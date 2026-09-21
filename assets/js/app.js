@@ -11,6 +11,7 @@ import {vistaOperaciones} from './vistas/operaciones.js';
 import {vistaCaptaciones} from './vistas/captaciones.js';
 import {vistaMapa} from './vistas/mapa.js';
 import {vistaContabilidad, vistaFacturas, vistaGastos, vistaCobros} from './vistas/finanzas.js';
+import {vistaBanco} from './vistas/banco.js';
 import {vistaEquipo, vistaResumen, vistaPartes} from './vistas/equipo.js';
 import {vistaParte} from './vistas/parte.js';
 import {vistaNomina} from './vistas/nominas.js';
@@ -31,6 +32,7 @@ const VISTAS = {
   contabilidad: {titulo: 'Contabilidad',       pinta: vistaContabilidad,  permiso: 'finanzas'},
   facturas:     {titulo: 'Facturas',           pinta: vistaFacturas,      permiso: 'finanzas'},
   gastos:       {titulo: 'Gastos',             pinta: vistaGastos,        permiso: 'finanzas'},
+  banco:        {titulo: 'Banco',              pinta: vistaBanco,         permiso: 'finanzas'},
   cobros:       {titulo: 'Cobros',             pinta: vistaCobros,        permiso: 'finanzas'},
   equipo:       {titulo: 'Equipo',             pinta: vistaEquipo,        permiso: 'partesAjenos'},
   partes:       {titulo: 'Partes diarios',     pinta: vistaPartes,        permiso: 'partesAjenos'},
@@ -91,6 +93,7 @@ function menuDe(rol) {
     {id: 'facturas', et: 'Facturas', ico: '▤'},
     {id: 'cobros', et: 'Cobros', ico: '↓'},
     {id: 'gastos', et: 'Gastos', ico: '↑'},
+    {id: 'banco', et: 'Banco', ico: '▮'},
     {grupo: 'Equipo'},
     {id: 'equipo', et: 'Equipo', ico: '◍'},
     {id: 'partes', et: 'Partes diarios', ico: '✓'},
