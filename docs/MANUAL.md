@@ -16,6 +16,14 @@ cita concertada, la tecnología que interesa y el perfil del cliente. Al
 guardar se crea el cliente y la cita de una vez, y el cliente queda asignado
 al comercial que se elija.
 
+**Adjudicar la ficha a un comercial.** En la lista de captaciones, el botón
+*Adjudicar* (o *Cambiar*) de cada fila decide qué comercial la lleva. Esto es
+importante: **un comercial solo ve las captaciones que se le han adjudicado**,
+con su cliente entero. Mientras la ficha no tenga comercial, no aparece en la
+cartera de nadie más que la tuya, y arriba verás cuántas están *Sin
+adjudicar*. Desde ahí también se cambia el día y la hora de la visita y se
+dejan notas para el comercial.
+
 **Mis clientes.** Solo aparecen los que has captado tú, con toda su
 información y su estado: si llegó a sentada, si se vendió o si se cayó.
 
@@ -36,8 +44,11 @@ Debajo, si te interesa, el devengo día a día que calcula el CRM.
 
 ## Para los comerciales (Nando y Rober)
 
-**Mis clientes.** Solo los tuyos. Desde la ficha: llamar, WhatsApp, abrir el
-mapa, editar, apuntar un contacto o crear la instalación. Las pestañas
+**Mis clientes.** Solo los tuyos: los que has dado de alta y los que los
+captadores te han adjudicado. Desde la ficha: llamar, WhatsApp, ver en el
+mapa, **ir en coche** (abre la navegación de Google Maps hasta la vivienda,
+por coordenadas si las hay y si no por la dirección), editar, apuntar un
+contacto o crear la instalación. Las pestañas
 separan el resumen, las instalaciones, el historial de contactos, la vivienda
 y el consumo, y la ficha de captación si venía de puerta fría.
 
@@ -64,9 +75,12 @@ llamada para el lunes que viene, Javier a propuesta con llamada de cierre el
 Desmarca lo que no cuadre y pulsa *Aplicar los cambios marcados*: cada cambio
 deja además su apunte en el historial del cliente.
 
-**Agenda.** Todo lo que tiene fecha: seguimientos pendientes, sentadas
-concertadas e instalaciones previstas, repartidos en vencido, hoy, esta semana
-y más adelante. Desde cada línea se llama o se apunta el contacto.
+**Agenda.** Arriba, un calendario del mes con un punto por cada cosa que hay
+ese día: verde las sentadas concertadas, azul los seguimientos y lima las
+instalaciones previstas. Al pulsar un día se abre lo que toca ese día. Debajo,
+lo mismo repartido en vencido, hoy, esta semana y más adelante. En cada línea
+hay botón de llamar, de apuntar el contacto y el coche 🚗, que abre Google
+Maps con la ruta hasta la vivienda lista para arrancar.
 
 **Mi resumen.** Ventas contra objetivo del periodo (del 16 al 15), cartera
 viva, conversión de propuesta a venta, comisiones devengadas, próximas
