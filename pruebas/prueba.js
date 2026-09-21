@@ -341,5 +341,53 @@ const gastoBanco = despachar_({accion: 'gastoDesdeBanco', token: sesiones.fernan
 comprobar('una salida se convierte en gasto de la instalación', gastoBanco.ok === true, gastoBanco.error);
 comprobar('el gasto nace pagado', gastoBanco.gasto.estado_pago === 'pagado');
 
+console.log('\n== Adjudicar captaciones al comercial ==');
+const capNueva = despachar_({accion: 'guardarCaptacion', token: sesiones.sandra.token,
+  captacion: {fecha: hoyISO_(), hora_cita: '18:00', estado_cita: 'confirmada',
+    tecnologia: 'AEROTERMIA', interes: 8,
+    cliente: {nombre: 'Familia Sin Adjudicar', telefono: '600999888',
+              direccion: 'Calle de Prueba 7', municipio: 'Getafe', gasto_luz_mes: 90}}});
+comprobar('la captadora crea la ficha sin comercial', capNueva.ok === true, capNueva.error);
+const idCliNuevo = capNueva.captacion.cliente_id;
+const veNandoAntes = despachar_({accion: 'datos', token: sesiones.nando.token})
+  .clientes.some(c => String(c.id) === String(idCliNuevo));
+comprobar('sin adjudicar, ningún comercial la ve', veNandoAntes === false);
+const veRoberAntes = despachar_({accion: 'datos', token: sesiones.rober.token})
+  .clientes.some(c => String(c.id) === String(idCliNuevo));
+comprobar('tampoco el otro comercial', veRoberAntes === false);
+comprobar('la captadora sí la ve',
+  despachar_({accion: 'datos', token: sesiones.sandra.token})
+    .clientes.some(c => String(c.id) === String(idCliNuevo)));
+
+const adjudica = despachar_({accion: 'guardarCaptacion', token: sesiones.sandra.token,
+  captacion: {id: capNueva.captacion.id, cliente_id: idCliNuevo,
+    comercial_id: sesiones.nando.usuario.id, fecha: sumarDias_(hoyISO_(), 2)}});
+comprobar('la captadora la adjudica al comercial que quiere', adjudica.ok === true, adjudica.error);
+comprobar('el comercial adjudicado ya la ve',
+  despachar_({accion: 'datos', token: sesiones.nando.token})
+    .clientes.some(c => String(c.id) === String(idCliNuevo)));
+comprobar('el otro comercial sigue sin verla',
+  despachar_({accion: 'datos', token: sesiones.rober.token})
+    .clientes.every(c => String(c.id) !== String(idCliNuevo)));
+const cliAdjudicado = leer_('CLIENTES').filter(c => String(c.id) === String(idCliNuevo))[0];
+comprobar('la visita queda como próxima acción del cliente',
+  txt_(cliAdjudicado.proxima_fecha) === sumarDias_(hoyISO_(), 2), cliAdjudicado.proxima_fecha);
+
+const reasigna = despachar_({accion: 'guardarCaptacion', token: sesiones.sandra.token,
+  captacion: {id: capNueva.captacion.id, cliente_id: idCliNuevo,
+    comercial_id: sesiones.rober.usuario.id}});
+comprobar('se puede cambiar de comercial', reasigna.ok === true);
+comprobar('el nuevo comercial la ve',
+  despachar_({accion: 'datos', token: sesiones.rober.token})
+    .clientes.some(c => String(c.id) === String(idCliNuevo)));
+comprobar('el anterior deja de verla',
+  despachar_({accion: 'datos', token: sesiones.nando.token})
+    .clientes.every(c => String(c.id) !== String(idCliNuevo)));
+const adjudicaComercial = despachar_({accion: 'guardarCaptacion', token: sesiones.nando.token,
+  captacion: {id: capNueva.captacion.id, cliente_id: idCliNuevo,
+    comercial_id: sesiones.nando.usuario.id}});
+comprobar('un comercial no se adjudica captaciones ajenas', adjudicaComercial.ok === false,
+  adjudicaComercial.error);
+
 console.log('\n' + (fallos ? 'FALLAN ' + fallos + ' de ' + pruebas : 'Todo correcto: ' + pruebas + ' comprobaciones'));
 process.exit(fallos ? 1 : 0);

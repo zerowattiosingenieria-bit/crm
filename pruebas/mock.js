@@ -175,7 +175,9 @@ global.Utilities = {
 /* Carga los .gs en el ámbito global, en orden. */
 const fs = require('fs'), path = require('path');
 const dir = path.join(__dirname, '..', 'apps-script');
-fs.readdirSync(dir).filter(f => f.endsWith('.gs')).sort().forEach(f => {
+/* Solo los archivos numerados: TODO_EN_UNO.gs es una copia de todos ellos
+   pegados, y cargarlo también redefiniría las funciones con su versión. */
+fs.readdirSync(dir).filter(f => /^\d\d_.*\.gs$/.test(f)).sort().forEach(f => {
   const codigo = fs.readFileSync(path.join(dir, f), 'utf8');
   /* const/function de nivel superior -> globales */
   (0, eval)(codigo.replace(/^const /gm, 'var ').replace(/^function /gm, 'function ') + `
