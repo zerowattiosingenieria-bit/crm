@@ -3,3 +3,6 @@ package-lock.json
 pruebas/capturas/
 pruebas/claves.json
 .DS_Store
+docs/manuales/pdf/
+docs/manuales/img/
+docs/manuales/__pycache__/
