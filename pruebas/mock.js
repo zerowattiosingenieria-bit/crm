@@ -87,18 +87,63 @@ function archivoFalso(id, nombre, tipo, bytes) {
   return {
     getId: () => id, getName: () => nombre, getMimeType: () => tipo,
     getBlob: () => ({getBytes: () => bytes}),
+    getUrl: () => 'https://drive.google.com/' + id,
+    getSize: () => (bytes || []).length,
+    getDateCreated: () => new Date(),
     setTrashed: () => { delete DRIVE[id]; }
   };
 }
-global.DriveApp = {
-  createFolder: nombre => ({getId: () => 'CARPETA_' + nombre,
+global.ScriptApp = {
+  WeekDay: {FRIDAY: 'FRIDAY'},
+  getOAuthToken: () => 'token-de-prueba',
+  getProjectTriggers: () => [],
+  newTrigger: nombre => {
+    const disparador = {
+      timeBased: () => disparador, onWeekDay: () => disparador,
+      atHour: () => disparador, nearMinute: () => disparador,
+      create: () => ({getHandlerFunction: () => nombre})
+    };
+    return disparador;
+  },
+  deleteTrigger: () => {}
+};
+global.UrlFetchApp = {
+  fetch: () => ({getResponseCode: () => 200,
+    getBlob: () => ({setName(n) { this.nombre = n; return this; }, getBytes: () => [1, 2, 3],
+                     getName: () => 'export.xlsx'})})
+};
+const CARPETAS = {};
+function carpetaFalsa(nombre) {
+  if (CARPETAS[nombre]) return CARPETAS[nombre];
+  const carpeta = {
+    getId: () => 'CARPETA_' + nombre,
+    getName: () => nombre,
+    getUrl: () => 'https://drive.google.com/CARPETA_' + nombre,
     createFile: blob => {
       const id = 'ARCHIVO_' + Object.keys(DRIVE).length;
-      DRIVE[id] = archivoFalso(id, blob.nombre, blob.tipo, blob.bytes);
+      DRIVE[id] = archivoFalso(id, blob.nombre || (blob.getName && blob.getName()) || 'archivo',
+        blob.tipo || 'application/octet-stream', blob.bytes || [1, 2, 3]);
+      DRIVE[id].carpeta = nombre;
       return DRIVE[id];
-    }}),
-  getFoldersByName: () => ({hasNext: () => false}),
-  getFolderById: id => DriveApp.createFolder(id),
+    },
+    getFiles: () => {
+      const ids = Object.keys(DRIVE).filter(k => DRIVE[k].carpeta === nombre);
+      let i = 0;
+      return {hasNext: () => i < ids.length, next: () => DRIVE[ids[i++]]};
+    }
+  };
+  CARPETAS[nombre] = carpeta;
+  CARPETAS['CARPETA_' + nombre] = carpeta;    // también por su id
+  return carpeta;
+}
+global.DriveApp = {
+  createFolder: carpetaFalsa,
+  getFoldersByName: nombre => {
+    const hay = !!CARPETAS[nombre];
+    let dado = false;
+    return {hasNext: () => hay && !dado, next: () => { dado = true; return CARPETAS[nombre]; }};
+  },
+  getFolderById: id => CARPETAS[id] || carpetaFalsa(String(id).replace(/^CARPETA_/, '')),
   getFileById: id => { if (!DRIVE[id]) throw new Error('no existe'); return DRIVE[id]; }
 };
 global.Utilities = {

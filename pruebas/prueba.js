@@ -226,5 +226,83 @@ comprobar('la nómina aparece en su lista',
 const borrada = despachar_({accion: 'borrarNomina', token: sesiones.nando.token, id: subida.nomina.id});
 comprobar('un comercial no borra nóminas', borrada.ok === false);
 
+console.log('\n== Vacaciones ==');
+const anio = hoyISO_().slice(0, 4);
+const pide = despachar_({accion: 'solicitarVacaciones', token: sesiones.nando.token,
+  desde: anio + '-08-03', hasta: anio + '-08-14', nota: 'Vacaciones de verano'});
+comprobar('un comercial pide sus días', pide.ok === true, pide.error);
+comprobar('cuenta solo días laborables', num_(pide.vacaciones.dias) === 10, pide.vacaciones.dias);
+comprobar('queda pendiente de aprobar', pide.vacaciones.estado === 'solicitada');
+
+const pisa = despachar_({accion: 'solicitarVacaciones', token: sesiones.nando.token,
+  desde: anio + '-08-10', hasta: anio + '-08-12'});
+comprobar('no deja pisar fechas ya pedidas', pisa.ok === false, pisa.error);
+
+const pasado = despachar_({accion: 'solicitarVacaciones', token: sesiones.nando.token,
+  desde: anio + '-01-07', hasta: anio + '-03-31'});
+comprobar('no deja pasarse de los 22 días', pasado.ok === false, pasado.error);
+
+const vistaNando = despachar_({accion: 'vacaciones', token: sesiones.nando.token, anio: anio});
+comprobar('ve su saldo', vistaNando.saldos.length === 1 && vistaNando.saldos[0].pendientes === 10,
+  JSON.stringify(vistaNando.saldos));
+comprobar('un comercial no ve las de los demás',
+  vistaNando.vacaciones.every(v => String(v.usuario_id) === String(sesiones.nando.usuario.id)));
+
+const apruebaSolo = despachar_({accion: 'resolverVacaciones', token: sesiones.nando.token,
+  id: pide.vacaciones.id, estado: 'aprobada'});
+comprobar('nadie se aprueba sus propias vacaciones', apruebaSolo.ok === false);
+
+const aprueba = despachar_({accion: 'resolverVacaciones', token: sesiones.fernando.token,
+  id: pide.vacaciones.id, estado: 'aprobada', respuesta: 'Adelante'});
+comprobar('dirección aprueba', aprueba.ok === true && aprueba.vacaciones.estado === 'aprobada', aprueba.error);
+const jornadasVac = leer_('JORNADAS').filter(j => j.tipo === 'vacaciones' &&
+  String(j.usuario_id) === String(sesiones.nando.usuario.id));
+comprobar('los días aprobados se marcan en el calendario de nómina', jornadasVac.length === 10,
+  jornadasVac.length);
+
+const diasNomina = despachar_({accion: 'nominaDias', token: sesiones.nando.token,
+  desde: anio + '-08-01', hasta: anio + '-08-31'});
+const enVacaciones = diasNomina.dias.filter(x => x.tipo === 'vacaciones');
+comprobar('la nómina ve esos días como vacaciones', enVacaciones.length === 10, enVacaciones.length);
+comprobar('los días de vacaciones no devengan sueldo diario',
+  enVacaciones.every(x => x.devengo === 0));
+
+const vistaDireccion = despachar_({accion: 'vacaciones', token: sesiones.ruben.token, anio: anio});
+comprobar('dirección ve las de todo el equipo', vistaDireccion.saldos.length >= 6,
+  vistaDireccion.saldos.length);
+comprobar('dirección puede aprobar', vistaDireccion.puede_aprobar === true);
+
+const retira = despachar_({accion: 'cancelarVacaciones', token: sesiones.nando.token,
+  id: pide.vacaciones.id});
+comprobar('la persona puede retirar sus días', retira.ok === true);
+comprobar('al retirar se limpian las jornadas',
+  leer_('JORNADAS').filter(j => j.tipo === 'vacaciones' &&
+    String(j.usuario_id) === String(sesiones.nando.usuario.id)).length === 0);
+
+console.log('\n== Sincronización de cobros ==');
+const opSync = despachar_({accion: 'guardarOperacion', token: sesiones.nando.token,
+  operacion: {cliente_id: alta.cliente.id, tipo: 'fv', importe_fv: 9990, forma_pago: 'contado',
+              estado: 'firmada', fecha_firma: hoyISO_(), iva_pct: 21}});
+comprobar('se crea la operación de prueba', opSync.ok === true);
+const subida2 = despachar_({accion: 'guardarOperacion', token: sesiones.nando.token,
+  operacion: {id: opSync.operacion.id, cliente_id: alta.cliente.id, tipo: 'fv',
+              importe_fv: 12990, forma_pago: 'contado', iva_pct: 21}});
+comprobar('al subir el importe se rehacen los cobros',
+  Math.abs(subida2.cobros.reduce((a, c) => a + num_(c.importe), 0) - 12990) < 0.05,
+  subida2.cobros.map(c => c.importe));
+
+console.log('\n== Copia de seguridad ==');
+const copia = copiaSeguridad();
+comprobar('la copia genera archivos', copia.archivos.length >= 1, JSON.stringify(copia.archivos));
+comprobar('la copia incluye el volcado JSON', copia.archivos.some(a => a.tipo === 'json'));
+const copias = despachar_({accion: 'copias', token: sesiones.fernando.token});
+comprobar('dirección ve las copias guardadas', copias.ok === true && copias.copias.length >= 1,
+  copias.error);
+const copiasComercial = despachar_({accion: 'copias', token: sesiones.nando.token});
+comprobar('un comercial no ve las copias', copiasComercial.ok === false);
+const bajaCopia = despachar_({accion: 'descargarCopia', token: sesiones.fernando.token});
+comprobar('se puede descargar la última copia', bajaCopia.ok === true && !!bajaCopia.datos, bajaCopia.error);
+comprobar('el disparador semanal se instala', instalarDisparadores() === true);
+
 console.log('\n' + (fallos ? 'FALLAN ' + fallos + ' de ' + pruebas : 'Todo correcto: ' + pruebas + ' comprobaciones'));
 process.exit(fallos ? 1 : 0);
