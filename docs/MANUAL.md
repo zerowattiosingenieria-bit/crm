@@ -99,6 +99,24 @@ de fecha y propuestas dormidas; embudo del año y próximas instalaciones.
 - *Cuenta de cada instalación*: ingreso, coste, margen, porcentaje, cobrado,
   pendiente y el beneficio no económico que se haya apuntado.
 
+**Banco.** Se descarga el extracto del banco en CSV y se sube con *Importar
+extracto*: el CRM reconoce las columnas de concepto, fecha, importe y saldo
+aunque vengan en otro orden, y no duplica lo que ya estaba. Cada movimiento
+queda clasificado solo; si algo está mal, se cambia la categoría en la propia
+fila y esa corrección manda sobre las reglas (el botón *Reclasificar* vuelve a
+pasar las reglas por lo que nadie ha tocado).
+
+De los movimientos salen tres cosas útiles: el saldo real de la cuenta, las
+entradas y salidas de cada mes, y el **coste real de estructura**, que es lo
+que cuesta tener la empresa abierta al margen de las obras. Si ese número no
+coincide con el de Ajustes, sale un aviso con un botón para ponerlo al día:
+de él dependen el beneficio neto y el punto de equilibrio.
+
+Cada entrada de dinero se puede casar con un cobro pendiente (*Casar con
+cobro*): el CRM propone primero los cobros de importe parecido y, al elegir
+uno, lo marca como cobrado con la fecha del banco. Cada salida se puede pasar
+a gasto de una instalación (*Pasar a gasto*), y entra ya como pagada.
+
 **Facturas, cobros y gastos.** Emitir facturas con numeración automática,
 marcar cobros con un botón, registrar gastos por instalación o generales y
 ver qué queda pendiente de pagar.
