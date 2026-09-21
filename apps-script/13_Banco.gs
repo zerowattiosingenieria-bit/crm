@@ -66,22 +66,33 @@ function accImportarBanco_(u, p) {
   const filas = p.movimientos || [];
   if (!filas.length) return {ok: false, error: 'No ha llegado ningún movimiento.'};
 
-  const existentes = {};
-  leer_('BANCO').forEach(function (m) { existentes[txt_(m.clave)] = true; });
+  /* El saldo entra en la clave: dos apuntes iguales el mismo día son dos
+     movimientos distintos y el saldo suele separarlos. Pero un cargo, su
+     devolución y el mismo cargo otra vez dejan el saldo igual las dos veces,
+     y los dos son de verdad. Por eso se cuentan las repeticiones: se compara
+     cuántas veces aparece cada apunte en el extracto contra cuántas hay ya
+     guardadas, y solo entra lo que sobra. Reimportar el mismo archivo sigue
+     sin duplicar nada. */
+  const guardadas = {};
+  leer_('BANCO').forEach(function (m) {
+    const base = txt_(m.clave).replace(/#\d+$/, '');
+    guardadas[base] = (guardadas[base] || 0) + 1;
+  });
 
   const nuevos = [];
+  const entrantes = {};
   let repetidos = 0;
   filas.forEach(function (f) {
     const fecha = txt_(f.fecha);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return;
     const importe = num_(f.importe);
     const concepto = txt_(f.concepto);
-    /* El saldo entra en la clave: dos apuntes iguales el mismo día son dos
-       movimientos distintos, y el saldo es lo único que los separa. */
-    const clave = fecha + '|' + normal_(concepto) + '|' + redondear_(importe, 2) +
-                  '|' + redondear_(num_(f.saldo), 2);
-    if (existentes[clave]) { repetidos++; return; }
-    existentes[clave] = true;
+    const base = fecha + '|' + normal_(concepto) + '|' + redondear_(importe, 2) +
+                 '|' + redondear_(num_(f.saldo), 2);
+    const vez = (entrantes[base] || 0) + 1;
+    entrantes[base] = vez;
+    if (vez <= (guardadas[base] || 0)) { repetidos++; return; }
+    const clave = vez > 1 ? base + '#' + vez : base;
     nuevos.push({
       fecha: fecha, concepto: concepto, importe: redondear_(importe, 2),
       saldo: redondear_(num_(f.saldo), 2),
