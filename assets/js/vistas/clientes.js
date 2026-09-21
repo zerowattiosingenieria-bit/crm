@@ -1,7 +1,7 @@
 /* vistas/clientes.js — listado de clientes y ficha completa. */
 
 import {h, poner, txt, num, eur, eur2, miles, pct, fechaCorta, fechaLarga, haceDias,
-        normal, telHref, waHref, mapsHref, suma, hoyISO} from '../util.js';
+        normal, telHref, waHref, mapsHref, comoLlegarHref, destinoDe, suma, hoyISO} from '../util.js';
 import * as api from '../api.js';
 import {tarjeta, tabla, kpi, kpis, etiquetaEstado, marca, ventanaFormulario, ventana,
         aviso, avisoError, confirmar, filtros} from '../ui.js';
@@ -199,7 +199,11 @@ export async function vistaCliente({id, ir, refrescar}) {
       txt(c.telefono) ? h('a.btn', {href: telHref(c.telefono)}, '☎ Llamar') : null,
       txt(c.telefono) ? h('a.btn', {href: waHref(c.telefono), target: '_blank'}, 'WhatsApp') : null,
       txt(c.coordenadas) || txt(c.direccion)
-        ? h('a.btn', {href: mapsHref(txt(c.coordenadas) || (c.direccion + ', ' + c.municipio)), target: '_blank'}, '◎ Mapa')
+        ? h('a.btn', {href: mapsHref(destinoDe(c)), target: '_blank'}, '◎ Ver en el mapa')
+        : null,
+      txt(c.coordenadas) || txt(c.direccion)
+        ? h('a.btn.lima', {href: comoLlegarHref(destinoDe(c)), target: '_blank', rel: 'noopener'},
+            '🚗 Ir en coche')
         : null,
       h('button.btn', {onclick: () => editorCliente(c, async () => { await refrescar(); })}, 'Editar'),
       h('button.btn.lima', {onclick: () => nuevoSeguimiento(c, refrescar)}, '+ Apuntar contacto'),
@@ -251,7 +255,14 @@ function panelResumen(c, ops, seg) {
       dato('Cotitular', c.cotitular),
       dato('Teléfono', txt(c.telefono) ? h('a', {href: telHref(c.telefono)}, c.telefono) : ''),
       dato('Correo', txt(c.email) ? h('a', {href: 'mailto:' + c.email}, c.email) : ''),
-      dato('Dirección', [c.direccion, c.municipio, c.cp].filter(Boolean).join(', ')),
+      h('.dato', h('.et', 'Dirección'),
+        h('.v', [c.direccion, c.municipio, c.cp].filter(Boolean).join(', ') || '—',
+          txt(c.direccion) || txt(c.coordenadas)
+            ? h('.acciones', {estilo: {marginTop: '8px'}},
+                h('a.btn.mini.lima', {href: comoLlegarHref(destinoDe(c)), target: '_blank',
+                  rel: 'noopener'}, '🚗 Ir en coche'),
+                h('a.btn.mini', {href: mapsHref(destinoDe(c)), target: '_blank'}, 'Ver en el mapa'))
+            : null)),
       dato('Coordenadas', txt(c.coordenadas)
         ? h('a', {href: mapsHref(c.coordenadas), target: '_blank'}, c.coordenadas) : ''),
       dato('Comercial', api.nombrePersona(c.comercial_id)),

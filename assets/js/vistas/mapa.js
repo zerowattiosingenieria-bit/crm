@@ -3,7 +3,8 @@
  * (assets/vendor), así que el mapa funciona aunque no haya CDN.
  */
 
-import {h, poner, txt, num, eur, miles, pct, fechaCorta, normal, suma, hoyISO} from '../util.js';
+import {h, poner, txt, num, eur, miles, pct, fechaCorta, normal, suma, hoyISO,
+        comoLlegarHref, mapsHref} from '../util.js';
 import * as api from '../api.js';
 import {tarjeta, tabla, kpi, kpis, etiquetaEstado, marca, aviso, avisoError, cargando,
         confirmar, filtros} from '../ui.js';
@@ -124,8 +125,12 @@ export async function vistaMapa({ir}) {
         (p.proxima_fecha ? ' · ' + fechaCorta(p.proxima_fecha) : '') : ''),
       op ? dato('Instalación', api.etiquetaCatalogo('tiposOperacion', op.tipo) + ' · ' + eur(op.total) +
         ' · ' + api.etiquetaCatalogo('estadosOperacion', op.estado)) : null,
-      h('button.btn.mini.primario', {estilo: {marginTop: '8px'},
-        onclick: () => ir('cliente/' + p.id)}, 'Abrir ficha completa'));
+      h('.acciones', {estilo: {marginTop: '10px'}},
+        h('button.btn.mini.primario', {onclick: () => ir('cliente/' + p.id)}, 'Abrir ficha'),
+        h('a.btn.mini.lima', {href: comoLlegarHref(p.lat + ',' + p.lng), target: '_blank',
+          rel: 'noopener'}, '🚗 Ir en coche'),
+        txt(p.telefono)
+          ? h('a.btn.mini', {href: 'tel:' + txt(p.telefono).replace(/\s/g, '')}, 'Llamar') : null));
   }
 
   function pinta() {

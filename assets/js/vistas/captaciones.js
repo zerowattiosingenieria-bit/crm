@@ -2,7 +2,8 @@
 
 import {h, poner, txt, num, eur, miles, pct, fechaCorta, normal, suma, hoyISO} from '../util.js';
 import * as api from '../api.js';
-import {tarjeta, tabla, kpi, kpis, etiquetaEstado, ventanaFormulario, aviso, filtros} from '../ui.js';
+import {tarjeta, tabla, kpi, kpis, etiquetaEstado, marca, ventanaFormulario, aviso,
+        filtros} from '../ui.js';
 import {gastoAnual} from './clientes.js';
 
 function nuevaCaptacion(refrescar, ir) {
@@ -70,10 +71,42 @@ function nuevaCaptacion(refrescar, ir) {
   });
 }
 
+/* Adjudicar la ficha a un comercial: hasta que no se hace, ese cliente no
+   aparece en la cartera de nadie. */
+function adjudicar(captacion, refrescar) {
+  const comerciales = api.estado.usuarios
+    .filter(u => ['comercial', 'admin', 'superadmin'].includes(u.rol))
+    .map(u => [u.id, u.nombre]);
+  const cli = api.cliente(captacion.cliente_id) || {};
+  return ventanaFormulario({
+    titulo: 'Adjudicar ' + (cli.nombre || 'la captación'),
+    campos: [
+      {id: 'comercial_id', et: 'Comercial que la lleva', tipo: 'select', opciones: comerciales,
+       vacio: 'Sin adjudicar', ancho: 2,
+       ayuda: 'El comercial solo ve las captaciones que le adjudicas'},
+      {id: 'fecha', et: 'Día de la visita', tipo: 'fecha'},
+      {id: 'hora_cita', et: 'Hora', tipo: 'hora'},
+      {id: 'estado_cita', et: 'Estado de la cita', tipo: 'select',
+       opciones: api.opciones('estadosCita'), vacio: false},
+      {id: 'notas', et: 'Notas para el comercial', tipo: 'area', ancho: 3}
+    ],
+    valores: captacion,
+    textoBoton: 'Guardar',
+    alGuardar: async d => {
+      d.id = captacion.id;
+      d.cliente_id = captacion.cliente_id;
+      await api.guardarCaptacion(d);
+      aviso(d.comercial_id ? 'Captación adjudicada.' : 'Captación sin adjudicar.');
+      await refrescar();
+    }
+  });
+}
+
 export async function vistaCaptaciones({ir, refrescar}) {
   const caja = h('div');
   const contenedor = h('div');
   const est = {texto: '', resultado: '', captador: '', desde: ''};
+  const puedeAdjudicar = api.estado.usuario.rol === 'captador' || api.esDireccion();
 
   const f = filtros([
     {id: 'texto', et: 'Buscar por cliente o municipio…'},
@@ -120,9 +153,15 @@ export async function vistaCaptaciones({ir, refrescar}) {
        valor: c => gastoAnual(api.cliente(c.cliente_id) || {}),
        pinta: c => eur(gastoAnual(api.cliente(c.cliente_id) || {}))},
       ...(api.esDireccion() ? [{clave: 'captador', et: 'Captador',
-        valor: c => api.nombrePersona(c.captador_id)},
-        {clave: 'comercial', et: 'Comercial', valor: c => txt(c.comercial_id)
-          ? api.nombrePersona(c.comercial_id) : '—'}] : [])
+        valor: c => api.nombrePersona(c.captador_id)}] : []),
+      {clave: 'comercial', et: 'Comercial', valor: c => txt(c.comercial_id)
+        ? api.nombrePersona(c.comercial_id) : '',
+       pinta: c => txt(c.comercial_id)
+         ? marca(api.nombrePersona(c.comercial_id), 'info')
+         : h('span.nota', 'sin adjudicar')},
+      ...(puedeAdjudicar ? [{clave: 'acciones', et: '', noOrden: true,
+        pinta: c => h('button.btn.mini', {onclick: e => { e.stopPropagation(); adjudicar(c, refrescar); }},
+          txt(c.comercial_id) ? 'Cambiar' : 'Adjudicar')}] : [])
     ], lista, {alPulsar: c => ir('cliente/' + c.cliente_id), csv: 'captaciones_zerowattios.csv',
                vacio: 'No hay fichas con esos filtros.'});
 
@@ -133,7 +172,10 @@ export async function vistaCaptaciones({ir, refrescar}) {
           pct(lista.length ? lista.filter(c => txt(c.estado_cita) === 'confirmada').length * 100 / lista.length : 0)),
         kpi('Llegan a sentada', miles(sentadas), pct(lista.length ? sentadas * 100 / lista.length : 0)),
         kpi('Acaban en venta', miles(ventas), pct(lista.length ? ventas * 100 / lista.length : 0),
-          {estado: 'bien'})
+          {estado: 'bien'}),
+        kpi('Sin adjudicar', miles(lista.filter(c => !txt(c.comercial_id)).length),
+          'esperando comercial',
+          {estado: lista.filter(c => !txt(c.comercial_id)).length ? 'aviso' : 'bien'})
       ),
       tarjeta(miles(lista.length) + ' ficha(s) de captación', t,
         {sinRelleno: true, acciones: [h('button.btn.mini', {onclick: () => t.exportar && t.exportar()}, 'Exportar CSV')]}));

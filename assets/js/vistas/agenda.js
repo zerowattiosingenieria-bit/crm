@@ -1,10 +1,11 @@
 /* vistas/agenda.js — qué toca hoy: citas, seguimientos y cosas vencidas. */
 
 import {h, poner, txt, num, eur, miles, fechaCorta, fechaLarga, haceDias, normal,
-        hoyISO, sumarDias, dias} from '../util.js';
+        hoyISO, sumarDias, dias, comoLlegarHref, destinoDe} from '../util.js';
 import * as api from '../api.js';
 import {tarjeta, tabla, kpi, kpis, etiquetaEstado, marca, filtros, aviso} from '../ui.js';
 import {nuevoSeguimiento} from './clientes.js';
+import {calendarioMes, COLOR_EVENTO} from '../calendario.js';
 
 export async function vistaAgenda({ir, refrescar}) {
   const caja = h('div');
@@ -61,19 +62,39 @@ export async function vistaAgenda({ir, refrescar}) {
 
     const icono = {seguimiento: '☎', cita: '⚑', obra: '⚡'};
 
-    const bloque = (titulo, lista, vacio, clase) => tarjeta(titulo + ' (' + lista.length + ')',
-      lista.length ? h('ul.lista-avisos', lista.map(x => h('li',
-        h('span.nivel.' + (clase || 'bajo')),
-        h('div', {estilo: {flex: '1', cursor: 'pointer'},
-          onclick: () => ir('cliente/' + x.cliente.id)},
-          h('b', icono[x.tipo] + ' ' + x.cliente.nombre),
-          h('div.nota', x.texto + ' · ' + fechaCorta(x.fecha) + (x.hora ? ' a las ' + x.hora : '') +
-            (txt(x.cliente.municipio) ? ' · ' + x.cliente.municipio : ''))),
-        h('.acciones',
-          txt(x.cliente.telefono)
-            ? h('a.btn.mini', {href: 'tel:' + txt(x.cliente.telefono).replace(/\s/g, '')}, 'Llamar') : null,
-          h('button.btn.mini.lima', {onclick: () => nuevoSeguimiento(x.cliente, refrescar)}, 'Apuntar')))))
-        : h('.vacio', vacio));
+    const linea = x => h('li',
+      h('span.nivel.' + (x.fecha < hoy ? 'alto' : (x.fecha === hoy ? 'medio' : 'bajo'))),
+      h('div', {estilo: {flex: '1', cursor: 'pointer'},
+        onclick: () => ir('cliente/' + x.cliente.id)},
+        h('b', icono[x.tipo] + ' ' + x.cliente.nombre),
+        h('div.nota', x.texto + ' · ' + fechaCorta(x.fecha) + (x.hora ? ' a las ' + x.hora : '') +
+          (txt(x.cliente.municipio) ? ' · ' + x.cliente.municipio : ''))),
+      h('.acciones',
+        txt(x.cliente.telefono)
+          ? h('a.btn.mini', {href: 'tel:' + txt(x.cliente.telefono).replace(/\s/g, '')}, 'Llamar') : null,
+        txt(x.cliente.direccion) || txt(x.cliente.coordenadas)
+          ? h('a.btn.mini', {href: comoLlegarHref(destinoDe(x.cliente)), target: '_blank',
+              rel: 'noopener', title: 'Ir en coche'}, '🚗') : null,
+        h('button.btn.mini.lima', {onclick: () => nuevoSeguimiento(x.cliente, refrescar)}, 'Apuntar')));
+
+    const bloque = (titulo, lista, vacio) => tarjeta(titulo + ' (' + lista.length + ')',
+      lista.length ? h('ul.lista-avisos', lista.map(linea)) : h('.vacio', vacio));
+
+    /* El calendario del mes: un punto por cada cosa que hay ese día. */
+    const delDia = h('div');
+    const calendario = calendarioMes({
+      titulo: 'Visitas',
+      eventos: todo.map(x => ({fecha: x.fecha, tipo: x.tipo,
+        texto: x.cliente.nombre + ' · ' + x.texto})),
+      alPulsarDia: fecha => {
+        const dia = todo.filter(x => x.fecha === fecha);
+        poner(delDia, fecha
+          ? tarjeta(fechaLarga(fecha),
+              dia.length ? h('ul.lista-avisos', dia.map(linea))
+                         : h('.vacio', 'Ese día no tienes nada apuntado.'))
+          : h('div'));
+      }
+    });
 
     poner(contenedor,
       kpis(
@@ -83,8 +104,19 @@ export async function vistaAgenda({ir, refrescar}) {
         kpi('Esta semana', miles(semana.length), 'próximos 7 días'),
         kpi('Más adelante', miles(despues.length), 'con fecha puesta')
       ),
-      bloque('Vencido', vencidas, 'Nada pendiente de días anteriores.', 'alto'),
-      bloque('Hoy', deHoy, 'Hoy no tienes nada con fecha.', 'medio'),
+      h('.doble',
+        h('div',
+          tarjeta('Calendario de visitas',
+            h('div', calendario,
+              h('.leyenda-visitas',
+                h('span', h('i', {estilo: {background: COLOR_EVENTO.cita}}), 'Sentadas concertadas'),
+                h('span', h('i', {estilo: {background: COLOR_EVENTO.seguimiento}}), 'Seguimientos'),
+                h('span', h('i', {estilo: {background: COLOR_EVENTO.obra}}), 'Instalaciones'))),
+            {subtitulo: 'Pulsa un día para ver lo que hay'}),
+          delDia),
+        h('div',
+          bloque('Vencido', vencidas, 'Nada pendiente de días anteriores.'),
+          bloque('Hoy', deHoy, 'Hoy no tienes nada con fecha.'))),
       bloque('Esta semana', semana, 'La semana está despejada.'),
       bloque('Más adelante', despues, 'Nada más en la agenda.'));
   }
