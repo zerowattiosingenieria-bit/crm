@@ -6,20 +6,26 @@ datos.
 
 ## 1. Crear el proyecto de Apps Script
 
+**La forma rápida (dos minutos):**
+
 1. Entra en https://script.google.com con la cuenta de la empresa.
 2. **Nuevo proyecto** y ponle de nombre `CRM · ZERO WATTIOS`.
-3. Borra el contenido del archivo `Código.gs` que viene por defecto.
-4. Copia, uno a uno, los once archivos de la carpeta `apps-script/` de este
-   repositorio. Para cada uno: **+** junto a *Archivos* → *Secuencia de
-   comandos* → le pones el mismo nombre que tiene aquí (sin la extensión
-   `.gs`) y pegas dentro todo el contenido.
+3. Abre `apps-script/TODO_EN_UNO.gs` de este repositorio, cópialo entero,
+   borra lo que trae `Código.gs` y pégalo en su sitio.
+4. Guarda con el icono del disquete.
 
-   El orden no importa, pero los nombres sí, porque así se entienden luego:
-   `00_Config`, `01_Base`, `02_Instalar`, `03_Auth`, `04_Clientes`,
-   `05_Finanzas`, `06_Partes`, `07_Resumen`, `08_Nominas`, `09_Mapa`,
-   `10_Api`.
+Ese archivo es exactamente los catorce `.gs` pegados en orden, así que el
+resultado es el mismo.
 
-5. Guarda con el icono del disquete.
+**La forma ordenada (para trabajar luego en el código):** en vez del paso 3,
+crea catorce archivos con **+** junto a *Archivos* → *Secuencia de comandos*,
+con el mismo nombre que tienen aquí (sin la extensión `.gs`) y pega el
+contenido de cada uno: `00_Config`, `01_Base`, `02_Instalar`, `03_Auth`,
+`04_Clientes`, `05_Finanzas`, `06_Partes`, `07_Resumen`, `08_Nominas`,
+`09_Mapa`, `10_Api`, `11_Vacaciones`, `12_Backup`, `13_Banco`.
+
+Si algún día cambias los archivos sueltos, vuelve a generar el de una pieza
+con `node pruebas/unir.js`.
 
 ## 2. Crear la base de datos
 
