@@ -66,6 +66,12 @@ festivos no cuentan). Rubén y Fernando los aprueban o los deniegan, y hasta
 entonces no están concedidos. Al aprobarse quedan marcados en el calendario
 de la nómina y el resto del equipo los ve para no solaparse.
 
+**Resumen semanal.** Los viernes a las 18:00 cada persona recibe por correo
+cómo le ha ido la semana —sus números, su objetivo, lo que tiene por delante y
+una frase para cerrar—, con el contenido que le toca según su papel: ventas y
+cartera para los comerciales, fichas y conversiones para los captadores, y las
+cuentas de la casa más el equipo entero para dirección.
+
 **Copias de seguridad.** Cada viernes a las 19:15 el propio CRM guarda una
 copia completa (el Excel de la base de datos y un volcado JSON) en la carpeta
 *BACKUP CRM ZERO WATTIOS* del Drive de la empresa, y borra solo las copias de
@@ -115,7 +121,7 @@ pruebas/                simulador del backend, pruebas y recorrido con navegador
 
 ```bash
 npm install                 # solo la primera vez (playwright)
-node pruebas/prueba.js      # 135 comprobaciones del backend, sin tocar Google
+node pruebas/prueba.js      # 147 comprobaciones del backend, sin tocar Google
 node pruebas/servidor.js &  # CRM completo en http://localhost:8765 con datos de ejemplo
 node pruebas/flujos.js      # alta de cliente, instalación, parte, cobro, nómina y mapa
 node pruebas/flujos-captacion.js  # adjudicación al comercial, calendario e ir en coche
