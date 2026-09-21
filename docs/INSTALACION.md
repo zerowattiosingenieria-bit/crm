@@ -91,7 +91,22 @@ WATTIOS* en el Drive de la cuenta de la empresa. Los PDF se guardan ahí **sin
 compartir con nadie**: el CRM los entrega solo a su dueño o a dirección, y
 nunca por un enlace público.
 
-## 7. Datos de ejemplo (opcional)
+## 7. Copia de seguridad semanal
+
+En el editor de Apps Script, ejecuta una vez la función
+**instalarDisparadores**. A partir de ahí, todos los viernes sobre las 19:15
+el CRM guarda solo una copia completa en la carpeta *BACKUP CRM ZERO WATTIOS*
+del Drive de la empresa: el Excel de la base de datos y un volcado JSON con
+todas las tablas. Las copias de más de tres meses se borran solas.
+
+Comprueba que el proyecto tiene la zona horaria de Madrid: en Apps Script,
+**Configuración del proyecto → Zona horaria → (GMT+01:00) Madrid**. Si no, el
+disparador saltaría a otra hora.
+
+Desde el CRM, en *Ajustes*, dirección ve las copias guardadas y puede lanzar
+una a mano.
+
+## 8. Datos de ejemplo (opcional)
 
 Para ver el CRM lleno antes de meter clientes de verdad, ejecuta la función
 **cargarDemo** desde el editor de Apps Script. Crea dieciséis clientes
@@ -99,11 +114,11 @@ ficticios con sus instalaciones, cobros y gastos. Cuando quieras empezar en
 limpio, ejecuta **borrarDemo**: vacía las tablas de trabajo y deja usuarios y
 configuración intactos.
 
-## 8. Copias de seguridad
+## 9. Y además
 
 La hoja de cálculo guarda su propio historial de versiones (*Archivo →
-Historial de versiones*). Aun así, conviene descargar una copia en `.xlsx`
-una vez al mes y guardarla en el Drive de la empresa.
+Historial de versiones*), que sirve para recuperar un cambio concreto sin
+tocar la copia semanal.
 
 ## Mantenimiento
 

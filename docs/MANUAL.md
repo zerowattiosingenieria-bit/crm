@@ -132,6 +132,27 @@ la casa.
 
 **Registro.** Quién ha hecho qué y cuándo.
 
+**Copias de seguridad.** En Ajustes, al final, están las copias que se guardan
+solas cada viernes a las 19:15 en el Drive de la empresa, con un botón para
+hacer una a mano. Las copias de más de tres meses se borran solas.
+
+## Vacaciones (todo el mundo)
+
+Cada persona tiene **22 días laborables** al año. En *Vacaciones* aparece el
+calendario entero: se pulsa el primer día, luego el último, y sale abajo
+cuántos días laborables son y el botón de pedirlos. Los fines de semana y los
+festivos no cuentan ni se pueden marcar.
+
+Los días pedidos quedan **pendientes hasta que Rubén o Fernando los aprueben**.
+Mientras tanto se ven en ámbar; aprobados, en verde lima. En azul aparecen los
+días que ya tiene aprobados otra persona del equipo, para no pedir todos lo
+mismo. Cada uno puede retirar una petición suya mientras no haya pasado.
+
+Para dirección, arriba del todo salen las peticiones pendientes con los botones
+de aprobar o denegar (al denegar hay que explicar el motivo, que le llega a la
+persona en su lista). Al aprobar, esos días quedan marcados como vacaciones en
+el calendario de la nómina.
+
 ---
 
 ## Para el superadmin
