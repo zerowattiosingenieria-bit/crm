@@ -130,7 +130,13 @@ function carpetaFalsa(nombre) {
       const ids = Object.keys(DRIVE).filter(k => DRIVE[k].carpeta === nombre);
       let i = 0;
       return {hasNext: () => i < ids.length, next: () => DRIVE[ids[i++]]};
-    }
+    },
+    getFoldersByName: sub => {
+      const hija = CARPETAS[nombre + '/' + sub];
+      let dado = false;
+      return {hasNext: () => !!hija && !dado, next: () => { dado = true; return hija; }};
+    },
+    createFolder: sub => carpetaFalsa(nombre + '/' + sub)
   };
   CARPETAS[nombre] = carpeta;
   CARPETAS['CARPETA_' + nombre] = carpeta;    // también por su id
