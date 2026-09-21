@@ -47,6 +47,18 @@ guardan en el Drive de la empresa sin compartir con nadie: solo su dueño y
 dirección pueden abrirlos. Debajo queda, para quien lo quiera, el devengo día
 a día que calcula el CRM con sueldo, dietas y comisiones.
 
+**Vacaciones.** Calendario del año donde cada persona marca los días que
+quiere y los pide; tiene 22 días laborables (los fines de semana y los
+festivos no cuentan). Rubén y Fernando los aprueban o los deniegan, y hasta
+entonces no están concedidos. Al aprobarse quedan marcados en el calendario
+de la nómina y el resto del equipo los ve para no solaparse.
+
+**Copias de seguridad.** Cada viernes a las 19:15 el propio CRM guarda una
+copia completa (el Excel de la base de datos y un volcado JSON) en la carpeta
+*BACKUP CRM ZERO WATTIOS* del Drive de la empresa, y borra solo las copias de
+más de tres meses. Desde Ajustes se puede lanzar una copia a mano y ver las
+que hay.
+
 **Mapa.** Solo para dirección: todos los clientes visitados sobre el mapa, por
 estado, comercial, captador, municipio e interés, con capa de calor por gasto
 energético y ficha completa al pulsar cada punto.
@@ -60,7 +72,8 @@ energético y ficha completa al pulsar cada punto.
 | Contabilidad, facturas, gastos y márgenes | sí | sí | no | no |
 | Mapa de clientes | sí | sí | no | no |
 | Equipo, partes y nóminas de todos | sí | sí | no | no |
-| Su resumen y su nómina | sí | sí | sí | sí |
+| Su resumen, su nómina y sus vacaciones | sí | sí | sí | sí |
+| Aprobar vacaciones | sí | sí | no | no |
 | Alta de usuarios y claves | sí | no | no | no |
 
 El filtro se aplica **en el servidor**: aunque alguien manipule el navegador,
@@ -88,13 +101,14 @@ pruebas/                simulador del backend, pruebas y recorrido con navegador
 
 ```bash
 npm install                 # solo la primera vez (playwright)
-node pruebas/prueba.js      # 77 comprobaciones del backend, sin tocar Google
+node pruebas/prueba.js      # 109 comprobaciones del backend, sin tocar Google
 node pruebas/servidor.js &  # CRM completo en http://localhost:8765 con datos de ejemplo
 node pruebas/flujos.js      # alta de cliente, instalación, parte, cobro, nómina y mapa
 node pruebas/navegador.js   # recorre todas las pantallas con cada rol y guarda capturas
 ```
 
-El simulador de `pruebas/mock.js` imita los servicios de Apps Script, así que
+El simulador de `pruebas/mock.js` imita los servicios de Apps Script (hoja de
+cálculo, Drive, disparadores), así que
 todo se puede probar en local antes de tocar los datos reales.
 
 ---
