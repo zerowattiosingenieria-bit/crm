@@ -1,7 +1,7 @@
 /**
  * CRM · ZERO WATTIOS — TODO EN UNO
  *
- * Este archivo es exactamente lo mismo que los catorce .gs de la carpeta
+ * Este archivo es exactamente lo mismo que los dieciséis .gs de la carpeta
  * apps-script, pegados uno detrás de otro en orden. Sirve para montar el
  * backend de una sentada: se crea el proyecto en script.google.com, se
  * borra lo que trae Código.gs y se pega todo esto dentro.
@@ -92,6 +92,8 @@ const ESQUEMA = {
     'hash','salt','creado','ultimo_acceso','debe_cambiar_clave',
     'salario_bruto','dietas_mes','irpf_pct','ss_pct',
     'comision_fv','comision_aero','comision_fv_ajustada','comision_aero_ajustada',
+    'comision_captacion_fv','comision_captacion_aero',
+    'responsable_id','comision_equipo_fv','comision_equipo_aero',
     'objetivo_mes','jornada_horas','fecha_alta','color','notas'],
 
   CLIENTES: ['id','creado','creado_por','comercial_id','captador_id',
@@ -114,7 +116,7 @@ const ESQUEMA = {
     'paneles_num','panel_modelo','panel_wp','inversor_modelo','inversor_kw',
     'bateria_kwh','bateria_modelo','cargador_modelo',
     'aero_kw','aero_modelo','deposito_acs','deposito_inercia','suelo_radiante','tejado',
-    'beneficio_no_economico','observaciones','motivo_perdida',
+    'precio_ajustado','beneficio_no_economico','observaciones','motivo_perdida',
     'modificado','modificado_por'],
 
   COBROS: ['id','operacion_id','concepto','importe','fecha_prevista','fecha_cobro',
@@ -313,13 +315,17 @@ const CONFIG_INICIAL = [
   ['comision_aero','400','Comisión por aerotermia vendida (€)'],
   ['comision_fv_ajustada','200','Comisión por fotovoltaica con precio ajustado (€)'],
   ['comision_aero_ajustada','200','Comisión por aerotermia con precio ajustado (€)'],
-  ['comision_captacion','50','Comisión por captación que acaba en venta (€)'],
+  ['comision_captacion_fv','400','Comisión por captar una fotovoltaica que acaba en venta (€)'],
+  ['comision_captacion_aero','400','Comisión por captar una aerotermia que acaba en venta (€)'],
+  ['comision_equipo_fv','400','Comisión del responsable por cada fotovoltaica que vende su equipo (€)'],
+  ['comision_equipo_aero','400','Comisión del responsable por cada aerotermia que vende su equipo (€)'],
   ['objetivo_comercial','6','Ventas sencillas al mes por comercial'],
   ['objetivo_captador','60','Fichas de captación al mes por captador'],
   ['objetivo_visitas_dia','40','Puertas al día por captador'],
   ['coste_estructura_mes','12000','Coste fijo mensual de la empresa (€)'],
   ['dias_vacaciones','22','Días laborables de vacaciones al año por persona'],
   ['resumen_semanal','si','Enviar el resumen semanal por correo los viernes (si/no)'],
+  ['resumen_a','fernandogarcia@zerowattios.com','Mientras tenga un correo, TODOS los resúmenes van ahí y no a cada persona'],
   ['copia_resumen','','Correo que recibe copia de todos los resúmenes (opcional)'],
   ['festivos','','Festivos del año, separados por comas (aaaa-mm-dd)'],
   ['margen_objetivo_pct','32','Margen bruto objetivo (%)'],
@@ -339,14 +345,23 @@ const CONFIG_INICIAL = [
 ];
 
 /* Los seis usuarios del arranque. Las claves se generan al instalar. */
+/**
+ * El equipo, con lo que cobra cada uno. 'nivel' solo sirve para leerlo de un
+ * vistazo; quien manda es la tarifa. 'responsable' es el usuario que cobra
+ * comisión de equipo por lo que cierra esta persona.
+ *
+ * Todo el mundo cobra por captar (400 + 400), venda quien venda después.
+ */
 const USUARIOS_INICIALES = [
-  {nombre:'Superadmin',  usuario:'superadmin', rol:'superadmin', email:'fernandogarciasantos87@gmail.com'},
-  {nombre:'Rubén',       usuario:'ruben',      rol:'admin',      email:'rubenleon@zerowattios.com'},
-  {nombre:'Fernando',    usuario:'fernando',   rol:'admin',      email:'fernandogarcia@zerowattios.com'},
-  {nombre:'Nando',       usuario:'nando',      rol:'comercial',  email:'fernandogarcia@zerowattios.com'},
-  {nombre:'Rober',       usuario:'rober',      rol:'comercial',  email:'robertopaulino@zerowattios.com'},
-  {nombre:'Sandra',      usuario:'sandra',     rol:'captador',   email:'sandrabono@zerowattios.com'},
-  {nombre:'Abraham',     usuario:'abraham',    rol:'captador',   email:'abrahamali@zerowattios.com'}
+  {nombre:'Superadmin', usuario:'superadmin', rol:'superadmin', email:'fernandogarciasantos87@gmail.com'},
+  {nombre:'Rubén',      usuario:'ruben',      rol:'admin',      email:'rubenleon@zerowattios.com'},
+  {nombre:'Fernando',   usuario:'fernando',   rol:'admin',      email:'fernandogarcia@zerowattios.com'},
+  {nombre:'Nando',      usuario:'nando',      rol:'comercial',  email:'fernandogarcia@zerowattios.com',
+   nivel:'sénior', venta:700, equipo:400},
+  {nombre:'Rober',      usuario:'rober',      rol:'comercial',  email:'robertopaulino@zerowattios.com',
+   nivel:'júnior', venta:400, responsable:'nando'},
+  {nombre:'Sandra',     usuario:'sandra',     rol:'captador',   email:'sandrabono@zerowattios.com'},
+  {nombre:'Abraham',    usuario:'abraham',    rol:'captador',   email:'abrahamali@zerowattios.com'}
 ];
 
 
@@ -709,14 +724,33 @@ function instalar() {
         creado: ahora_(), ultimo_acceso: '', debe_cambiar_clave: 'si',
         salario_bruto: u.rol === 'comercial' ? 1500 : (u.rol === 'captador' ? 1300 : 2000),
         dietas_mes: 150, irpf_pct: 15, ss_pct: 6.35,
-        comision_fv: num_(cfg.comision_fv || 400),
-        comision_aero: num_(cfg.comision_aero || 400),
-        comision_fv_ajustada: num_(cfg.comision_fv_ajustada || 200),
-        comision_aero_ajustada: num_(cfg.comision_aero_ajustada || 200),
+        /* Un captador no cierra ventas: su comisión de venta va a cero y
+           cobra por captar, como todo el mundo. */
+        comision_fv: u.rol === 'captador' ? 0 : num_(u.venta || cfg.comision_fv || 400),
+        comision_aero: u.rol === 'captador' ? 0 : num_(u.venta || cfg.comision_aero || 400),
+        comision_fv_ajustada: u.rol === 'captador' ? 0 : num_(cfg.comision_fv_ajustada || 200),
+        comision_aero_ajustada: u.rol === 'captador' ? 0 : num_(cfg.comision_aero_ajustada || 200),
+        comision_captacion_fv: num_(cfg.comision_captacion_fv || 400),
+        comision_captacion_aero: num_(cfg.comision_captacion_aero || 400),
+        comision_equipo_fv: num_(u.equipo || 0),
+        comision_equipo_aero: num_(u.equipo || 0),
+        responsable_id: '',
         objetivo_mes: u.rol === 'captador' ? num_(cfg.objetivo_captador || 60) : num_(cfg.objetivo_comercial || 6),
-        jornada_horas: 7.5, fecha_alta: hoyISO_(), color: '', notas: ''
+        jornada_horas: 7.5, fecha_alta: hoyISO_(), color: '',
+        notas: u.nivel ? 'Comercial ' + u.nivel : ''
       });
       claves.push([u.nombre, u.usuario, u.rol, clave]);
+    });
+
+    /* Los responsables se enlazan al final, cuando ya existen todos. */
+    const porUsuario = {};
+    leer_('USUARIOS').forEach(function (x) { porUsuario[normal_(x.usuario)] = x; });
+    USUARIOS_INICIALES.forEach(function (u) {
+      if (!u.responsable) return;
+      const yo = porUsuario[normal_(u.usuario)], jefe = porUsuario[normal_(u.responsable)];
+      if (yo && jefe && !txt_(yo.responsable_id)) {
+        actualizar_('USUARIOS', yo.id, {responsable_id: jefe.id});
+      }
     });
 
     if (claves.length) {
@@ -1010,6 +1044,11 @@ function publicoConNomina_(u) {
   o.comision_aero = num_(u.comision_aero);
   o.comision_fv_ajustada = num_(u.comision_fv_ajustada);
   o.comision_aero_ajustada = num_(u.comision_aero_ajustada);
+  o.comision_captacion_fv = num_(u.comision_captacion_fv);
+  o.comision_captacion_aero = num_(u.comision_captacion_aero);
+  o.comision_equipo_fv = num_(u.comision_equipo_fv);
+  o.comision_equipo_aero = num_(u.comision_equipo_aero);
+  o.responsable_id = txt_(u.responsable_id);
   o.notas = u.notas;
   return o;
 }
@@ -1089,6 +1128,8 @@ function accGuardarUsuario_(u, p) {
   const d = p.usuario || {};
   const campos = ['nombre','usuario','email','telefono','rol','activo','salario_bruto','dietas_mes',
     'irpf_pct','ss_pct','comision_fv','comision_aero','comision_fv_ajustada','comision_aero_ajustada',
+    'comision_captacion_fv','comision_captacion_aero',
+    'responsable_id','comision_equipo_fv','comision_equipo_aero',
     'objetivo_mes','jornada_horas','fecha_alta','color','notas'];
   const cambios = {};
   campos.forEach(function (c) { if (d[c] !== undefined) cambios[c] = d[c]; });
@@ -2306,9 +2347,14 @@ function resumenPersona_(persona, desde, hasta, conImportes) {
   });
 
   const importeVendido = ganadasRango.reduce(function (a, o) { return a + num_(o.total); }, 0);
-  const comisiones = comisionesDe_(persona, ganadasRango, captacionesVentaTodas.filter(function (c) {
-    return enRango(txt_(c.fecha_resultado) || txt_(c.fecha));
-  }));
+  /* Las captaciones que acaban en venta se pagan a quien abrió la puerta,
+     sea captador o comercial, así que se miran por captador_id siempre. */
+  const misCaptacionesVendidas = captaciones.filter(function (c) {
+    return String(c.captador_id) === String(persona.id) && normal_(c.resultado) === 'venta' &&
+           enRango(txt_(c.fecha_resultado) || txt_(c.fecha));
+  });
+  const comisiones = comisionesDe_(persona, ganadasRango, misCaptacionesVendidas,
+    ventasDeSuEquipo_(persona, desde, hasta));
 
   /* Objetivo del periodo 16-15: una operación doble cuenta por dos. */
   const delPeriodo = misOps.filter(function (o) {
@@ -2411,27 +2457,90 @@ function esGanada_(o) {
     .indexOf(normal_(o.estado)) >= 0;
 }
 
-function comisionesDe_(persona, ganadas, captacionesVenta) {
+/**
+ * Lo que cobra una persona por su trabajo comercial. Hay cuatro formas de
+ * comisionar y no se excluyen entre sí:
+ *
+ *   venta      · la instalación que ha cerrado, a su tarifa
+ *   ajustada   · la misma venta cuando se ha bajado el precio estándar
+ *   captación  · haber abierto la puerta de algo que acabó vendiéndose,
+ *                aunque la venta la cerrara otro
+ *   equipo     · cada venta de alguien que tiene a esta persona de
+ *                responsable; es lo que cobra un sénior por lo que cierra
+ *                su júnior
+ *
+ * Las tarifas son las de la persona; si no las tiene puestas, las de Ajustes.
+ */
+function comisionesDe_(persona, ganadas, captacionesVenta, ventasEquipo) {
   const cfg = config_();
-  const cFV = num_(persona.comision_fv) || num_(cfg.comision_fv);
-  const cAero = num_(persona.comision_aero) || num_(cfg.comision_aero);
-  const cCap = num_(cfg.comision_captacion);
+  const tarifa = function (campo, porDefecto) {
+    const propia = num_(persona[campo]);
+    return propia || num_(cfg[porDefecto || campo]);
+  };
+  const cFV = tarifa('comision_fv');
+  const cAero = tarifa('comision_aero');
+  const cFVaj = tarifa('comision_fv_ajustada');
+  const cAeroaj = tarifa('comision_aero_ajustada');
+  const cCapFV = tarifa('comision_captacion_fv');
+  const cCapAero = tarifa('comision_captacion_aero');
+  const cEqFV = tarifa('comision_equipo_fv');
+  const cEqAero = tarifa('comision_equipo_aero');
+
   let total = 0;
   const detalle = [];
-  ganadas.forEach(function (o) {
-    let c = 0;
+  const apuntar = function (importe, concepto, o, extra) {
+    if (!importe) return;
+    total += importe;
+    detalle.push(Object.assign({
+      operacion_id: o && o.id ? o.id : '', referencia: (o && o.referencia) || '',
+      tipo: o ? o.tipo : '', concepto: concepto, importe: redondear_(importe, 2),
+      fecha: o ? (txt_(o.fecha_firma) || txt_(o.creado)) : ''
+    }, extra || {}));
+  };
+  const porTipo = function (o, fv, aero) {
     const t = normal_(o.tipo);
-    if (t === 'fv' || t === 'fv_aero') c += cFV;
-    if (t === 'aero' || t === 'fv_aero') c += cAero;
-    if (c) { total += c; detalle.push({operacion_id: o.id, referencia: o.referencia, tipo: o.tipo, importe: c,
-      fecha: txt_(o.fecha_firma) || txt_(o.creado)}); }
+    return (t === 'fv' || t === 'fv_aero' ? fv : 0) + (t === 'aero' || t === 'fv_aero' ? aero : 0);
+  };
+
+  ganadas.forEach(function (o) {
+    const ajustada = normal_(o.precio_ajustado) === 'si';
+    apuntar(porTipo(o, ajustada ? cFVaj : cFV, ajustada ? cAeroaj : cAero),
+            ajustada ? 'venta con precio ajustado' : 'venta', o);
   });
+
   (captacionesVenta || []).forEach(function (c) {
-    total += cCap;
-    detalle.push({operacion_id: c.operacion_id || '', referencia: 'Captación ' + c.id, tipo: 'captacion',
-      importe: cCap, fecha: txt_(c.fecha_resultado) || txt_(c.fecha)});
+    const tipo = normal_(c.tecnologia) || 'fv';
+    const importe = (tipo === 'fv' || tipo === 'fv_aero' ? cCapFV : 0) +
+                    (tipo === 'aero' || tipo === 'fv_aero' ? cCapAero : 0);
+    apuntar(importe, 'captación vendida', null,
+      {operacion_id: c.operacion_id || '', referencia: 'Captación ' + c.id, tipo: tipo,
+       fecha: txt_(c.fecha_resultado) || txt_(c.fecha)});
   });
+
+  (ventasEquipo || []).forEach(function (o) {
+    apuntar(porTipo(o, cEqFV, cEqAero), 'venta de su equipo', o, {de: o._de || ''});
+  });
+
   return {total: redondear_(total, 2), detalle: detalle};
+}
+
+/** Las ventas cerradas por la gente que tiene a esta persona de responsable. */
+function ventasDeSuEquipo_(persona, desde, hasta) {
+  const suyos = leer_('USUARIOS').filter(function (x) {
+    return String(x.responsable_id || '') === String(persona.id) && String(x.id) !== String(persona.id);
+  });
+  if (!suyos.length) return [];
+  const nombre = {};
+  suyos.forEach(function (x) { nombre[String(x.id)] = txt_(x.nombre); });
+  return leer_('OPERACIONES').filter(function (o) {
+    if (!nombre[String(o.comercial_id)] || !esGanada_(o)) return false;
+    const f = txt_(o.fecha_firma) || txt_(o.creado);
+    return f >= desde && f <= hasta;
+  }).map(function (o) {
+    const copia = Object.assign({}, o);
+    copia._de = nombre[String(o.comercial_id)];
+    return copia;
+  });
 }
 
 function diasSinParte_(persona, partes) {
@@ -2788,7 +2897,8 @@ function accGenerarNomina_(u, p) {
     return String(c.captador_id) === String(objetivoId) && normal_(c.resultado) === 'venta' &&
            f >= desdeC && f <= hastaC;
   });
-  const com = comisionesDe_(persona, ganadas, capVenta);
+  const com = comisionesDe_(persona, ganadas, capVenta,
+    ventasDeSuEquipo_(persona, desdeC, hastaC));
 
   const bruto = num_(persona.salario_bruto);
   const dietas = num_(persona.dietas_mes);
@@ -3167,6 +3277,7 @@ function acciones_() {
 
     /* administración */
     usuarios: accUsuarios_,
+    importar: accImportar_,
     guardarUsuario: accGuardarUsuario_,
     resetClave: accResetClave_,
     guardarConfig: accGuardarConfig_,
@@ -4091,14 +4202,19 @@ function resumenSemanal(soloA) {
       const html = correoHtml_(u, cuerpo, frase);
       const asunto = 'Tu semana en ZERO WATTIOS · ' + selloFecha_(lunes) + ' a ' + selloFecha_(viernes);
 
-      MailApp.sendEmail({to: txt_(u.email), subject: asunto, htmlBody: html,
-        name: 'CRM ZERO WATTIOS'});
+      /* Mientras «resumen_a» tenga un correo, todo va ahí y no a cada uno.
+         Sirve para rodar el envío sin molestar al equipo; se vacía el campo
+         en Ajustes y cada persona vuelve a recibir el suyo. */
+      const unico = txt_(cfg.resumen_a);
+      MailApp.sendEmail({to: unico || txt_(u.email),
+        subject: asunto + (unico ? ' · ' + txt_(u.nombre) : ''),
+        htmlBody: html, name: 'CRM ZERO WATTIOS'});
       enviados++;
     } catch (e) { fallos.push(txt_(u.usuario) + ': ' + String(e)); }
   });
 
   /* Copia para quien lleve el control, si se ha puesto en Ajustes. */
-  if (txt_(cfg.copia_resumen) && !soloA) {
+  if (txt_(cfg.copia_resumen) && !soloA && !txt_(cfg.resumen_a)) {
     try {
       MailApp.sendEmail({to: txt_(cfg.copia_resumen),
         subject: 'Resúmenes semanales enviados · semana ' + semana,
@@ -4143,4 +4259,255 @@ function actualizarCorreos() {
   });
   Logger.log('Correos actualizados: ' + cambiados);
   return cambiados;
+}
+
+
+/* ==========================================================================
+   15_Importar.gs
+   ========================================================================== */
+
+/**
+ * CRM · ZERO WATTIOS
+ * 15_Importar.gs — Meter de golpe el histórico de la empresa.
+ *
+ * Sirve para arrancar el CRM con lo que ya pasó: los clientes de la carpeta
+ * de Drive, las facturas emitidas, sus cobros, los gastos y las nóminas.
+ * Se puede lanzar las veces que haga falta: cada cosa tiene una clave natural
+ * (la referencia del cliente, la de la operación, el número de factura…) y lo
+ * que ya está se actualiza en lugar de duplicarse.
+ */
+
+/** Los usuarios por su nombre de entrada, para resolver comercial y captador. */
+function usuariosPorNombre_() {
+  const m = {};
+  leer_('USUARIOS').forEach(function (u) {
+    m[normal_(u.usuario)] = u.id;
+    m[normal_(u.nombre)] = u.id;
+  });
+  return m;
+}
+
+/** Busca un registro por el valor de una columna, ya normalizado. */
+function porClave_(tabla, columna) {
+  const m = {};
+  leer_(tabla).forEach(function (r) {
+    const k = normal_(r[columna]);
+    if (k) m[k] = r;
+  });
+  return m;
+}
+
+/**
+ * El paquete puede venir en la llamada o, si es grande, en un archivo JSON
+ * dejado en el Drive de la empresa. Así no hay que empujar megas por HTTP.
+ */
+function paqueteDeDrive_(nombre) {
+  const it = DriveApp.getFilesByName(nombre);
+  if (!it.hasNext()) throw new Error('No encuentro el archivo ' + nombre + ' en el Drive.');
+  const f = it.next();
+  return JSON.parse(f.getBlob().getDataAsString('UTF-8'));
+}
+
+function accImportar_(u, p) {
+  exigir_(u, 'editarTodo');
+  if (txt_(p.archivo)) {
+    const paquete = paqueteDeDrive_(txt_(p.archivo));
+    ['clientes', 'operaciones', 'facturas', 'cobros', 'gastos', 'nominas'].forEach(function (k) {
+      if (paquete[k]) p[k] = paquete[k];
+    });
+  }
+  const gente = usuariosPorNombre_();
+  const quien = function (nombre) { return gente[normal_(nombre)] || ''; };
+  const cuenta = {clientes: 0, operaciones: 0, facturas: 0, cobros: 0, gastos: 0,
+                  actualizados: 0};
+
+  /* ---------- clientes, por referencia ---------- */
+  const clientesPorRef = porClave_('CLIENTES', 'etiquetas');
+  const clientesPorNombre = porClave_('CLIENTES', 'nombre');
+  const refACliente = {};
+  (p.clientes || []).forEach(function (c) {
+    const ref = txt_(c.ref);
+    const existente = clientesPorRef[normal_(ref)] || clientesPorNombre[normal_(c.nombre)];
+    const datos = {
+      nombre: txt_(c.nombre), telefono: txt_(c.telefono), email: txt_(c.email),
+      direccion: txt_(c.direccion), municipio: txt_(c.municipio), cp: txt_(c.cp),
+      comercial_id: quien(c.comercial), captador_id: quien(c.captador),
+      interes: txt_(c.interes), origen: txt_(c.origen) || 'historico',
+      estado: txt_(c.estado) || 'nuevo', fecha_estado: txt_(c.fecha_estado),
+      etiquetas: ref, otros: txt_(c.notas),
+      modificado: ahora_(), modificado_por: u.id
+    };
+    if (existente) {
+      actualizar_('CLIENTES', existente.id, datos);
+      refACliente[ref] = existente.id;
+      cuenta.actualizados++;
+    } else {
+      datos.creado = txt_(c.creado) || ahora_();
+      datos.creado_por = u.id;
+      refACliente[ref] = insertar_('CLIENTES', datos).id;
+      cuenta.clientes++;
+    }
+  });
+
+  /* ---------- operaciones, por referencia ---------- */
+  const opsPorRef = porClave_('OPERACIONES', 'referencia');
+  /* Las obras que ya están cuentan desde el principio: así un paquete que
+     solo traiga gastos puede colgarlos de su instalación. */
+  const refAOperacion = {};
+  leer_('OPERACIONES').forEach(function (o) {
+    if (txt_(o.referencia)) refAOperacion[txt_(o.referencia)] = o.id;
+  });
+  (p.operaciones || []).forEach(function (o) {
+    const ref = txt_(o.referencia);
+    const cliente = refACliente[txt_(o.ref_cliente)] ||
+                    (clientesPorNombre[normal_(o.cliente)] || {}).id || '';
+    if (!cliente) return;
+    const datos = {
+      cliente_id: cliente, comercial_id: quien(o.comercial), captador_id: quien(o.captador),
+      referencia: ref, tipo: txt_(o.tipo), estado: txt_(o.estado) || 'instalada',
+      fecha_propuesta: txt_(o.fecha_propuesta), fecha_contrato: txt_(o.fecha_contrato),
+      fecha_firma: txt_(o.fecha_firma), fecha_instalacion: txt_(o.fecha_instalacion),
+      forma_pago: txt_(o.forma_pago), financiera: txt_(o.financiera),
+      importe_fv: num_(o.importe_fv), importe_aero: num_(o.importe_aero),
+      importe_bateria: num_(o.importe_bateria), importe_cargador: num_(o.importe_cargador),
+      importe_extras: num_(o.importe_extras),
+      iva_pct: o.iva_pct === undefined ? configNum_('iva_pct', 21) : num_(o.iva_pct),
+      paneles_num: num_(o.paneles_num), panel_modelo: txt_(o.panel_modelo),
+      inversor_modelo: txt_(o.inversor_modelo), inversor_kw: num_(o.inversor_kw),
+      bateria_kwh: num_(o.bateria_kwh), bateria_modelo: txt_(o.bateria_modelo),
+      cargador_modelo: txt_(o.cargador_modelo),
+      aero_kw: num_(o.aero_kw), aero_modelo: txt_(o.aero_modelo),
+      precio_ajustado: txt_(o.precio_ajustado) || 'no',
+      observaciones: txt_(o.observaciones)
+    };
+    /* El total lo manda el histórico si viene; si no, se suma por partidas. */
+    const base = num_(o.base) || (datos.importe_fv + datos.importe_aero +
+      datos.importe_bateria + datos.importe_cargador + datos.importe_extras);
+    datos.base = redondear_(base, 2);
+    datos.total = num_(o.total) || redondear_(base * (1 + datos.iva_pct / 100), 2);
+
+    const existente = opsPorRef[normal_(ref)];
+    if (existente) {
+      actualizar_('OPERACIONES', existente.id, datos);
+      refAOperacion[ref] = existente.id;
+      cuenta.actualizados++;
+    } else {
+      datos.creado = txt_(o.creado) || txt_(o.fecha_firma) || ahora_();
+      datos.creado_por = u.id;
+      refAOperacion[ref] = insertar_('OPERACIONES', datos).id;
+      cuenta.operaciones++;
+    }
+    sincronizarEstadoCliente_(cliente);
+  });
+
+  /* ---------- facturas, por número ---------- */
+  const factPorNumero = porClave_('FACTURAS', 'numero');
+  (p.facturas || []).forEach(function (f) {
+    const opId = refAOperacion[txt_(f.ref_operacion)] || '';
+    const cliId = refACliente[txt_(f.ref_cliente)] ||
+      (opId ? txt_((leer_('OPERACIONES').filter(function (x) { return x.id === opId; })[0] || {}).cliente_id) : '');
+    const datos = {
+      numero: txt_(f.numero), operacion_id: opId, cliente_id: cliId,
+      fecha_emision: txt_(f.fecha), concepto: txt_(f.concepto),
+      base: num_(f.base), iva_pct: num_(f.iva_pct) || 21, iva: num_(f.iva),
+      total: num_(f.total), estado: txt_(f.estado) || 'cobrada',
+      fecha_vencimiento: txt_(f.fecha_vencimiento), fecha_cobro: txt_(f.fecha_cobro),
+      emitida_por: u.id, notas: txt_(f.notas)
+    };
+    const existente = factPorNumero[normal_(f.numero)];
+    if (existente) { actualizar_('FACTURAS', existente.id, datos); cuenta.actualizados++; }
+    else { insertar_('FACTURAS', datos); cuenta.facturas++; }
+  });
+
+  /* ---------- cobros: la clave es la operación más el concepto ---------- */
+  const cobrosPorClave = {};
+  leer_('COBROS').forEach(function (c) {
+    cobrosPorClave[txt_(c.operacion_id) + '|' + normal_(c.concepto) + '|' + redondear_(num_(c.importe), 2)] = c;
+  });
+  (p.cobros || []).forEach(function (c) {
+    const opId = refAOperacion[txt_(c.ref_operacion)] || '';
+    if (!opId) return;
+    const clave = opId + '|' + normal_(c.concepto) + '|' + redondear_(num_(c.importe), 2);
+    const datos = {
+      operacion_id: opId, concepto: txt_(c.concepto), importe: redondear_(num_(c.importe), 2),
+      fecha_prevista: txt_(c.fecha_prevista), fecha_cobro: txt_(c.fecha_cobro),
+      estado: txt_(c.fecha_cobro) ? 'cobrado' : 'pendiente',
+      metodo: txt_(c.metodo) || 'transferencia', notas: txt_(c.notas)
+    };
+    const existente = cobrosPorClave[clave];
+    if (existente) { actualizar_('COBROS', existente.id, datos); cuenta.actualizados++; }
+    else { datos.creado = ahora_(); datos.creado_por = u.id; insertar_('COBROS', datos); cuenta.cobros++; }
+  });
+
+  /* ---------- gastos: proveedor, fecha e importe ---------- */
+  const gastosPorClave = {};
+  leer_('GASTOS').forEach(function (g) {
+    gastosPorClave[normal_(g.proveedor) + '|' + txt_(g.fecha) + '|' +
+                   redondear_(num_(g.importe), 2)] = g;
+  });
+  const claveGasto = function (prov, fecha, importe) {
+    return normal_(prov) + '|' + txt_(fecha) + '|' + redondear_(num_(importe), 2);
+  };
+  (p.gastos || []).forEach(function (g) {
+    /* «anterior» señala un gasto que ya está, para corregirlo en su sitio:
+       así el apunte del banco pasa a ser la factura de la obra, con su
+       importe sin IVA y la instalación a la que pertenece, sin duplicarse. */
+    const propia = claveGasto(g.proveedor, g.fecha, g.importe);
+    const ant = g.anterior;
+    const antigua = ant ? claveGasto(ant.proveedor, ant.fecha, ant.importe) : '';
+    /* Si ya se corrigió en una pasada anterior, la clave vieja ya no está y
+       vale la nueva; por eso se busca primero una y luego la otra. */
+    const clave = (antigua && gastosPorClave[antigua]) ? antigua : propia;
+    const datos = {
+      operacion_id: refAOperacion[txt_(g.ref_operacion)] || '',
+      categoria: txt_(g.categoria) || 'otros', proveedor: txt_(g.proveedor),
+      concepto: txt_(g.concepto), importe: redondear_(num_(g.importe), 2),
+      iva_pct: num_(g.iva_pct) || 21, fecha: txt_(g.fecha),
+      estado_pago: txt_(g.estado_pago) || 'pagado', fecha_pago: txt_(g.fecha_pago) || txt_(g.fecha),
+      factura_proveedor: txt_(g.factura_proveedor), notas: txt_(g.notas)
+    };
+    const existente = gastosPorClave[clave];
+    if (existente) {
+      actualizar_('GASTOS', existente.id, datos);
+      delete gastosPorClave[clave];
+      gastosPorClave[propia] = existente;
+      cuenta.actualizados++;
+    } else {
+      datos.creado = ahora_(); datos.creado_por = u.id;
+      insertar_('GASTOS', datos);
+      gastosPorClave[propia] = datos;
+      cuenta.gastos++;
+    }
+  });
+
+  /* ---------- nóminas: una por persona y mes ---------- */
+  const nomPorClave = {};
+  leer_('NOMINAS').forEach(function (n) {
+    nomPorClave[txt_(n.usuario_id) + '|' + txt_(n.periodo)] = n;
+  });
+  cuenta.nominas = 0;
+  (p.nominas || []).forEach(function (n) {
+    const uid = quien(n.usuario);
+    if (!uid) return;
+    const bruto = num_(n.bruto), dietas = num_(n.dietas), comisiones = num_(n.comisiones);
+    const brutoTotal = num_(n.bruto_total) || redondear_(bruto + dietas + comisiones, 2);
+    const irpf = num_(n.irpf), ss = num_(n.ss);
+    const datos = {
+      usuario_id: uid, periodo: txt_(n.periodo),
+      bruto: bruto, dietas: dietas, comisiones: comisiones, otros: num_(n.otros),
+      bruto_total: brutoTotal,
+      irpf_pct: num_(n.irpf_pct) || pct_(irpf, brutoTotal), irpf: irpf,
+      ss_pct: num_(n.ss_pct) || pct_(ss, brutoTotal), ss: ss,
+      neto: num_(n.neto) || redondear_(brutoTotal - irpf - ss, 2),
+      estado: txt_(n.estado) || 'pagada', fecha_pago: txt_(n.fecha_pago),
+      detalle: txt_(n.detalle), notas: txt_(n.notas)
+    };
+    const clave = uid + '|' + datos.periodo;
+    const existente = nomPorClave[clave];
+    if (existente) { actualizar_('NOMINAS', existente.id, datos); cuenta.actualizados++; }
+    else { datos.creado = ahora_(); insertar_('NOMINAS', datos); cuenta.nominas++; }
+  });
+
+  registrar_(u, 'importar_historico', 'CRM', '', JSON.stringify(cuenta));
+  return {ok: true, resumen: cuenta};
 }
