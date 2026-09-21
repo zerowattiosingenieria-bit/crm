@@ -304,5 +304,42 @@ const bajaCopia = despachar_({accion: 'descargarCopia', token: sesiones.fernando
 comprobar('se puede descargar la última copia', bajaCopia.ok === true && !!bajaCopia.datos, bajaCopia.error);
 comprobar('el disparador semanal se instala', instalarDisparadores() === true);
 
+console.log('\n== Banco ==');
+const movimientos = [
+  {fecha: '2026-09-21', concepto: 'TRANSFERENCIA', importe: 14990, saldo: 20553.4},
+  {fecha: '2026-09-21', concepto: 'PAGO FACTURA 2601', importe: -1149.5, saldo: 13400.35},
+  {fecha: '2026-08-31', concepto: 'TGSS.COTIZACION 0', importe: -1746.02, saldo: 6225.75},
+  {fecha: '2026-08-28', concepto: 'PAGO NOMINA AGOSTO', importe: -774.97, saldo: 8713.77},
+  {fecha: '2026-08-28', concepto: 'PAGO NOMINA AGOSTO', importe: -774.97, saldo: 7938.80},
+  {fecha: '2026-09-17', concepto: 'WWW.JIBBLE.IO', importe: -7.07, saldo: 12664.06},
+  {fecha: '2026-09-15', concepto: 'DIGI SPAIN TELEC.', importe: -35.9, saldo: 12600}
+];
+const imp1 = despachar_({accion: 'importarBanco', token: sesiones.fernando.token, movimientos});
+comprobar('se importan los movimientos', imp1.ok === true && imp1.nuevos === 7, JSON.stringify(imp1));
+const imp2 = despachar_({accion: 'importarBanco', token: sesiones.fernando.token, movimientos});
+comprobar('no se duplican al reimportar', imp2.nuevos === 0 && imp2.repetidos === 7, JSON.stringify(imp2));
+const banco = despachar_({accion: 'banco', token: sesiones.fernando.token});
+const porConcepto = {};
+banco.movimientos.forEach(m => { porConcepto[m.concepto] = m.categoria; });
+comprobar('reconoce las nóminas', porConcepto['PAGO NOMINA AGOSTO'] === 'nominas', porConcepto);
+comprobar('reconoce la Seguridad Social', porConcepto['TGSS.COTIZACION 0'] === 'seguridad_social');
+comprobar('reconoce a los proveedores', porConcepto['PAGO FACTURA 2601'] === 'proveedor');
+comprobar('reconoce el software', porConcepto['WWW.JIBBLE.IO'] === 'servicios');
+comprobar('reconoce la telefonía', porConcepto['DIGI SPAIN TELEC.'] === 'telefonia');
+comprobar('reconoce los cobros de cliente', porConcepto['TRANSFERENCIA'] === 'cobro_cliente');
+comprobar('guarda dos apuntes iguales del mismo día', 
+  banco.movimientos.filter(m => m.concepto === 'PAGO NOMINA AGOSTO').length === 2);
+comprobar('el saldo es el del último movimiento', num_(banco.saldo) === 20553.4, banco.saldo);
+comprobar('el coste de estructura deja fuera material e impuestos',
+  banco.estructura_real > 0, banco.estructura_real);
+const bancoComercial = despachar_({accion: 'banco', token: sesiones.nando.token});
+comprobar('un comercial no ve el banco', bancoComercial.ok === false);
+
+const movBanco = banco.movimientos.filter(m => m.concepto === 'PAGO FACTURA 2601')[0];
+const gastoBanco = despachar_({accion: 'gastoDesdeBanco', token: sesiones.fernando.token,
+  id: movBanco.id, operacion_id: op.operacion.id, categoria: 'material_fv', proveedor: 'Proveedor'});
+comprobar('una salida se convierte en gasto de la instalación', gastoBanco.ok === true, gastoBanco.error);
+comprobar('el gasto nace pagado', gastoBanco.gasto.estado_pago === 'pagado');
+
 console.log('\n' + (fallos ? 'FALLAN ' + fallos + ' de ' + pruebas : 'Todo correcto: ' + pruebas + ' comprobaciones'));
 process.exit(fallos ? 1 : 0);
