@@ -180,7 +180,50 @@ export async function vistaAjustes({refrescar}) {
       'Estos valores los usan las propuestas, las comisiones y los cálculos de salud financiera.'),
     formularios.map(x => tarjeta(x.titulo, x.f.nodo)),
     h('.acciones', btn),
+    resumenSemanal(),
     copiasSeguridad());
+}
+
+/* ---------- resumen semanal por correo ---------- */
+function resumenSemanal() {
+  const gente = api.estado.usuarios.filter(u => u.activo === 'si');
+  const filas = tabla([
+    {clave: 'nombre', et: 'Persona', pinta: u => h('b', u.nombre)},
+    {clave: 'rol', et: 'Rol', pinta: u => capital(u.rol)},
+    {clave: 'email', et: 'Correo donde lo recibe',
+     pinta: u => txt(u.email) ? u.email : h('span.nota', 'sin correo: no lo recibirá')}
+  ], gente, {vacio: 'Sin usuarios activos.'});
+
+  const btnProbar = h('button.btn.mini', 'Mandármelo a mí para verlo');
+  btnProbar.addEventListener('click', async () => {
+    btnProbar.disabled = true;
+    const original = btnProbar.textContent;
+    btnProbar.textContent = 'Enviando…';
+    try { await api.pedir('probarResumen'); aviso('Te lo he mandado a tu correo.'); }
+    catch (e) { avisoError(e); }
+    finally { btnProbar.disabled = false; btnProbar.textContent = original; }
+  });
+
+  const btnTodos = h('button.btn.mini.primario', 'Enviarlo ahora a todo el equipo');
+  btnTodos.addEventListener('click', async () => {
+    if (!await confirmar('Se manda el resumen de esta semana a todo el equipo, ahora mismo.',
+      {botón: 'Enviar', peligro: false})) return;
+    btnTodos.disabled = true;
+    const original = btnTodos.textContent;
+    btnTodos.textContent = 'Enviando…';
+    try {
+      const r = await api.pedir('resumenSemanalAhora');
+      aviso(r.resultado.enviados + ' resúmenes enviados.');
+    } catch (e) { avisoError(e); }
+    finally { btnTodos.disabled = false; btnTodos.textContent = original; }
+  });
+
+  return tarjeta('Resumen semanal por correo', filas, {
+    sinRelleno: true,
+    subtitulo: 'Cada viernes sobre las 18:00 cada uno recibe cómo le ha ido la semana, ' +
+      'con sus números, lo que tiene por delante y una frase para cerrar',
+    acciones: [btnProbar, btnTodos]
+  });
 }
 
 /* ---------- copias de seguridad ---------- */
