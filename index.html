@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#242422">
+<meta name="description" content="CRM de ZERO WATTIOS: clientes, instalaciones, contabilidad y equipo.">
+<title>CRM · ZERO WATTIOS</title>
+<link rel="icon" href="assets/img/favicon-64.png">
+<link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body>
+
+<!-- ======================= ENTRADA ======================= -->
+<section class="acceso" id="acceso">
+  <form class="acceso-caja" id="form-acceso" autocomplete="on">
+    <img class="marca" src="assets/img/logo.png" alt="ZERO WATTIOS">
+    <h1>Entrar en el CRM</h1>
+    <p class="sub">Panel interno de ZERO WATTIOS INGENIERÍA.</p>
+
+    <label class="campo"><span>Usuario</span>
+      <input id="usuario" name="username" autocomplete="username" autocapitalize="none"
+             spellcheck="false" required>
+    </label>
+    <label class="campo"><span>Clave</span>
+      <input id="clave" name="password" type="password" autocomplete="current-password" required>
+    </label>
+
+    <div id="acceso-error" class="etiqueta mal" style="display:none; margin-bottom:12px"></div>
+    <button class="btn primario" id="btn-entrar" style="width:100%; justify-content:center">Entrar</button>
+
+    <div id="acceso-config" style="margin-top:18px; display:none">
+      <label class="campo"><span>Dirección del servidor (Apps Script)</span>
+        <input id="endpoint" placeholder="https://script.google.com/macros/s/.../exec" spellcheck="false">
+      </label>
+      <button type="button" class="btn" id="btn-guardar-endpoint" style="width:100%; justify-content:center">
+        Guardar dirección
+      </button>
+    </div>
+    <p class="acceso-pie">
+      <a href="#" id="ver-config">Configurar servidor</a> · v<span id="version-app"></span>
+    </p>
+  </form>
+</section>
+
+<!-- ======================= APLICACIÓN ======================= -->
+<div class="app" id="app">
+  <aside class="lateral" id="lateral">
+    <div class="marca">
+      <img src="assets/img/logo-dark-h96.png" alt="ZERO WATTIOS" class="wordmark">
+      <span class="sub-marca">CRM interno</span>
+    </div>
+    <nav id="menu"></nav>
+    <div class="yo" id="yo"></div>
+  </aside>
+
+  <main class="principal">
+    <header class="barra">
+      <button class="btn plano menu-movil" id="btn-menu" aria-label="Menú">☰</button>
+      <h1 id="titulo">Panel</h1>
+      <div class="buscador"><input id="buscador" placeholder="Buscar cliente, dirección, teléfono…"></div>
+      <div class="acciones" id="acciones-barra"></div>
+    </header>
+    <div class="contenido" id="vista"></div>
+  </main>
+</div>
+
+<div class="aviso-flotante" id="aviso" role="status" aria-live="polite"></div>
+<div id="ventanas"></div>
+
+<script type="module" src="assets/js/app.js"></script>
+</body>
+</html>
