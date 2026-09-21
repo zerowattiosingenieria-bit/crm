@@ -80,10 +80,34 @@ global.ContentService = {
 };
 global.Logger = {log: m => console.log('[log] ' + m)};
 global.Maps = {newGeocoder: () => ({setRegion() { return this; }, geocode: () => ({status: 'ZERO_RESULTS'})})};
+
+/* Drive simulado: guarda los archivos en memoria. */
+const DRIVE = {};
+function archivoFalso(id, nombre, tipo, bytes) {
+  return {
+    getId: () => id, getName: () => nombre, getMimeType: () => tipo,
+    getBlob: () => ({getBytes: () => bytes}),
+    setTrashed: () => { delete DRIVE[id]; }
+  };
+}
+global.DriveApp = {
+  createFolder: nombre => ({getId: () => 'CARPETA_' + nombre,
+    createFile: blob => {
+      const id = 'ARCHIVO_' + Object.keys(DRIVE).length;
+      DRIVE[id] = archivoFalso(id, blob.nombre, blob.tipo, blob.bytes);
+      return DRIVE[id];
+    }}),
+  getFoldersByName: () => ({hasNext: () => false}),
+  getFolderById: id => DriveApp.createFolder(id),
+  getFileById: id => { if (!DRIVE[id]) throw new Error('no existe'); return DRIVE[id]; }
+};
 global.Utilities = {
   DigestAlgorithm: {SHA_256: 'sha256'},
   Charset: {UTF_8: 'utf8'},
   getUuid: () => crypto.randomUUID(),
+  newBlob: (bytes, tipo, nombre) => ({bytes, tipo, nombre}),
+  base64Encode: b => Buffer.from(b).toString('base64'),
+  base64Decode: s => Array.from(Buffer.from(String(s), 'base64')),
   sleep: () => {},
   computeDigest: (alg, txt) => {
     const h = crypto.createHash('sha256').update(txt, 'utf8').digest();

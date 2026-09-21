@@ -204,5 +204,27 @@ console.log('\n== Sesión ==');
 comprobar('sin token no se entra', despachar_({accion: 'datos'}).ok === false);
 comprobar('token inventado rechazado', despachar_({accion: 'datos', token: 'xxx'}).ok === false);
 
+console.log('\n== Nómina en PDF ==');
+const pdfFalso = Buffer.from('%PDF-1.4 nomina de prueba').toString('base64');
+const subida = despachar_({accion: 'subirNomina', token: sesiones.fernando.token,
+  usuario_id: sesiones.nando.usuario.id, periodo: '2026-09', tipo: 'application/pdf',
+  datos: pdfFalso, neto: 1899.55, estado: 'pagada', fecha_pago: hoyISO_()});
+comprobar('dirección sube el PDF de la nómina', subida.ok === true, subida.error);
+comprobar('la nómina guarda el archivo', !!subida.nomina.archivo_id);
+const subeOtro = despachar_({accion: 'subirNomina', token: sesiones.nando.token,
+  usuario_id: sesiones.rober.usuario.id, periodo: '2026-09', datos: pdfFalso});
+comprobar('un comercial no puede subir nóminas', subeOtro.ok === false);
+const baja = despachar_({accion: 'descargarNomina', token: sesiones.nando.token, id: subida.nomina.id});
+comprobar('cada uno se descarga la suya', baja.ok === true && baja.datos === pdfFalso, baja.error);
+const bajaAjena = despachar_({accion: 'descargarNomina', token: sesiones.rober.token, id: subida.nomina.id});
+comprobar('nadie se descarga la de otro', bajaAjena.ok === false);
+const bajaDireccion = despachar_({accion: 'descargarNomina', token: sesiones.ruben.token, id: subida.nomina.id});
+comprobar('dirección sí puede', bajaDireccion.ok === true);
+const listaNom = despachar_({accion: 'nominas', token: sesiones.nando.token});
+comprobar('la nómina aparece en su lista',
+  listaNom.nominas.some(n => n.periodo === '2026-09' && String(n.neto) !== ''), listaNom.nominas.length);
+const borrada = despachar_({accion: 'borrarNomina', token: sesiones.nando.token, id: subida.nomina.id});
+comprobar('un comercial no borra nóminas', borrada.ok === false);
+
 console.log('\n' + (fallos ? 'FALLAN ' + fallos + ' de ' + pruebas : 'Todo correcto: ' + pruebas + ' comprobaciones'));
 process.exit(fallos ? 1 : 0);

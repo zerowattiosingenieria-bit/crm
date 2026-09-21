@@ -137,19 +137,24 @@ async function entrar(navegador, usuario) {
   await dir.pag.screenshot({path: path.join(SALIDA, 'flujo_cobros.png'), fullPage: true});
 
   await dir.pag.evaluate(() => { location.hash = '#nomina'; });
-  await dir.pag.waitForTimeout(2000);
+  await dir.pag.waitForTimeout(2200);
   const opcionNando = await dir.pag.$eval('.filtros select',
     el => Array.from(el.options).find(o => o.textContent.includes('Nando')).value);
   await dir.pag.selectOption('.filtros select', opcionNando);
   await dir.pag.waitForTimeout(1800);
-  await dir.pag.click('text=+ Generar nómina');
+  await dir.pag.click('text=+ Subir nómina en PDF');
   await dir.pag.waitForSelector('.ventana');
+  await dir.pag.setInputFiles('.ventana input[type=file]', '/tmp/nomina-ejemplo.pdf');
+  await dir.pag.fill('.ventana input[type=month]', '2026-09');
+  await dir.pag.fill('.ventana input[type=number]', '1899,55'.replace(',', '.'));
   await dir.pag.click('.ventana footer button.primario');
-  await dir.pag.waitForSelector('.ventana', {state: 'detached', timeout: 10000});
-  await dir.pag.waitForTimeout(1800);
+  await dir.pag.waitForSelector('.ventana', {state: 'detached', timeout: 15000});
+  await dir.pag.waitForTimeout(2200);
   const nomina = await dir.pag.textContent('#vista');
-  comprobar('la nómina se genera con comisiones', /Comisiones/.test(nomina));
-  comprobar('el desglose por días está', /Día a día/.test(nomina));
+  comprobar('la nómina en PDF queda subida', /Septiembre de 2026|septiembre de 2026/.test(nomina), '');
+  comprobar('se ve el botón de abrir el PDF', /Ver PDF/.test(nomina));
+  comprobar('el devengo día a día sigue disponible',
+    /Ver el devengo día a día/.test(nomina));
   await dir.pag.screenshot({path: path.join(SALIDA, 'flujo_nomina.png'), fullPage: true});
 
   console.log('\n== Mapa de dirección ==');
