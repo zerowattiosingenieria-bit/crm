@@ -83,7 +83,15 @@ queda en https://zerowattiosingenieria-bit.github.io/crm/
    y las comisiones: de ahí salen los cálculos de margen y de salud
    financiera.
 
-## 6. Datos de ejemplo (opcional)
+## 6. Nóminas en PDF
+
+La primera vez que dirección suba una nómina, Apps Script pedirá permiso para
+usar Google Drive. Se crea sola una carpeta llamada *NÓMINAS · CRM ZERO
+WATTIOS* en el Drive de la cuenta de la empresa. Los PDF se guardan ahí **sin
+compartir con nadie**: el CRM los entrega solo a su dueño o a dirección, y
+nunca por un enlace público.
+
+## 7. Datos de ejemplo (opcional)
 
 Para ver el CRM lleno antes de meter clientes de verdad, ejecuta la función
 **cargarDemo** desde el editor de Apps Script. Crea dieciséis clientes
@@ -91,7 +99,7 @@ ficticios con sus instalaciones, cobros y gastos. Cuando quieras empezar en
 limpio, ejecuta **borrarDemo**: vacía las tablas de trabajo y deja usuarios y
 configuración intactos.
 
-## 7. Copias de seguridad
+## 8. Copias de seguridad
 
 La hoja de cálculo guarda su propio historial de versiones (*Archivo →
 Historial de versiones*). Aun así, conviene descargar una copia en `.xlsx`

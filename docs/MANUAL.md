@@ -29,8 +29,8 @@ de lo que ya venció.
 **Mi resumen.** Fichas del periodo contra el objetivo, cuántas acaban en
 sentada y cuántas en venta, y las comisiones devengadas.
 
-**Mi nómina.** Sueldo, dietas y comisiones, con el desglose día a día y la
-posibilidad de consultar entre dos fechas cualesquiera.
+**Mi nómina.** Las nóminas que dirección ha subido, mes a mes, con su PDF.
+Debajo, si te interesa, el devengo día a día que calcula el CRM.
 
 ---
 
@@ -72,8 +72,8 @@ y más adelante. Desde cada línea se llama o se apunta el contacto.
 viva, conversión de propuesta a venta, comisiones devengadas, próximas
 acciones y clientes que llevan más de quince días sin contacto.
 
-**Mi nómina.** Igual que los captadores: sueldo, dietas y comisiones día a
-día, consultable entre fechas.
+**Mi nómina.** Igual que los captadores: los PDF de cada mes y, debajo, el
+devengo día a día calculado.
 
 Los comerciales no ven la contabilidad de la empresa ni los clientes de nadie
 más.
@@ -111,9 +111,13 @@ de esa persona.
 **Partes diarios.** Todo lo que ha enviado el equipo, día a día, con su
 resumen escrito.
 
-**Nóminas.** Generar la nómina de cualquiera (las comisiones se cuentan del 16
-del mes anterior al 15 de este), editarla, marcarla como pagada y enlazar el
-PDF. El desglose por días permite comprobar cualquier periodo.
+**Nóminas.** Subir el PDF de la nómina de cada persona y cada mes: se elige de
+quién es, el mes, el archivo y, si se quiere, el neto y la fecha de pago. El
+PDF queda en el Drive de la empresa sin compartir; solo esa persona y
+dirección pueden abrirlo desde el CRM. Si se vuelve a subir el mismo mes, el
+anterior se sustituye. Debajo sigue el devengo día a día, útil para cuadrar
+comisiones antes de hacer la nómina (se cuentan del 16 del mes anterior al 15
+de este).
 
 **Mapa.** Todos los clientes visitados sobre el mapa. Filtros por estado,
 municipio, comercial, captador, interés y fecha; capa de calor por gasto
