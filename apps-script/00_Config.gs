@@ -302,6 +302,8 @@ const CONFIG_INICIAL = [
   ['objetivo_visitas_dia','40','Puertas al día por captador'],
   ['coste_estructura_mes','12000','Coste fijo mensual de la empresa (€)'],
   ['dias_vacaciones','22','Días laborables de vacaciones al año por persona'],
+  ['resumen_semanal','si','Enviar el resumen semanal por correo los viernes (si/no)'],
+  ['copia_resumen','','Correo que recibe copia de todos los resúmenes (opcional)'],
   ['festivos','','Festivos del año, separados por comas (aaaa-mm-dd)'],
   ['margen_objetivo_pct','32','Margen bruto objetivo (%)'],
   ['dias_cobro_objetivo','45','Días medios de cobro objetivo'],
@@ -321,11 +323,11 @@ const CONFIG_INICIAL = [
 
 /* Los seis usuarios del arranque. Las claves se generan al instalar. */
 const USUARIOS_INICIALES = [
-  {nombre:'Superadmin',  usuario:'superadmin', rol:'superadmin', email:'zerowattiosingenieria@gmail.com'},
-  {nombre:'Rubén',       usuario:'ruben',      rol:'admin',      email:''},
+  {nombre:'Superadmin',  usuario:'superadmin', rol:'superadmin', email:'fernandogarciasantos87@gmail.com'},
+  {nombre:'Rubén',       usuario:'ruben',      rol:'admin',      email:'rubenleon@zerowattios.com'},
   {nombre:'Fernando',    usuario:'fernando',   rol:'admin',      email:'fernandogarcia@zerowattios.com'},
-  {nombre:'Nando',       usuario:'nando',      rol:'comercial',  email:''},
-  {nombre:'Rober',       usuario:'rober',      rol:'comercial',  email:''},
-  {nombre:'Sandra',      usuario:'sandra',     rol:'captador',   email:''},
-  {nombre:'Abraham',     usuario:'abraham',    rol:'captador',   email:''}
+  {nombre:'Nando',       usuario:'nando',      rol:'comercial',  email:'fernandogarcia@zerowattios.com'},
+  {nombre:'Rober',       usuario:'rober',      rol:'comercial',  email:'robertopaulino@zerowattios.com'},
+  {nombre:'Sandra',      usuario:'sandra',     rol:'captador',   email:'sandrabono@zerowattios.com'},
+  {nombre:'Abraham',     usuario:'abraham',    rol:'captador',   email:'abrahamali@zerowattios.com'}
 ];

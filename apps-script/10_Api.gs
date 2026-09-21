@@ -83,7 +83,11 @@ function acciones_() {
     /* copias de seguridad */
     copias: accCopias_,
     copiaAhora: accCopiaAhora_,
-    descargarCopia: accDescargarCopia_
+    descargarCopia: accDescargarCopia_,
+
+    /* resumen semanal por correo */
+    resumenSemanalAhora: accResumenSemanalAhora_,
+    probarResumen: accProbarResumen_
   };
 }
 

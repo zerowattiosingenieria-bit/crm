@@ -80,17 +80,28 @@ function copiaSeguridad() {
   return salida;
 }
 
-/** Deja listo el disparador de los viernes a las 19:15. */
+/**
+ * Deja listos los dos disparadores de los viernes: el resumen semanal por
+ * correo a las 18:00 y la copia de seguridad a las 19:15.
+ */
 function instalarDisparadores() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
-    if (t.getHandlerFunction() === 'copiaSeguridad') ScriptApp.deleteTrigger(t);
+    if (['copiaSeguridad', 'resumenSemanal'].indexOf(t.getHandlerFunction()) >= 0) {
+      ScriptApp.deleteTrigger(t);
+    }
   });
+  ScriptApp.newTrigger('resumenSemanal')
+    .timeBased()
+    .onWeekDay(ScriptApp.WeekDay.FRIDAY)
+    .atHour(18).nearMinute(0)
+    .create();
   ScriptApp.newTrigger('copiaSeguridad')
     .timeBased()
     .onWeekDay(ScriptApp.WeekDay.FRIDAY)
     .atHour(19).nearMinute(15)
     .create();
-  Logger.log('Disparador semanal creado: viernes sobre las 19:15 (zona horaria del proyecto).');
+  Logger.log('Disparadores creados: resumen semanal los viernes sobre las 18:00 y ' +
+    'copia de seguridad sobre las 19:15 (zona horaria del proyecto).');
   return true;
 }
 
