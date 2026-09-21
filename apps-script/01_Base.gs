@@ -115,8 +115,17 @@ function insertarLote_(nombre, objetos) {
   if (!objetos || !objetos.length) return 0;
   const h = hoja_(nombre);
   const cab = cabeceras_(nombre);
+  /* Los identificadores se piden de golpe: un solo candado para todo el lote,
+     no uno por fila. Con extractos de cientos de apuntes la diferencia es de
+     minutos a segundos. */
+  let sueltos = [];
+  if (cab.indexOf('id') >= 0) {
+    const faltan = objetos.filter(function (o) { return !o.id; }).length;
+    sueltos = faltan ? nuevosIds_(nombre, faltan) : [];
+  }
+  let siguiente = 0;
   const filas = objetos.map(function (obj) {
-    if (cab.indexOf('id') >= 0 && !obj.id) obj.id = nuevoId_(nombre);
+    if (cab.indexOf('id') >= 0 && !obj.id) obj.id = sueltos[siguiente++];
     return cab.map(function (c) { return obj[c] === undefined || obj[c] === null ? '' : obj[c]; });
   });
   h.getRange(h.getLastRow() + 1, 1, filas.length, cab.length).setValues(filas);
@@ -127,19 +136,28 @@ function insertarLote_(nombre, objetos) {
 
 const PREFIJO = {
   USUARIOS:'U', CLIENTES:'C', OPERACIONES:'OP', COBROS:'CO', FACTURAS:'F',
-  GASTOS:'G', SEGUIMIENTO:'S', CAPTACIONES:'CA', PARTES:'P', NOMINAS:'N', JORNADAS:'J'
+  GASTOS:'G', SEGUIMIENTO:'S', CAPTACIONES:'CA', PARTES:'P', NOMINAS:'N', JORNADAS:'J',
+  BANCO:'B', VACACIONES:'V', SESIONES:'SE', LOG:'L'
 };
 
 /** Identificador corto, legible y único: C-000412. */
-function nuevoId_(nombre) {
+function nuevoId_(nombre) { return nuevosIds_(nombre, 1)[0]; }
+
+/** Reserva n identificadores seguidos con un unico candado. */
+function nuevosIds_(nombre, n) {
+  const cuantos = Math.max(1, Number(n) || 1);
   const clave = 'SEQ_' + nombre;
   const lock = LockService.getScriptLock();
-  lock.waitLock(20000);
+  lock.waitLock(30000);
+  let desde;
   try {
-    const n = Number(PROPS.getProperty(clave) || 0) + 1;
-    PROPS.setProperty(clave, String(n));
-    return (PREFIJO[nombre] || 'X') + '-' + String(n).padStart(6, '0');
+    desde = Number(PROPS.getProperty(clave) || 0) + 1;
+    PROPS.setProperty(clave, String(desde + cuantos - 1));
   } finally { lock.releaseLock(); }
+  const pref = (PREFIJO[nombre] || 'X') + '-';
+  const ids = [];
+  for (let i = 0; i < cuantos; i++) ids.push(pref + String(desde + i).padStart(6, '0'));
+  return ids;
 }
 
 /* ---------- fechas y números ---------- */
