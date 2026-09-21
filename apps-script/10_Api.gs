@@ -67,6 +67,7 @@ function acciones_() {
 
     /* administración */
     usuarios: accUsuarios_,
+    importar: accImportar_,
     guardarUsuario: accGuardarUsuario_,
     resetClave: accResetClave_,
     guardarConfig: accGuardarConfig_,
