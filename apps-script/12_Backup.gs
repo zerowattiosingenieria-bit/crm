@@ -10,11 +10,22 @@
 const CARPETA_BACKUP = 'BACKUP CRM ZERO WATTIOS';
 const MESES_BACKUP = 3;
 
+/* La carpeta cuelga de "ZERO WATTIOS" en el Drive de la empresa cuando esa
+   carpeta existe: así las copias aparecen solas en el ordenador de la
+   oficina a través de Google Drive, sin tener que bajarlas a mano. */
 function carpetaBackup_() {
   const id = PROPS.getProperty('ID_CARPETA_BACKUP');
   if (id) { try { return DriveApp.getFolderById(id); } catch (e) { /* se recrea */ } }
-  const busca = DriveApp.getFoldersByName(CARPETA_BACKUP);
-  const carpeta = busca.hasNext() ? busca.next() : DriveApp.createFolder(CARPETA_BACKUP);
+
+  let padre = null;
+  const empresa = DriveApp.getFoldersByName('ZERO WATTIOS');
+  if (empresa.hasNext()) padre = empresa.next();
+
+  let carpeta = null;
+  const busca = padre ? padre.getFoldersByName(CARPETA_BACKUP) : DriveApp.getFoldersByName(CARPETA_BACKUP);
+  if (busca.hasNext()) carpeta = busca.next();
+  else carpeta = padre ? padre.createFolder(CARPETA_BACKUP) : DriveApp.createFolder(CARPETA_BACKUP);
+
   PROPS.setProperty('ID_CARPETA_BACKUP', carpeta.getId());
   return carpeta;
 }
