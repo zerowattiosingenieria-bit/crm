@@ -148,7 +148,7 @@ const ESQUEMA = {
   JORNADAS: ['id','usuario_id','fecha','tipo','horas','dietas','comisiones',
     'concepto','notas'],
 
-  BANCO: ['id','fecha','concepto','importe','saldo','tipo','categoria','manual','operacion_id',
+  BANCO: ['id','cuenta','fecha','concepto','importe','saldo','tipo','categoria','manual','operacion_id',
     'cobro_id','gasto_id','conciliado','notas','clave','creado'],
 
   VACACIONES: ['id','usuario_id','anio','desde','hasta','dias','tipo','estado','nota',
@@ -3708,10 +3708,16 @@ function accDescargarCopia_(u, p) {
 
 /* Palabras que aparecen en los conceptos del banco y qué significan. */
 const REGLAS_BANCO = [
+  /* Primero los movimientos entre cuentas propias: el dinero no sale de la
+     empresa, solo cambia de sitio, y si cuenta como gasto la estructura y los
+     impuestos salen inflados. */
+  {categoria: 'traspaso',         claves: ['traspaso para imp', 'traspaso entre cuentas',
+                                           'traspaso a impuestos',
+                                           'zero wattios', 'zero watios']},
   {categoria: 'nominas',          claves: ['nomina', 'nóminas', 'nominas']},
   {categoria: 'seguridad_social', claves: ['tgss', 'cotizacion', 'seg social', 'seguridad social']},
   {categoria: 'impuestos',        claves: ['aeat', 'hacienda', 'tributaria', 'iva ', 'irpf', 'modelo 3',
-                                           'impuesto', 'para imp', 'tributos', 'ayto', 'ayuntamiento']},
+                                           'impuesto', 'tributos', 'ayto', 'ayuntamiento']},
   {categoria: 'telefonia',        claves: ['digi', 'movistar', 'vodafone', 'orange', 'jazztel', 'telefonica',
                                            'yoigo', 'pepephone', 'telec']},
   {categoria: 'ropa_epi',         claves: ['uniforme', 'ropa corpora', 'ropa de tra', 'bordados', 'decathlon',
@@ -3759,11 +3765,16 @@ const CATEGORIAS_ESTRUCTURA = ['nominas', 'seguridad_social', 'servicios', 'segu
    la cuenta, y meterlo en el coste fijo desvirtúa el punto de equilibrio. */
 const CATEGORIAS_IMPUESTOS = ['impuestos'];
 
+/* Cuando el extracto no dice de qué cuenta viene, se supone la principal. */
+const CUENTA_POR_DEFECTO = 'CaixaBank';
+
 /** Importa movimientos ya troceados por el navegador. */
 function accImportarBanco_(u, p) {
   exigir_(u, 'finanzas');
   const filas = p.movimientos || [];
   if (!filas.length) return {ok: false, error: 'No ha llegado ningún movimiento.'};
+  const cuenta = txt_(p.cuenta) || CUENTA_POR_DEFECTO;
+  const pref = normal_(cuenta) === normal_(CUENTA_POR_DEFECTO) ? '' : normal_(cuenta) + '|';
 
   /* El saldo entra en la clave: dos apuntes iguales el mismo día son dos
      movimientos distintos y el saldo suele separarlos. Pero un cargo, su
@@ -3786,13 +3797,17 @@ function accImportarBanco_(u, p) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return;
     const importe = num_(f.importe);
     const concepto = txt_(f.concepto);
-    const base = fecha + '|' + normal_(concepto) + '|' + redondear_(importe, 2) +
-                 '|' + redondear_(num_(f.saldo), 2);
+    /* La cuenta principal no lleva prefijo, para que las claves guardadas
+       antes de que existieran varias cuentas sigan valiendo y reimportar su
+       extracto no duplique nada. */
+    const base = pref + fecha + '|' + normal_(concepto) + '|' +
+                 redondear_(importe, 2) + '|' + redondear_(num_(f.saldo), 2);
     const vez = (entrantes[base] || 0) + 1;
     entrantes[base] = vez;
     if (vez <= (guardadas[base] || 0)) { repetidos++; return; }
     const clave = vez > 1 ? base + '#' + vez : base;
     nuevos.push({
+      cuenta: cuenta,
       fecha: fecha, concepto: concepto, importe: redondear_(importe, 2),
       saldo: redondear_(num_(f.saldo), 2),
       tipo: importe >= 0 ? 'ingreso' : 'gasto',
@@ -3803,8 +3818,10 @@ function accImportarBanco_(u, p) {
   });
 
   if (nuevos.length) insertarLote_('BANCO', nuevos);
-  registrar_(u, 'importar_banco', 'BANCO', '', nuevos.length + ' nuevos, ' + repetidos + ' repetidos');
-  return {ok: true, nuevos: nuevos.length, repetidos: repetidos, total: leer_('BANCO').length};
+  registrar_(u, 'importar_banco', 'BANCO', '', cuenta + ': ' + nuevos.length + ' nuevos, ' +
+             repetidos + ' repetidos');
+  return {ok: true, cuenta: cuenta, nuevos: nuevos.length, repetidos: repetidos,
+          total: leer_('BANCO').length};
 }
 
 /** Los movimientos y las cuentas que salen de ellos. */
@@ -3850,6 +3867,19 @@ function accBanco_(u, p) {
     ? redondear_(cerrados.reduce(function (a, m) { return a + m.estructura; }, 0) / cerrados.length, 2)
     : 0;
 
+  /* El saldo es el del último apunte de CADA cuenta; sumar el último de todos
+     daría el de una sola y la tesorería saldría corta. */
+  const porCuenta = {};
+  todos.forEach(function (m) {
+    const c = txt_(m.cuenta) || CUENTA_POR_DEFECTO;
+    if (!porCuenta[c]) porCuenta[c] = {cuenta: c, saldo: num_(m.saldo), fecha: txt_(m.fecha),
+                                       movimientos: 0};
+    porCuenta[c].movimientos += 1;
+  });
+  const cuentas = Object.keys(porCuenta).map(function (k) { return porCuenta[k]; })
+    .sort(function (a, b) { return b.saldo - a.saldo; });
+  const saldoTotal = cuentas.reduce(function (a, c) { return a + c.saldo; }, 0);
+
   const ultimo = todos[0] || {};
   const sinConciliar = lista.filter(function (m) {
     return num_(m.importe) > 0 && normal_(m.conciliado) !== 'si'; });
@@ -3859,7 +3889,8 @@ function accBanco_(u, p) {
     meses: meses,
     categorias: Object.keys(porCategoria).map(function (k) { return porCategoria[k]; })
       .sort(function (a, b) { return b.importe - a.importe; }),
-    saldo: num_(ultimo.saldo), fecha_saldo: txt_(ultimo.fecha),
+    cuentas: cuentas,
+    saldo: redondear_(saldoTotal, 2), fecha_saldo: txt_(ultimo.fecha),
     estructura_real: estructuraReal,
     estructura_config: configNum_('coste_estructura_mes', 0),
     ingresos_sin_casar: sinConciliar.length,
