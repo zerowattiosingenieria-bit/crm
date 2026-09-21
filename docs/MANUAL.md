@@ -196,6 +196,22 @@ apuntarla en ese momento.
 
 ---
 
+## El correo de los viernes
+
+Todos los viernes sobre las 18:00 cada uno recibe en su correo cómo le ha ido
+la semana: sus números, cómo va contra su objetivo, lo que tiene pendiente
+para la semana siguiente y una frase para cerrar. El comercial recibe sus
+ventas, sentadas, propuestas, cartera y comisiones; el captador, sus fichas,
+puertas, citas y conversiones, con las fichas que aún no ha adjudicado a
+ningún comercial; y dirección, además, las cuentas de la casa, cómo ha ido
+cada persona y quién no ha enviado partes.
+
+Los correos salen de la cuenta de la empresa. En *Ajustes* se ve quién lo
+recibe y en qué dirección, se puede mandar uno de prueba a uno mismo y se
+puede lanzar el envío a todo el equipo sin esperar al viernes. Si alguien no
+debe recibirlo, se le quita el correo en *Usuarios* o se pone `resumen_semanal`
+a `no` en Ajustes.
+
 ## Preguntas rápidas
 
 **¿Se puede usar en el móvil?** Sí; el menú se abre con el botón de arriba a
