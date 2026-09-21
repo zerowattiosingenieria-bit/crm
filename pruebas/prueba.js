@@ -312,12 +312,23 @@ const movimientos = [
   {fecha: '2026-08-28', concepto: 'PAGO NOMINA AGOSTO', importe: -774.97, saldo: 8713.77},
   {fecha: '2026-08-28', concepto: 'PAGO NOMINA AGOSTO', importe: -774.97, saldo: 7938.80},
   {fecha: '2026-09-17', concepto: 'WWW.JIBBLE.IO', importe: -7.07, saldo: 12664.06},
-  {fecha: '2026-09-15', concepto: 'DIGI SPAIN TELEC.', importe: -35.9, saldo: 12600}
+  {fecha: '2026-09-15', concepto: 'DIGI SPAIN TELEC.', importe: -35.9, saldo: 12600},
+  /* Un cargo, su devolución y el mismo cargo otra vez: el saldo vuelve al
+     mismo sitio las dos veces y aun así son tres movimientos de verdad. */
+  {fecha: '2026-07-10', concepto: 'TRASPASO PARA IMP', importe: -10000, saldo: 15250.7},
+  {fecha: '2026-07-10', concepto: 'TRASPASO PARA IMP', importe: 10000, saldo: 25250.7},
+  {fecha: '2026-07-10', concepto: 'TRASPASO PARA IMP', importe: -10000, saldo: 15250.7}
 ];
 const imp1 = despachar_({accion: 'importarBanco', token: sesiones.fernando.token, movimientos});
-comprobar('se importan los movimientos', imp1.ok === true && imp1.nuevos === 7, JSON.stringify(imp1));
+comprobar('se importan los movimientos', imp1.ok === true && imp1.nuevos === 10, JSON.stringify(imp1));
 const imp2 = despachar_({accion: 'importarBanco', token: sesiones.fernando.token, movimientos});
-comprobar('no se duplican al reimportar', imp2.nuevos === 0 && imp2.repetidos === 7, JSON.stringify(imp2));
+comprobar('no se duplican al reimportar', imp2.nuevos === 0 && imp2.repetidos === 10, JSON.stringify(imp2));
+const conRepetido = movimientos.concat([
+  {fecha: '2026-07-10', concepto: 'TRASPASO PARA IMP', importe: -10000, saldo: 15250.7}]);
+const imp3 = despachar_({accion: 'importarBanco', token: sesiones.fernando.token,
+  movimientos: conRepetido});
+comprobar('una repetición de más sí entra', imp3.nuevos === 1 && imp3.repetidos === 10,
+  JSON.stringify(imp3));
 const banco = despachar_({accion: 'banco', token: sesiones.fernando.token});
 const porConcepto = {};
 banco.movimientos.forEach(m => { porConcepto[m.concepto] = m.categoria; });
@@ -329,6 +340,9 @@ comprobar('reconoce la telefonía', porConcepto['DIGI SPAIN TELEC.'] === 'telefo
 comprobar('reconoce los cobros de cliente', porConcepto['TRANSFERENCIA'] === 'cobro_cliente');
 comprobar('guarda dos apuntes iguales del mismo día', 
   banco.movimientos.filter(m => m.concepto === 'PAGO NOMINA AGOSTO').length === 2);
+comprobar('guarda un cargo repetido que deja el mismo saldo',
+  banco.movimientos.filter(m => m.concepto === 'TRASPASO PARA IMP' && num_(m.importe) === -10000)
+    .length === 3);
 comprobar('el saldo es el del último movimiento', num_(banco.saldo) === 20553.4, banco.saldo);
 comprobar('el coste de estructura deja fuera material e impuestos',
   banco.estructura_real > 0, banco.estructura_real);
