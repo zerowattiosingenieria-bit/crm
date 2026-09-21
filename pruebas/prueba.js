@@ -389,5 +389,35 @@ const adjudicaComercial = despachar_({accion: 'guardarCaptacion', token: sesione
 comprobar('un comercial no se adjudica captaciones ajenas', adjudicaComercial.ok === false,
   adjudicaComercial.error);
 
+console.log('\n== Resumen semanal por correo ==');
+const envio = resumenSemanal();
+comprobar('se envía a todo el equipo', envio.enviados === 7, JSON.stringify(envio));
+const correos = correosEnviados();
+comprobar('cada correo va a su dirección',
+  correos.every(c => /@/.test(c.to)), correos.map(c => c.to).join(','));
+comprobar('los correos llevan el asunto de la semana',
+  correos.every(c => /Tu semana en ZERO WATTIOS/.test(c.subject)), correos[0].subject);
+const correoRober = correos.find(c => c.to === 'robertopaulino@zerowattios.com');
+comprobar('el correo del comercial habla de sus ventas y su objetivo',
+  /Ventas/.test(correoRober.htmlBody) && /Objetivo del periodo/.test(correoRober.htmlBody));
+comprobar('el comercial no recibe las cuentas de la empresa',
+  !/Margen del año|Beneficio neto/.test(correoRober.htmlBody));
+const correoSandra = correos.find(c => c.to === 'sandrabono@zerowattios.com');
+comprobar('el de la captadora habla de fichas y puertas',
+  /Fichas/.test(correoSandra.htmlBody) && /Puertas/.test(correoSandra.htmlBody));
+comprobar('el de la captadora avisa de fichas sin adjudicar',
+  /adjudicar/i.test(correoSandra.htmlBody));
+const correoRuben = correos.find(c => c.to === 'rubenleon@zerowattios.com');
+comprobar('el de dirección trae las cuentas de la casa',
+  /Margen del año/.test(correoRuben.htmlBody) && /Pendiente de cobro/.test(correoRuben.htmlBody));
+comprobar('el de dirección resume a cada persona',
+  /Cómo ha ido cada uno/.test(correoRuben.htmlBody));
+comprobar('todos terminan con una frase',
+  correos.every(c => /b4fa1e;border-radius:10px/.test(c.htmlBody)));
+comprobar('la frase no es la misma para todos',
+  new Set(correos.map(c => (c.htmlBody.match(/font-style:italic">([^<]+)</) || [])[1])).size > 1);
+comprobar('los correos iniciales son los de la empresa',
+  leer_('USUARIOS').filter(u => u.usuario === 'rober')[0].email === 'robertopaulino@zerowattios.com');
+
 console.log('\n' + (fallos ? 'FALLAN ' + fallos + ' de ' + pruebas : 'Todo correcto: ' + pruebas + ' comprobaciones'));
 process.exit(fallos ? 1 : 0);

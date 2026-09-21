@@ -93,6 +93,12 @@ function archivoFalso(id, nombre, tipo, bytes) {
     setTrashed: () => { delete DRIVE[id]; }
   };
 }
+const CORREOS = [];
+global.MailApp = {
+  sendEmail: opciones => { CORREOS.push(opciones); },
+  getRemainingDailyQuota: () => 100
+};
+global.correosEnviados = () => CORREOS;
 global.ScriptApp = {
   WeekDay: {FRIDAY: 'FRIDAY'},
   getOAuthToken: () => 'token-de-prueba',
