@@ -14,6 +14,7 @@ import {vistaContabilidad, vistaFacturas, vistaGastos, vistaCobros} from './vist
 import {vistaEquipo, vistaResumen, vistaPartes} from './vistas/equipo.js';
 import {vistaParte} from './vistas/parte.js';
 import {vistaNomina} from './vistas/nominas.js';
+import {vistaVacaciones} from './vistas/vacaciones.js';
 import {vistaUsuarios, vistaAjustes, vistaPerfil, vistaRegistro} from './vistas/ajustes.js';
 
 export const VERSION = '1.0.0';
@@ -36,6 +37,7 @@ const VISTAS = {
   resumen:      {titulo: 'Resumen',            pinta: vistaResumen},
   parte:        {titulo: 'Parte del día',      pinta: vistaParte},
   nomina:       {titulo: 'Nómina',             pinta: vistaNomina},
+  vacaciones:   {titulo: 'Vacaciones',         pinta: vistaVacaciones},
   usuarios:     {titulo: 'Usuarios',           pinta: vistaUsuarios,      permiso: 'usuarios'},
   ajustes:      {titulo: 'Ajustes',            pinta: vistaAjustes,       permiso: 'config'},
   registro:     {titulo: 'Registro de actividad', pinta: vistaRegistro,   permiso: 'config'},
@@ -56,6 +58,7 @@ function menuDe(rol) {
       {grupo: 'Lo mío'},
       {id: 'resumen', et: 'Mi resumen', ico: '◔'},
       {id: 'nomina', et: 'Mi nómina', ico: '€'},
+      {id: 'vacaciones', et: 'Mis vacaciones', ico: '☀'},
       {id: 'perfil', et: 'Mi perfil', ico: '◉'}
     ];
   }
@@ -71,6 +74,7 @@ function menuDe(rol) {
       {grupo: 'Lo mío'},
       {id: 'resumen', et: 'Mi resumen', ico: '◔'},
       {id: 'nomina', et: 'Mi nómina', ico: '€'},
+      {id: 'vacaciones', et: 'Mis vacaciones', ico: '☀'},
       {id: 'perfil', et: 'Mi perfil', ico: '◉'}
     ];
   }
@@ -91,6 +95,7 @@ function menuDe(rol) {
     {id: 'equipo', et: 'Equipo', ico: '◍'},
     {id: 'partes', et: 'Partes diarios', ico: '✓'},
     {id: 'nomina', et: 'Nóminas', ico: '◧'},
+    {id: 'vacaciones', et: 'Vacaciones', ico: '☀'},
     {grupo: 'Sistema'},
     {id: 'usuarios', et: 'Usuarios', ico: '◉', soloSuper: true},
     {id: 'ajustes', et: 'Ajustes', ico: '⚙'},
@@ -132,38 +137,40 @@ function pintaYo() {
     h('button', {title: 'Salir', onclick: async () => { await api.salir(); location.reload(); }}, 'Salir'));
 }
 
-let pintando = false;
+/* Cada pintado lleva su número: si el usuario cambia de pantalla mientras
+   una tarda en cargar, la que llegue tarde ya no escribe en la vista. */
+let turno = 0;
+
 export async function pintar() {
-  if (pintando) return;
-  pintando = true;
+  const mio = ++turno;
   const {vista, id} = rutaActual();
   const def = VISTAS[vista] || VISTAS.panel;
 
-  if (def.permiso === 'direccion' && !api.esDireccion()) return fueraDeAlcance();
-  if (def.permiso && def.permiso !== 'direccion' && !api.puede(def.permiso)) return fueraDeAlcance();
-
   $('#titulo').textContent = def.titulo;
   poner($('#acciones-barra'));
-  poner($('#vista'), cargando());
   pintaMenu();
 
+  const fuera = (def.permiso === 'direccion' && !api.esDireccion()) ||
+                (def.permiso && def.permiso !== 'direccion' && !api.puede(def.permiso));
+  if (fuera) {
+    return poner($('#vista'), h('.tarjeta', h('.cuerpo',
+      h('h2', 'Esta parte del CRM no está abierta para tu usuario'),
+      h('p.nota', 'Si necesitas acceso, pídeselo a dirección.'))));
+  }
+
+  poner($('#vista'), cargando());
   try {
     const contenido = await def.pinta({id, ir, refrescar: recargar});
+    if (mio !== turno) return;               // el usuario ya se ha ido a otra pantalla
     poner($('#vista'), contenido);
     window.scrollTo({top: 0});
   } catch (e) {
+    if (mio !== turno) return;
     avisoError(e);
     poner($('#vista'), h('.tarjeta', h('.cuerpo',
       h('h2', 'No se ha podido abrir esta pantalla'),
       h('p.nota', txt(e.message)),
       h('button.btn', {onclick: () => pintar()}, 'Reintentar'))));
-  } finally { pintando = false; }
-
-  function fueraDeAlcance() {
-    pintando = false;
-    poner($('#vista'), h('.tarjeta', h('.cuerpo',
-      h('h2', 'Esta parte del CRM no está abierta para tu usuario'),
-      h('p.nota', 'Si necesitas acceso, pídeselo a dirección.'))));
   }
 }
 
