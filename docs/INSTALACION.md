@@ -95,9 +95,13 @@ nunca por un enlace público.
 
 En el editor de Apps Script, ejecuta una vez la función
 **instalarDisparadores**. A partir de ahí, todos los viernes sobre las 19:15
-el CRM guarda solo una copia completa en la carpeta *BACKUP CRM ZERO WATTIOS*
-del Drive de la empresa: el Excel de la base de datos y un volcado JSON con
-todas las tablas. Las copias de más de tres meses se borran solas.
+el CRM guarda solo una copia completa en *ZERO WATTIOS / BACKUP CRM ZERO
+WATTIOS* dentro del Drive de la empresa: el Excel de la base de datos y un
+volcado JSON con todas las tablas. Las copias de más de tres meses se borran
+solas. Como esa carpeta está sincronizada con Google Drive en el ordenador de
+la oficina, las copias aparecen allí solas; además, una tarea programada de
+Claude las deja cada viernes en el Escritorio, en *BACKUP CRM ZERO WATTIOS*, y
+limpia allí lo que pase de tres meses.
 
 Comprueba que el proyecto tiene la zona horaria de Madrid: en Apps Script,
 **Configuración del proyecto → Zona horaria → (GMT+01:00) Madrid**. Si no, el
