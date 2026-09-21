@@ -132,6 +132,9 @@ function accGuardarOperacion_(u, p) {
     cambios.base = calc.base; cambios.total = calc.total;
     const r = actualizar_('OPERACIONES', d.id, cambios);
     sincronizarEstadoCliente_(u, r);
+    /* Si cambia el importe y todavía no se ha cobrado nada, el calendario
+       de cobros se rehace para que no quede descuadrado. */
+    if (Math.abs(num_(actual.total) - calc.total) > 0.01) recalcularCobros_(u, r);
     registrar_(u, 'editar_operacion', 'OPERACIONES', d.id, cambios.estado || '');
     return {ok: true, operacion: r, cobros: cobrosDe_(u, d.id)};
   }
@@ -196,6 +199,28 @@ function crearCobrosEstandar_(u, op) {
       creado: ahora_(), creado_por: u.id
     });
   });
+}
+
+/**
+ * Rehace el calendario de cobros de una operación cuando cambia su importe.
+ * Solo toca los cobros que aún no se han cobrado: si ya ha entrado dinero,
+ * se deja como está y se avisa en el registro.
+ */
+function recalcularCobros_(u, op) {
+  const cobros = leer_('COBROS').filter(function (c) {
+    return String(c.operacion_id) === String(op.id); });
+  if (!cobros.length) {
+    if (normal_(op.forma_pago) === 'contado' && num_(op.total) > 0) crearCobrosEstandar_(u, op);
+    return;
+  }
+  const cobrado = cobros.filter(function (c) { return txt_(c.fecha_cobro); });
+  if (cobrado.length) {
+    registrar_(u, 'importe_cambiado_con_cobros', 'OPERACIONES', op.id,
+      'Revisar a mano el calendario de cobros: ya había dinero cobrado.');
+    return;
+  }
+  cobros.forEach(function (c) { borrar_('COBROS', c.id); });
+  if (num_(op.total) > 0) crearCobrosEstandar_(u, op);
 }
 
 function cobrosDe_(u, operacionId) {

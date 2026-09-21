@@ -6,65 +6,78 @@
  * Aquí se comprueba la sesión y se reparte el trabajo.
  */
 
-const ACCIONES_PUBLICAS = {login: accLogin_, ping: null};
+/* El mapa se construye al recibir la petición, no al cargar el archivo: así
+   da igual en qué orden evalúe Apps Script los archivos del proyecto. */
+function acciones_() {
+  return {
+    /* sesión */
+    salir: accSalir_,
+    cambiarClave: accCambiarClave_,
 
-const ACCIONES = {
-  /* sesión */
-  salir: accSalir_,
-  cambiarClave: accCambiarClave_,
+    /* datos */
+    datos: accDatos_,
+    buscar: accBuscar_,
+    guardarCliente: accGuardarCliente_,
+    borrarCliente: accBorrarCliente_,
+    guardarOperacion: accGuardarOperacion_,
+    borrarOperacion: accBorrarOperacion_,
+    guardarSeguimiento: accGuardarSeguimiento_,
+    guardarCaptacion: accGuardarCaptacion_,
 
-  /* datos */
-  datos: accDatos_,
-  buscar: accBuscar_,
-  guardarCliente: accGuardarCliente_,
-  borrarCliente: accBorrarCliente_,
-  guardarOperacion: accGuardarOperacion_,
-  borrarOperacion: accBorrarOperacion_,
-  guardarSeguimiento: accGuardarSeguimiento_,
-  guardarCaptacion: accGuardarCaptacion_,
+    /* finanzas */
+    finanzas: accFinanzas_,
+    guardarCobro: accGuardarCobro_,
+    borrarCobro: accBorrarCobro_,
+    guardarFactura: accGuardarFactura_,
+    borrarFactura: accBorrarFactura_,
+    guardarGasto: accGuardarGasto_,
+    borrarGasto: accBorrarGasto_,
 
-  /* finanzas */
-  finanzas: accFinanzas_,
-  guardarCobro: accGuardarCobro_,
-  borrarCobro: accBorrarCobro_,
-  guardarFactura: accGuardarFactura_,
-  borrarFactura: accBorrarFactura_,
-  guardarGasto: accGuardarGasto_,
-  borrarGasto: accBorrarGasto_,
+    /* parte diario */
+    guardarParte: accGuardarParte_,
+    aplicarParte: accAplicarParte_,
+    reanalizar: accReanalizar_,
+    partes: accPartes_,
 
-  /* parte diario */
-  guardarParte: accGuardarParte_,
-  aplicarParte: accAplicarParte_,
-  reanalizar: accReanalizar_,
-  partes: accPartes_,
+    /* resúmenes y analítica */
+    resumen: accResumen_,
+    equipo: accEquipo_,
+    analitica: accAnalitica_,
+    alertas: accAlertas_,
 
-  /* resúmenes y analítica */
-  resumen: accResumen_,
-  equipo: accEquipo_,
-  analitica: accAnalitica_,
-  alertas: accAlertas_,
+    /* nóminas */
+    nominas: accNominas_,
+    nominaDias: accNominaDias_,
+    generarNomina: accGenerarNomina_,
+    guardarNomina: accGuardarNomina_,
+    subirNomina: accSubirNomina_,
+    descargarNomina: accDescargarNomina_,
+    borrarNomina: accBorrarNomina_,
+    guardarJornada: accGuardarJornada_,
 
-  /* nóminas */
-  nominas: accNominas_,
-  nominaDias: accNominaDias_,
-  generarNomina: accGenerarNomina_,
-  guardarNomina: accGuardarNomina_,
-  subirNomina: accSubirNomina_,
-  descargarNomina: accDescargarNomina_,
-  borrarNomina: accBorrarNomina_,
-  guardarJornada: accGuardarJornada_,
+    /* vacaciones */
+    vacaciones: accVacaciones_,
+    solicitarVacaciones: accSolicitarVacaciones_,
+    resolverVacaciones: accResolverVacaciones_,
+    cancelarVacaciones: accCancelarVacaciones_,
 
-  /* mapa */
-  mapa: accMapa_,
-  geocodificar: accGeocodificar_,
+    /* mapa */
+    mapa: accMapa_,
+    geocodificar: accGeocodificar_,
 
-  /* administración */
-  usuarios: accUsuarios_,
-  guardarUsuario: accGuardarUsuario_,
-  resetClave: accResetClave_,
-  guardarConfig: accGuardarConfig_,
-  registro: accRegistro_
-};
+    /* administración */
+    usuarios: accUsuarios_,
+    guardarUsuario: accGuardarUsuario_,
+    resetClave: accResetClave_,
+    guardarConfig: accGuardarConfig_,
+    registro: accRegistro_,
+
+    /* copias de seguridad */
+    copias: accCopias_,
+    copiaAhora: accCopiaAhora_,
+    descargarCopia: accDescargarCopia_
+  };
+}
 
 function doPost(e) {
   let p = {};
@@ -87,7 +100,7 @@ function despachar_(p) {
   try {
     if (accion === 'ping') return {ok: true, version: VERSION, servidor: ahora_()};
     if (accion === 'login') return accLogin_(p);
-    const fn = ACCIONES[accion];
+    const fn = acciones_()[accion];
     if (!fn) return {ok: false, error: 'Acción desconocida: ' + accion};
 
     const u = sesion_(p.token);

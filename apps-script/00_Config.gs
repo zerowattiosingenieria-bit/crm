@@ -129,6 +129,9 @@ const ESQUEMA = {
   JORNADAS: ['id','usuario_id','fecha','tipo','horas','dietas','comisiones',
     'concepto','notas'],
 
+  VACACIONES: ['id','usuario_id','anio','desde','hasta','dias','tipo','estado','nota',
+    'solicitada','resuelta_por','resuelta_fecha','respuesta'],
+
   CONFIG: ['clave','valor','descripcion'],
 
   SESIONES: ['token','usuario_id','creado','expira','agente'],
@@ -241,6 +244,19 @@ const CATALOGO = {
   tiposJornada: [
     ['trabajado','Trabajado'],['vacaciones','Vacaciones'],
     ['festivo','Festivo'],['baja','Baja'],['libre','Libre']
+  ],
+
+  estadosVacaciones: [
+    ['solicitada','Pendiente de aprobar'],
+    ['aprobada','Aprobada'],
+    ['denegada','Denegada'],
+    ['cancelada','Cancelada']
+  ],
+
+  tiposAusencia: [
+    ['vacaciones','Vacaciones'],
+    ['asuntos','Asuntos propios'],
+    ['sin_sueldo','Permiso sin sueldo']
   ]
 };
 
@@ -262,6 +278,8 @@ const CONFIG_INICIAL = [
   ['objetivo_captador','60','Fichas de captación al mes por captador'],
   ['objetivo_visitas_dia','40','Puertas al día por captador'],
   ['coste_estructura_mes','12000','Coste fijo mensual de la empresa (€)'],
+  ['dias_vacaciones','22','Días laborables de vacaciones al año por persona'],
+  ['festivos','','Festivos del año, separados por comas (aaaa-mm-dd)'],
   ['margen_objetivo_pct','32','Margen bruto objetivo (%)'],
   ['dias_cobro_objetivo','45','Días medios de cobro objetivo'],
   ['precio_fv_10_12','9990','FV 10-12 paneles (€)'],
