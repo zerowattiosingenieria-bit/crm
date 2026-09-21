@@ -28,6 +28,14 @@ estado y su previsión; gastos por categoría; facturas emitidas; tesorería
 prevista a 30, 60 y 90 días; y una tabla de salud financiera con semáforos,
 objetivos y consejos concretos para mejorar la caja.
 
+**Banco.** Se sube el extracto que descarga el banco (CSV) y el CRM lo
+clasifica solo: nóminas, Seguridad Social, proveedores, impuestos, servicios,
+seguros, telefonía… De ahí salen el saldo real, las entradas y salidas de cada
+mes y el **coste real de estructura**, que se puede llevar de un clic a los
+cálculos de salud financiera. Las entradas se casan con los cobros pendientes
+de cada instalación y las salidas se convierten en gastos de una obra con un
+botón.
+
 **Agenda.** Lo que toca hoy: seguimientos con fecha, sentadas concertadas e
 instalaciones previstas, separados en vencido, hoy, esta semana y más
 adelante, con botón de llamar y de apuntar el contacto sin salir de la lista.
@@ -69,7 +77,7 @@ energético y ficha completa al pulsar cada punto.
 |---|---|---|---|---|
 | Clientes | todos | todos | solo los suyos | solo los suyos |
 | Instalaciones e importes | sí | sí | las suyas | las de sus captaciones |
-| Contabilidad, facturas, gastos y márgenes | sí | sí | no | no |
+| Contabilidad, banco, facturas, gastos y márgenes | sí | sí | no | no |
 | Mapa de clientes | sí | sí | no | no |
 | Equipo, partes y nóminas de todos | sí | sí | no | no |
 | Su resumen, su nómina y sus vacaciones | sí | sí | sí | sí |
@@ -101,7 +109,7 @@ pruebas/                simulador del backend, pruebas y recorrido con navegador
 
 ```bash
 npm install                 # solo la primera vez (playwright)
-node pruebas/prueba.js      # 109 comprobaciones del backend, sin tocar Google
+node pruebas/prueba.js      # 123 comprobaciones del backend, sin tocar Google
 node pruebas/servidor.js &  # CRM completo en http://localhost:8765 con datos de ejemplo
 node pruebas/flujos.js      # alta de cliente, instalación, parte, cobro, nómina y mapa
 node pruebas/navegador.js   # recorre todas las pantallas con cada rol y guarda capturas
