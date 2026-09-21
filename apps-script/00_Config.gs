@@ -129,6 +129,9 @@ const ESQUEMA = {
   JORNADAS: ['id','usuario_id','fecha','tipo','horas','dietas','comisiones',
     'concepto','notas'],
 
+  BANCO: ['id','fecha','concepto','importe','saldo','tipo','categoria','manual','operacion_id',
+    'cobro_id','gasto_id','conciliado','notas','clave','creado'],
+
   VACACIONES: ['id','usuario_id','anio','desde','hasta','dias','tipo','estado','nota',
     'solicitada','resuelta_por','resuelta_fecha','respuesta'],
 
@@ -251,6 +254,26 @@ const CATALOGO = {
     ['aprobada','Aprobada'],
     ['denegada','Denegada'],
     ['cancelada','Cancelada']
+  ],
+
+  categoriasBanco: [
+    ['cobro_cliente','Cobro de cliente'],
+    ['otros_ingresos','Otros ingresos'],
+    ['proveedor','Proveedores y material'],
+    ['montaje','Montaje y subcontrata'],
+    ['nominas','Nóminas'],
+    ['seguridad_social','Seguridad Social'],
+    ['impuestos','Impuestos'],
+    ['servicios','Software y servicios'],
+    ['seguros','Seguros'],
+    ['banco','Comisiones y gastos bancarios'],
+    ['financiacion','Préstamos y financiación'],
+    ['transporte','Combustible y transporte'],
+    ['telefonia','Teléfono e internet'],
+    ['ropa_epi','Ropa de trabajo y EPI'],
+    ['obra','Licencias y tasas de obra'],
+    ['dietas','Dietas y representación'],
+    ['otros_gastos','Otros gastos']
   ],
 
   tiposAusencia: [

@@ -72,6 +72,14 @@ function acciones_() {
     guardarConfig: accGuardarConfig_,
     registro: accRegistro_,
 
+    /* banco */
+    banco: accBanco_,
+    importarBanco: accImportarBanco_,
+    guardarMovimiento: accGuardarMovimiento_,
+    gastoDesdeBanco: accGastoDesdeBanco_,
+    reclasificarBanco: accReclasificarBanco_,
+    ajustarEstructura: accAjustarEstructura_,
+
     /* copias de seguridad */
     copias: accCopias_,
     copiaAhora: accCopiaAhora_,
