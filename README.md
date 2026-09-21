@@ -16,7 +16,11 @@ Apps Script. No hay servidores que mantener ni cuotas que pagar.
 
 **Clientes y captaciones.** Ficha completa de cada cliente (vivienda, consumo
 actual, perfil, coordenadas), historial de contactos y fichas de captación con
-su resultado. El captador da de alta cliente y cita en una sola pantalla.
+su resultado. El captador da de alta cliente y cita en una sola pantalla y
+adjudica la ficha al comercial que quiera: hasta que no lo hace, esa
+captación no aparece en la cartera de ningún comercial, y el comercial
+adjudicado solo ve las suyas. Desde la ficha se abre la navegación en coche
+hasta la vivienda.
 
 **Instalaciones.** Importes por partida, ayudas y CAE, forma de pago y
 financiación, fechas de propuesta, contrato, firma, instalación y
@@ -36,9 +40,10 @@ cálculos de salud financiera. Las entradas se casan con los cobros pendientes
 de cada instalación y las salidas se convierten en gastos de una obra con un
 botón.
 
-**Agenda.** Lo que toca hoy: seguimientos con fecha, sentadas concertadas e
-instalaciones previstas, separados en vencido, hoy, esta semana y más
-adelante, con botón de llamar y de apuntar el contacto sin salir de la lista.
+**Agenda.** Calendario del mes con un punto por día según lo que haya
+—sentadas, seguimientos, instalaciones— y, debajo, lo mismo separado en
+vencido, hoy, esta semana y más adelante. Cada línea lleva botón de llamar, de
+apuntar el contacto y de arrancar la navegación en coche hasta la vivienda.
 
 **Equipo.** Resumen individual de ventas o captaciones, objetivos por periodo
 del 16 al 15, comisiones devengadas, embudo de puerta fría a venta, ranking,
@@ -97,6 +102,7 @@ assets/js/
   api.js                conversación con el servidor y estado en memoria
   ui.js                 ventanas, tablas, formularios y tarjetas
   graficos.js           gráficos en SVG, sin librerías externas
+  calendario.js         calendario mensual reutilizable
   util.js               formato de fechas, dinero y ayudas varias
   vistas/               una pantalla por archivo
 assets/vendor/leaflet/  mapa (incluido en el repositorio, no depende de CDN)
@@ -109,9 +115,10 @@ pruebas/                simulador del backend, pruebas y recorrido con navegador
 
 ```bash
 npm install                 # solo la primera vez (playwright)
-node pruebas/prueba.js      # 123 comprobaciones del backend, sin tocar Google
+node pruebas/prueba.js      # 135 comprobaciones del backend, sin tocar Google
 node pruebas/servidor.js &  # CRM completo en http://localhost:8765 con datos de ejemplo
 node pruebas/flujos.js      # alta de cliente, instalación, parte, cobro, nómina y mapa
+node pruebas/flujos-captacion.js  # adjudicación al comercial, calendario e ir en coche
 node pruebas/navegador.js   # recorre todas las pantallas con cada rol y guarda capturas
 ```
 
