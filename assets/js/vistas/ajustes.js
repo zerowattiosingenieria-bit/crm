@@ -179,7 +179,49 @@ export async function vistaAjustes({refrescar}) {
     h('p.nota', {estilo: {marginBottom: '14px'}},
       'Estos valores los usan las propuestas, las comisiones y los cálculos de salud financiera.'),
     formularios.map(x => tarjeta(x.titulo, x.f.nodo)),
-    h('.acciones', btn));
+    h('.acciones', btn),
+    copiasSeguridad());
+}
+
+/* ---------- copias de seguridad ---------- */
+function copiasSeguridad() {
+  const caja = h('div', cargando('Mirando las copias…'));
+
+  async function cargar() {
+    try {
+      const d = await api.pedir('copias');
+      const t = tabla([
+        {clave: 'nombre', et: 'Archivo', pinta: c => h('a', {href: c.url, target: '_blank'}, c.nombre)},
+        {clave: 'creado', et: 'Guardada el', pinta: c => c.creado},
+        {clave: 'tamano', et: 'Tamaño', num: true,
+         pinta: c => Math.max(1, Math.round(num(c.tamano) / 1024)) + ' KB'}
+      ], d.copias, {vacio: 'Todavía no hay ninguna copia guardada.'});
+
+      const btn = h('button.btn.mini.primario', 'Hacer una copia ahora');
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        const original = btn.textContent;
+        btn.textContent = 'Copiando…';
+        try { await api.pedir('copiaAhora'); aviso('Copia guardada.'); await cargar(); }
+        catch (e) { avisoError(e); }
+        finally { btn.disabled = false; btn.textContent = original; }
+      });
+
+      poner(caja, tarjeta('Copias de seguridad', t, {
+        sinRelleno: true,
+        subtitulo: 'Cada viernes sobre las 19:15 se guarda una copia; las de más de ' +
+          d.meses + ' meses se borran solas',
+        acciones: [h('a.btn.mini', {href: d.carpeta, target: '_blank'}, 'Abrir la carpeta'), btn]
+      }));
+    } catch (e) {
+      poner(caja, tarjeta('Copias de seguridad',
+        h('div', h('p.nota', txt(e.message)),
+          h('p.nota', 'Si es la primera vez, ejecuta instalarDisparadores() en el editor de Apps Script.'))));
+    }
+  }
+
+  cargar();
+  return caja;
 }
 
 /* ================= mi perfil ================= */
