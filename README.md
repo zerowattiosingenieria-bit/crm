@@ -41,8 +41,11 @@ sentadas, con quién, y un resumen escrito. El sistema lee ese resumen,
 reconoce a los clientes, propone cambios de estado, próximos pasos y fechas, y
 espera confirmación antes de tocar nada.
 
-**Nóminas.** Sueldo, dietas y comisiones por periodo, con desglose día a día y
-consulta entre dos fechas cualesquiera. Cada uno ve la suya; dirección, todas.
+**Nóminas.** Rubén y Fernando suben cada mes el PDF de la nómina de cada
+persona y el resto las consulta por meses desde el propio CRM. Los PDF se
+guardan en el Drive de la empresa sin compartir con nadie: solo su dueño y
+dirección pueden abrirlos. Debajo queda, para quien lo quiera, el devengo día
+a día que calcula el CRM con sueldo, dietas y comisiones.
 
 **Mapa.** Solo para dirección: todos los clientes visitados sobre el mapa, por
 estado, comercial, captador, municipio e interés, con capa de calor por gasto
