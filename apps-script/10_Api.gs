@@ -49,6 +49,9 @@ const ACCIONES = {
   nominaDias: accNominaDias_,
   generarNomina: accGenerarNomina_,
   guardarNomina: accGuardarNomina_,
+  subirNomina: accSubirNomina_,
+  descargarNomina: accDescargarNomina_,
+  borrarNomina: accBorrarNomina_,
   guardarJornada: accGuardarJornada_,
 
   /* mapa */

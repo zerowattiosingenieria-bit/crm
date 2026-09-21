@@ -232,3 +232,94 @@ function accGuardarJornada_(u, p) {
   const r = existente ? actualizar_('JORNADAS', existente.id, datos) : insertar_('JORNADAS', datos);
   return {ok: true, jornada: r};
 }
+
+/* ================= la nómina en PDF ================= */
+/*
+ * Rubén y Fernando suben cada mes el PDF de la nómina de cada persona.
+ * El archivo se guarda en una carpeta del Drive de la empresa y NO se
+ * comparte con nadie: para verlo hay que pedirlo por aquí, y el servidor
+ * solo lo entrega a su dueño o a dirección.
+ */
+
+function carpetaNominas_() {
+  const id = PROPS.getProperty('ID_CARPETA_NOMINAS');
+  if (id) { try { return DriveApp.getFolderById(id); } catch (e) { /* se recrea */ } }
+  const nombre = 'NÓMINAS · CRM ZERO WATTIOS';
+  const busca = DriveApp.getFoldersByName(nombre);
+  const carpeta = busca.hasNext() ? busca.next() : DriveApp.createFolder(nombre);
+  PROPS.setProperty('ID_CARPETA_NOMINAS', carpeta.getId());
+  return carpeta;
+}
+
+/** Sube (o reemplaza) el PDF de la nómina de una persona en un mes. */
+function accSubirNomina_(u, p) {
+  exigir_(u, 'nominasAjenas');
+  const objetivoId = txt_(p.usuario_id);
+  const periodo = txt_(p.periodo);
+  const datos = txt_(p.datos);
+  if (!objetivoId || !/^\d{4}-\d{2}$/.test(periodo)) {
+    return {ok: false, error: 'Falta la persona o el periodo (aaaa-mm).'};
+  }
+  if (!datos) return {ok: false, error: 'No ha llegado el archivo.'};
+
+  const persona = leer_('USUARIOS').filter(function (x) { return String(x.id) === String(objetivoId); })[0];
+  if (!persona) return {ok: false, error: 'No existe esa persona.'};
+
+  const tipo = txt_(p.tipo) || 'application/pdf';
+  const nombre = 'Nomina_' + normal_(persona.usuario).replace(/\s+/g, '_') + '_' + periodo + '.pdf';
+  const blob = Utilities.newBlob(Utilities.base64Decode(datos), tipo, nombre);
+  const archivo = carpetaNominas_().createFile(blob);
+
+  const existente = leer_('NOMINAS').filter(function (n) {
+    return String(n.usuario_id) === String(objetivoId) && txt_(n.periodo) === periodo; })[0];
+
+  /* Si ya había un PDF para ese mes, el viejo se manda a la papelera. */
+  if (existente && txt_(existente.archivo_id)) {
+    try { DriveApp.getFileById(txt_(existente.archivo_id)).setTrashed(true); } catch (e) {}
+  }
+
+  const datosFila = {
+    usuario_id: objetivoId, periodo: periodo,
+    archivo_id: archivo.getId(), archivo_nombre: nombre,
+    subida_por: u.id, subida_fecha: ahora_(),
+    estado: txt_(p.estado) || (existente ? txt_(existente.estado) : 'pagada'),
+    fecha_pago: txt_(p.fecha_pago) || (existente ? txt_(existente.fecha_pago) : ''),
+    neto: p.neto !== undefined && txt_(p.neto) !== '' ? num_(p.neto) : (existente ? num_(existente.neto) : ''),
+    notas: txt_(p.notas) || (existente ? txt_(existente.notas) : '')
+  };
+
+  const r = existente ? actualizar_('NOMINAS', existente.id, datosFila)
+                      : insertar_('NOMINAS', Object.assign({creado: ahora_()}, datosFila));
+  registrar_(u, 'subir_nomina', 'NOMINAS', r.id, persona.usuario + ' ' + periodo);
+  return {ok: true, nomina: r};
+}
+
+/** Devuelve el PDF en base64, solo a su dueño o a dirección. */
+function accDescargarNomina_(u, p) {
+  const n = leer_('NOMINAS').filter(function (x) { return String(x.id) === String(p.id); })[0];
+  if (!n) return {ok: false, error: 'No existe esa nómina.'};
+  if (String(n.usuario_id) !== String(u.id) && !permisos_(u).nominasAjenas) {
+    return {ok: false, error: 'Esa nómina no es tuya.'};
+  }
+  if (!txt_(n.archivo_id)) return {ok: false, error: 'Esa nómina todavía no tiene PDF subido.'};
+  let archivo;
+  try { archivo = DriveApp.getFileById(txt_(n.archivo_id)); }
+  catch (e) { return {ok: false, error: 'El archivo ya no está en el Drive de la empresa.'}; }
+  registrar_(u, 'ver_nomina', 'NOMINAS', n.id, txt_(n.periodo));
+  return {ok: true, nombre: txt_(n.archivo_nombre) || archivo.getName(),
+          tipo: archivo.getMimeType(),
+          datos: Utilities.base64Encode(archivo.getBlob().getBytes())};
+}
+
+/** Quita la nómina de un mes (y su PDF). Solo dirección. */
+function accBorrarNomina_(u, p) {
+  exigir_(u, 'nominasAjenas');
+  const n = leer_('NOMINAS').filter(function (x) { return String(x.id) === String(p.id); })[0];
+  if (!n) return {ok: false, error: 'No existe esa nómina.'};
+  if (txt_(n.archivo_id)) {
+    try { DriveApp.getFileById(txt_(n.archivo_id)).setTrashed(true); } catch (e) {}
+  }
+  borrar_('NOMINAS', p.id);
+  registrar_(u, 'borrar_nomina', 'NOMINAS', p.id, txt_(n.periodo));
+  return {ok: true};
+}

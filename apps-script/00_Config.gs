@@ -123,7 +123,8 @@ const ESQUEMA = {
 
   NOMINAS: ['id','usuario_id','periodo','bruto','dietas','comisiones','otros',
     'bruto_total','irpf_pct','irpf','ss_pct','ss','neto',
-    'estado','fecha_pago','url','detalle','notas','creado'],
+    'estado','fecha_pago','url','archivo_id','archivo_nombre','subida_por','subida_fecha',
+    'detalle','notas','creado'],
 
   JORNADAS: ['id','usuario_id','fecha','tipo','horas','dietas','comisiones',
     'concepto','notas'],
