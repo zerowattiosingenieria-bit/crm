@@ -161,3 +161,16 @@ export function descargarCSV(nombre, cabeceras, filas) {
 export const telHref = t => 'tel:' + txt(t).replace(/\s/g, '');
 export const waHref = t => 'https://wa.me/34' + txt(t).replace(/\D/g, '').replace(/^34/, '');
 export const mapsHref = c => 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(txt(c));
+
+/** Abre Google Maps con la ruta en coche hasta la vivienda, lista para salir. */
+export const comoLlegarHref = destino =>
+  'https://www.google.com/maps/dir/?api=1&travelmode=driving&dir_action=navigate&destination=' +
+  encodeURIComponent(txt(destino));
+
+/** Lo mejor que tengamos del cliente para guiar hasta su casa. */
+export const destinoDe = cliente => {
+  const co = txt(cliente && cliente.coordenadas);
+  if (co) return co.replace(/\s/g, '');
+  return [txt(cliente && cliente.direccion), txt(cliente && cliente.municipio),
+          txt(cliente && cliente.cp), 'España'].filter(Boolean).join(', ');
+};
