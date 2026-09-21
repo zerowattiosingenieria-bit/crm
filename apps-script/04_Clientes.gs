@@ -289,9 +289,25 @@ function accGuardarCaptacion_(u, p) {
   const campos = ['fecha','hora_cita','estado_cita','tecnologia','comercial_id','resultado',
                   'fecha_resultado','operacion_id','interes','notas'];
   if (d.id) {
+    const anterior = leer_('CAPTACIONES').filter(function (x) { return String(x.id) === String(d.id); })[0];
     const cambios = {};
     campos.forEach(function (c) { if (d[c] !== undefined) cambios[c] = d[c]; });
     const r = actualizar_('CAPTACIONES', d.id, cambios);
+
+    /* Adjudicar la captación a un comercial es lo que hace que ese comercial
+       la vea: el cliente pasa a ser suyo. Si se quita, deja de verla. */
+    if (d.comercial_id !== undefined &&
+        txt_(d.comercial_id) !== txt_(anterior ? anterior.comercial_id : '')) {
+      actualizar_('CLIENTES', cli.id, {comercial_id: txt_(d.comercial_id),
+        modificado: ahora_(), modificado_por: u.id});
+      registrar_(u, 'adjudicar_captacion', 'CAPTACIONES', d.id,
+        txt_(d.comercial_id) ? 'a ' + txt_(d.comercial_id) : 'sin comercial');
+    }
+    /* Si cambia el día de la cita, la ficha del cliente lo refleja. */
+    if (txt_(cambios.fecha) && normal_(r.resultado) === 'pendiente') {
+      actualizar_('CLIENTES', cli.id, {proxima_accion: 'Sentada concertada',
+        proxima_fecha: txt_(cambios.fecha), modificado: ahora_(), modificado_por: u.id});
+    }
     return {ok: true, captacion: r};
   }
   const nueva = {cliente_id: clienteId, captador_id: u.rol === 'captador' ? u.id : (d.captador_id || ''),
