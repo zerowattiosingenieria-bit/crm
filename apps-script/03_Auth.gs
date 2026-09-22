@@ -54,20 +54,31 @@ function sesion_(token) {
   if (!tk) return null;
   const s = leer_('SESIONES').filter(function (x) { return txt_(x.token) === tk; })[0];
   if (!s) return null;
-  if (txt_(s.expira) && txt_(s.expira) < ahora_()) return null;
+  if (caducada_(s.expira)) return null;
   const u = leer_('USUARIOS').filter(function (x) { return String(x.id) === String(s.usuario_id); })[0];
   if (!u || normal_(u.activo) !== 'si') return null;
   return u;
+}
+
+/* ¿Ha pasado ya esta marca de tiempo? Aguanta que la hoja haya guardado la
+   fecha como fecha y nos devuelva solo el día: entonces vale hasta el final
+   de ese día, que es lo prudente. */
+function caducada_(valor) {
+  const s = txt_(valor);
+  if (!s) return false;
+  if (s.length <= 10) return s < hoyISO_();
+  return s < ahora_();
 }
 
 function limpiarSesiones_() {
   const h = hoja_('SESIONES');
   const n = h.getLastRow();
   if (n < 3) return;
-  const datos = h.getRange(2, 1, n - 1, 4).getDisplayValues();
-  const ahora = ahora_();
+  const datos = h.getRange(2, 1, n - 1, 4).getValues();
   for (let i = datos.length - 1; i >= 0; i--) {
-    if (datos[i][3] && datos[i][3] < ahora) h.deleteRow(i + 2);
+    const v = datos[i][3];
+    if (!v) continue;
+    if (caducada_(v instanceof Date ? fechaHoja_(v) : String(v))) h.deleteRow(i + 2);
   }
 }
 
