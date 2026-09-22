@@ -15,30 +15,44 @@ const REGLAS_BANCO = [
   {categoria: 'traspaso',         claves: ['traspaso para imp', 'traspaso entre cuentas',
                                            'traspaso a impuestos',
                                            'zero wattios', 'zero watios']},
-  {categoria: 'nominas',          claves: ['nomina', 'nóminas', 'nominas']},
+  {categoria: 'nominas',          claves: ['nomina', 'nóminas', 'nominas', 'retribucion auton',
+                                           'retribución autón']},
   {categoria: 'seguridad_social', claves: ['tgss', 'cotizacion', 'seg social', 'seguridad social']},
   {categoria: 'impuestos',        claves: ['aeat', 'hacienda', 'tributaria', 'iva ', 'irpf', 'modelo 3',
                                            'impuesto', 'tributos', 'ayto', 'ayuntamiento']},
   {categoria: 'telefonia',        claves: ['digi', 'movistar', 'vodafone', 'orange', 'jazztel', 'telefonica',
                                            'yoigo', 'pepephone', 'telec']},
   {categoria: 'ropa_epi',         claves: ['uniforme', 'ropa corpora', 'ropa de tra', 'bordados', 'decathlon',
-                                           'workwear', 'epi']},
+                                           'workwear', 'epi', 'zara ', 'hm es']},
+  {categoria: 'marketing',        claves: ['vistaprint', 'serigrafia', 'persoregala', 'rotulacion',
+                                           'publicidad', 'imprenta', 'regalo']},
+  {categoria: 'administracion',   claves: ['constituci', 'administracion dep', 'notaria', 'registro mercantil',
+                                           'gestoria', 'asesoria']},
   {categoria: 'montaje',          claves: ['greenfield', 'montaje', 'instalacion subcontrat']},
-  {categoria: 'proveedor',        claves: ['pago factura', 'pago oferta', 'facturas abonadas', 'proveedor',
-                                           'pago presupuesto', 'pago proforma', 'pago fianza', 'pago 40',
-                                           'pago 50', 'pago 60', 'pago 25', 'pago 75', 'domusat', 'obramat',
+  {categoria: 'proveedor',        claves: ['pago factura', 'pago oferta', 'pago ofert', 'pago pedido',
+                                           'facturas abonadas', 'abono factura', 'proveedor',
+                                           'pago presupuesto', 'presupu', 'pago proforma', 'proforma',
+                                           'pago fianza', 'pago a cuenta', 'segundo pago', 'pago pendiente',
+                                           'paga factura', 'pago cee', 'pago cite', 'pago 40',
+                                           'pago 50', 'pago 60', 'pago 25', 'pago 75', 'domusat', 'obramat', 'sumsol', 'seissolar',
+                                           'sunpower', 'lassolar', 'soyrenovable', 'polarstock',
+                                           'rober gas', 'robert gas', 'profo',
                                            'leroy', 'bricomart', 'saltoki', 'escoda', 'suministros',
                                            'sun', 'solar', 'hanersun', 'solax', 'almacen']},
   {categoria: 'servicios',        claves: ['jibble', 'google', 'microsoft', 'adobe', 'zoom', 'openai',
                                            'anthropic', 'canva', 'dominio', 'hosting', 'www.', 'suscripcion']},
   {categoria: 'seguros',          claves: ['seguro', 'mapfre', 'allianz', 'axa', 'generali', 'legalitas',
-                                           'asist.', 'mutua']},
-  {categoria: 'banco',            claves: ['comision', 'mantenimiento cuenta', 'intereses', 'v.negocios',
-                                           'cuota t.', 'tarjeta cuota', 'p.serv', 'trf. ajena']},
-  {categoria: 'financiacion',     claves: ['prestamo', 'leasing', 'renting', 'cuota prestamo', 'amortizacion']},
+                                           'asist.', 'mutua', 'pago mes enero le']},
+  {categoria: 'banco',            claves: ['comision', 'mantenimiento', 'intereses', 'v.negocios',
+                                           'cuota t.', 'tarjeta cuota', 'p.serv', 'trf. ajena',
+                                           'devolucion ajuste']},
+  /* Recibo periódico domiciliado del que solo llega el número de contrato. */
+  {categoria: 'financiacion',     claves: ['prestamo', 'leasing', 'renting', 'cuota prestamo', 'amortizacion',
+                                           '8126000462718']},
   {categoria: 'transporte',       claves: ['repsol', 'cepsa', 'galp', 'shell', 'bp ', 'gasolinera', 'peaje',
                                            'parking', 'autopista', 'renfe', 'iberia', 'combustible']},
-  {categoria: 'dietas',           claves: ['restaurante', 'cafeteria', 'bar ', 'hotel', 'menu', 'obm ']}
+  {categoria: 'dietas',           claves: ['restaurante', 'cafeteria', 'bar ', 'hotel', 'menu', 'obm ',
+                                           'dietas', 'dolmen', 'faro de', 'marbore', 'bermellon']}
 ];
 
 function categoriaBanco_(concepto, importe) {
@@ -61,7 +75,7 @@ function categoriaBanco_(concepto, importe) {
    instalación, ni tampoco lo que todavía está sin clasificar. */
 const CATEGORIAS_ESTRUCTURA = ['nominas', 'seguridad_social', 'servicios', 'seguros',
                                'banco', 'financiacion', 'transporte', 'dietas', 'telefonia',
-                               'ropa_epi'];
+                               'ropa_epi', 'marketing', 'administracion'];
 /* Los impuestos salen aparte: el IVA no es un coste, es dinero que pasa por
    la cuenta, y meterlo en el coste fijo desvirtúa el punto de equilibrio. */
 const CATEGORIAS_IMPUESTOS = ['impuestos'];
