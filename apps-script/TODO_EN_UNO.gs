@@ -237,6 +237,8 @@ const CATALOGO = {
     ['comision','Comisión comercial'],
     ['captacion','Comisión de captación'],
     ['transporte','Transporte y dietas'],
+    ['marketing','Marketing y marca'],
+    ['administracion','Gestoría y administración'],
     ['estructura','Gastos de estructura'],
     ['otro','Otro']
   ],
@@ -410,7 +412,7 @@ function leer_(nombre) {
     for (let c = 0; c < cab.length; c++) {
       if (!cab[c]) continue;
       const v = crudos[i][c];
-      o[cab[c]] = (v instanceof Date) ? Utilities.formatDate(v, zonaHoraria_(), 'yyyy-MM-dd') : v;
+      o[cab[c]] = (v instanceof Date) ? fechaHoja_(v) : v;
     }
     let vacia = true;
     for (let c = 0; c < cab.length; c++) { if (cab[c] && String(crudos[i][c]).length) { vacia = false; break; } }
@@ -538,6 +540,14 @@ function zonaHoraria_() { return 'Europe/Madrid'; }
 function hoyISO_() { return Utilities.formatDate(new Date(), zonaHoraria_(), 'yyyy-MM-dd'); }
 
 function ahora_() { return Utilities.formatDate(new Date(), zonaHoraria_(), 'yyyy-MM-dd HH:mm:ss'); }
+
+/* Una celda con fecha vuelve de la hoja como objeto Date. Si lleva hora hay
+   que conservarla: si no, 'expira' se quedaba en el día pelado y toda sesión
+   parecía caducada nada más crearla. */
+function fechaHoja_(d) {
+  const conHora = d.getHours() || d.getMinutes() || d.getSeconds();
+  return Utilities.formatDate(d, zonaHoraria_(), conHora ? 'yyyy-MM-dd HH:mm:ss' : 'yyyy-MM-dd');
+}
 
 function mesDe_(iso) { return String(iso || '').slice(0, 7); }
 
@@ -1005,20 +1015,31 @@ function sesion_(token) {
   if (!tk) return null;
   const s = leer_('SESIONES').filter(function (x) { return txt_(x.token) === tk; })[0];
   if (!s) return null;
-  if (txt_(s.expira) && txt_(s.expira) < ahora_()) return null;
+  if (caducada_(s.expira)) return null;
   const u = leer_('USUARIOS').filter(function (x) { return String(x.id) === String(s.usuario_id); })[0];
   if (!u || normal_(u.activo) !== 'si') return null;
   return u;
+}
+
+/* ¿Ha pasado ya esta marca de tiempo? Aguanta que la hoja haya guardado la
+   fecha como fecha y nos devuelva solo el día: entonces vale hasta el final
+   de ese día, que es lo prudente. */
+function caducada_(valor) {
+  const s = txt_(valor);
+  if (!s) return false;
+  if (s.length <= 10) return s < hoyISO_();
+  return s < ahora_();
 }
 
 function limpiarSesiones_() {
   const h = hoja_('SESIONES');
   const n = h.getLastRow();
   if (n < 3) return;
-  const datos = h.getRange(2, 1, n - 1, 4).getDisplayValues();
-  const ahora = ahora_();
+  const datos = h.getRange(2, 1, n - 1, 4).getValues();
   for (let i = datos.length - 1; i >= 0; i--) {
-    if (datos[i][3] && datos[i][3] < ahora) h.deleteRow(i + 2);
+    const v = datos[i][3];
+    if (!v) continue;
+    if (caducada_(v instanceof Date ? fechaHoja_(v) : String(v))) h.deleteRow(i + 2);
   }
 }
 
@@ -3714,30 +3735,44 @@ const REGLAS_BANCO = [
   {categoria: 'traspaso',         claves: ['traspaso para imp', 'traspaso entre cuentas',
                                            'traspaso a impuestos',
                                            'zero wattios', 'zero watios']},
-  {categoria: 'nominas',          claves: ['nomina', 'nóminas', 'nominas']},
+  {categoria: 'nominas',          claves: ['nomina', 'nóminas', 'nominas', 'retribucion auton',
+                                           'retribución autón']},
   {categoria: 'seguridad_social', claves: ['tgss', 'cotizacion', 'seg social', 'seguridad social']},
   {categoria: 'impuestos',        claves: ['aeat', 'hacienda', 'tributaria', 'iva ', 'irpf', 'modelo 3',
                                            'impuesto', 'tributos', 'ayto', 'ayuntamiento']},
   {categoria: 'telefonia',        claves: ['digi', 'movistar', 'vodafone', 'orange', 'jazztel', 'telefonica',
                                            'yoigo', 'pepephone', 'telec']},
   {categoria: 'ropa_epi',         claves: ['uniforme', 'ropa corpora', 'ropa de tra', 'bordados', 'decathlon',
-                                           'workwear', 'epi']},
+                                           'workwear', 'epi', 'zara ', 'hm es']},
+  {categoria: 'marketing',        claves: ['vistaprint', 'serigrafia', 'persoregala', 'rotulacion',
+                                           'publicidad', 'imprenta', 'regalo']},
+  {categoria: 'administracion',   claves: ['constituci', 'administracion dep', 'notaria', 'registro mercantil',
+                                           'gestoria', 'asesoria']},
   {categoria: 'montaje',          claves: ['greenfield', 'montaje', 'instalacion subcontrat']},
-  {categoria: 'proveedor',        claves: ['pago factura', 'pago oferta', 'facturas abonadas', 'proveedor',
-                                           'pago presupuesto', 'pago proforma', 'pago fianza', 'pago 40',
-                                           'pago 50', 'pago 60', 'pago 25', 'pago 75', 'domusat', 'obramat',
+  {categoria: 'proveedor',        claves: ['pago factura', 'pago oferta', 'pago ofert', 'pago pedido',
+                                           'facturas abonadas', 'abono factura', 'proveedor',
+                                           'pago presupuesto', 'presupu', 'pago proforma', 'proforma',
+                                           'pago fianza', 'pago a cuenta', 'segundo pago', 'pago pendiente',
+                                           'paga factura', 'pago cee', 'pago cite', 'pago 40',
+                                           'pago 50', 'pago 60', 'pago 25', 'pago 75', 'domusat', 'obramat', 'sumsol', 'seissolar',
+                                           'sunpower', 'lassolar', 'soyrenovable', 'polarstock',
+                                           'rober gas', 'robert gas', 'profo',
                                            'leroy', 'bricomart', 'saltoki', 'escoda', 'suministros',
                                            'sun', 'solar', 'hanersun', 'solax', 'almacen']},
   {categoria: 'servicios',        claves: ['jibble', 'google', 'microsoft', 'adobe', 'zoom', 'openai',
                                            'anthropic', 'canva', 'dominio', 'hosting', 'www.', 'suscripcion']},
   {categoria: 'seguros',          claves: ['seguro', 'mapfre', 'allianz', 'axa', 'generali', 'legalitas',
-                                           'asist.', 'mutua']},
-  {categoria: 'banco',            claves: ['comision', 'mantenimiento cuenta', 'intereses', 'v.negocios',
-                                           'cuota t.', 'tarjeta cuota', 'p.serv', 'trf. ajena']},
-  {categoria: 'financiacion',     claves: ['prestamo', 'leasing', 'renting', 'cuota prestamo', 'amortizacion']},
+                                           'asist.', 'mutua', 'pago mes enero le']},
+  {categoria: 'banco',            claves: ['comision', 'mantenimiento', 'intereses', 'v.negocios',
+                                           'cuota t.', 'tarjeta cuota', 'p.serv', 'trf. ajena',
+                                           'devolucion ajuste']},
+  /* Recibo periódico domiciliado del que solo llega el número de contrato. */
+  {categoria: 'financiacion',     claves: ['prestamo', 'leasing', 'renting', 'cuota prestamo', 'amortizacion',
+                                           '8126000462718']},
   {categoria: 'transporte',       claves: ['repsol', 'cepsa', 'galp', 'shell', 'bp ', 'gasolinera', 'peaje',
                                            'parking', 'autopista', 'renfe', 'iberia', 'combustible']},
-  {categoria: 'dietas',           claves: ['restaurante', 'cafeteria', 'bar ', 'hotel', 'menu', 'obm ']}
+  {categoria: 'dietas',           claves: ['restaurante', 'cafeteria', 'bar ', 'hotel', 'menu', 'obm ',
+                                           'dietas', 'dolmen', 'faro de', 'marbore', 'bermellon']}
 ];
 
 function categoriaBanco_(concepto, importe) {
@@ -3760,7 +3795,7 @@ function categoriaBanco_(concepto, importe) {
    instalación, ni tampoco lo que todavía está sin clasificar. */
 const CATEGORIAS_ESTRUCTURA = ['nominas', 'seguridad_social', 'servicios', 'seguros',
                                'banco', 'financiacion', 'transporte', 'dietas', 'telefonia',
-                               'ropa_epi'];
+                               'ropa_epi', 'marketing', 'administracion'];
 /* Los impuestos salen aparte: el IVA no es un coste, es dinero que pasa por
    la cuenta, y meterlo en el coste fijo desvirtúa el punto de equilibrio. */
 const CATEGORIAS_IMPUESTOS = ['impuestos'];
