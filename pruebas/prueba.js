@@ -435,6 +435,31 @@ comprobar('reconoce a los proveedores', porConcepto['PAGO FACTURA 2601'] === 'pr
 comprobar('reconoce el software', porConcepto['WWW.JIBBLE.IO'] === 'servicios');
 comprobar('reconoce la telefonía', porConcepto['DIGI SPAIN TELEC.'] === 'telefonia');
 comprobar('reconoce los cobros de cliente', porConcepto['TRANSFERENCIA'] === 'cobro_cliente');
+
+/* Los conceptos del banco llegan cortados a media palabra; las reglas tienen
+   que reconocerlos igual, porque lo que no se clasifica no cuenta como coste
+   de estructura y el punto de equilibrio sale barato. */
+const recortados = [
+  {fecha: '2026-05-25', concepto: 'PAGO PEDIDO POLAR', importe: -8072.48, saldo: 100, espera: 'proveedor'},
+  {fecha: '2026-03-31', concepto: 'SEGUNDO PAGO SUMS', importe: -2843.5, saldo: 101, espera: 'proveedor'},
+  {fecha: '2026-02-11', concepto: 'PAGO SUMSOL PROFO', importe: -264.17, saldo: 102, espera: 'proveedor'},
+  {fecha: '2026-03-16', concepto: 'DIETAS VIAJE FERNANDO', importe: -982.14, saldo: 103, espera: 'dietas'},
+  {fecha: '2026-02-17', concepto: 'Vistaprint', importe: -231.79, saldo: 104, espera: 'marketing'},
+  {fecha: '2026-03-16', concepto: 'GASTOS CONSTITUCI', importe: -57.85, saldo: 105, espera: 'administracion'},
+  {fecha: '2026-02-20', concepto: 'retribucion auton', importe: -387.72, saldo: 106, espera: 'nominas'},
+  {fecha: '2026-04-28', concepto: '812600046271805', importe: -803.43, saldo: 107, espera: 'financiacion'}
+];
+despachar_({accion: 'importarBanco', token: sesiones.fernando.token,
+  movimientos: recortados.map(m => ({fecha: m.fecha, concepto: m.concepto,
+    importe: m.importe, saldo: m.saldo}))});
+const tras = despachar_({accion: 'banco', token: sesiones.fernando.token});
+const porCorte = {};
+tras.movimientos.forEach(m => { porCorte[m.concepto] = m.categoria; });
+recortados.forEach(m => comprobar('clasifica «' + m.concepto + '»',
+  porCorte[m.concepto] === m.espera, porCorte[m.concepto]));
+comprobar('no queda nada sin clasificar',
+  tras.movimientos.every(m => txt_(m.categoria) !== 'otros_gastos'),
+  tras.movimientos.filter(m => txt_(m.categoria) === 'otros_gastos').map(m => m.concepto).join(', '));
 comprobar('guarda dos apuntes iguales del mismo día', 
   banco.movimientos.filter(m => m.concepto === 'PAGO NOMINA AGOSTO').length === 2);
 comprobar('guarda un cargo repetido que deja el mismo saldo',
@@ -574,6 +599,35 @@ comprobar('la frase no es la misma para todos',
   new Set(correos.map(c => (c.htmlBody.match(/font-style:italic">([^<]+)</) || [])[1])).size > 1);
 comprobar('los correos iniciales son los de la empresa',
   leer_('USUARIOS').filter(u => u.usuario === 'rober')[0].email === 'robertopaulino@zerowattios.com');
+
+/* ---------------------------------------------------------------------------
+   Las sesiones no pueden nacer caducadas
+   ------------------------------------------------------------------------ */
+
+console.log('\n== Sesiones ==');
+
+const conHora = new Date(2026, 8, 22, 13, 58, 24);
+comprobar('una fecha con hora conserva la hora al leerla de la hoja',
+  fechaHoja_(conHora) === '2026-09-22 13:58:24', fechaHoja_(conHora));
+comprobar('una fecha a secas se queda en el día',
+  fechaHoja_(new Date(2026, 8, 22)) === '2026-09-22', fechaHoja_(new Date(2026, 8, 22)));
+
+const dentroDeUnaHora = Utilities.formatDate(new Date(Date.now() + 3600000), zonaHoraria_(), 'yyyy-MM-dd HH:mm:ss');
+const haceUnaHora = Utilities.formatDate(new Date(Date.now() - 3600000), zonaHoraria_(), 'yyyy-MM-dd HH:mm:ss');
+comprobar('lo que caduca dentro de una hora todavía vale', caducada_(dentroDeUnaHora) === false);
+comprobar('lo que caducó hace una hora ya no vale', caducada_(haceUnaHora) === true);
+comprobar('sin fecha de caducidad no caduca', caducada_('') === false);
+comprobar('si la hoja solo devuelve el día, vale hasta el final del día',
+  caducada_(hoyISO_()) === false, hoyISO_());
+comprobar('un día anterior sí está caducado',
+  caducada_('2020-01-01') === true);
+
+const antes = leer_('SESIONES').length;
+const entrada = accLogin_({usuario: 'fernando', clave: claves.fernando, agente: 'prueba'});
+comprobar('se puede entrar', entrada.ok === true, JSON.stringify(entrada.error || ''));
+comprobar('entrar deja una sesión escrita', leer_('SESIONES').length === antes + 1);
+comprobar('la sesión recién creada sirve para la siguiente petición',
+  !!sesion_(entrada.token), 'token no reconocido');
 
 console.log('\n' + (fallos ? 'FALLAN ' + fallos + ' de ' + pruebas : 'Todo correcto: ' + pruebas + ' comprobaciones'));
 process.exit(fallos ? 1 : 0);
