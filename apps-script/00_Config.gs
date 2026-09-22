@@ -220,6 +220,8 @@ const CATALOGO = {
     ['comision','Comisión comercial'],
     ['captacion','Comisión de captación'],
     ['transporte','Transporte y dietas'],
+    ['marketing','Marketing y marca'],
+    ['administracion','Gestoría y administración'],
     ['estructura','Gastos de estructura'],
     ['otro','Otro']
   ],
