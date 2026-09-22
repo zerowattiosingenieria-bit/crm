@@ -39,7 +39,7 @@ function leer_(nombre) {
     for (let c = 0; c < cab.length; c++) {
       if (!cab[c]) continue;
       const v = crudos[i][c];
-      o[cab[c]] = (v instanceof Date) ? Utilities.formatDate(v, zonaHoraria_(), 'yyyy-MM-dd') : v;
+      o[cab[c]] = (v instanceof Date) ? fechaHoja_(v) : v;
     }
     let vacia = true;
     for (let c = 0; c < cab.length; c++) { if (cab[c] && String(crudos[i][c]).length) { vacia = false; break; } }
@@ -167,6 +167,14 @@ function zonaHoraria_() { return 'Europe/Madrid'; }
 function hoyISO_() { return Utilities.formatDate(new Date(), zonaHoraria_(), 'yyyy-MM-dd'); }
 
 function ahora_() { return Utilities.formatDate(new Date(), zonaHoraria_(), 'yyyy-MM-dd HH:mm:ss'); }
+
+/* Una celda con fecha vuelve de la hoja como objeto Date. Si lleva hora hay
+   que conservarla: si no, 'expira' se quedaba en el día pelado y toda sesión
+   parecía caducada nada más crearla. */
+function fechaHoja_(d) {
+  const conHora = d.getHours() || d.getMinutes() || d.getSeconds();
+  return Utilities.formatDate(d, zonaHoraria_(), conHora ? 'yyyy-MM-dd HH:mm:ss' : 'yyyy-MM-dd');
+}
 
 function mesDe_(iso) { return String(iso || '').slice(0, 7); }
 
