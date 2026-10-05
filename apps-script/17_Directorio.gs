@@ -103,7 +103,11 @@ function accPuertas_(u, p) {
   const zonas = {};
   todas.forEach(function (x) { const z = txt_(x.zona) || '(sin zona)'; zonas[z] = (zonas[z] || 0) + 1; });
 
+  /* Para filtrar por fechas vale la que haya; para decir si es nueva, solo
+     cuenta el día en que se tocó: una puerta sin fecha no es de esta semana
+     por mucho que se haya cargado hoy. */
   const cuando = function (x) { return txt_(x.fecha) || txt_(x.alta_crm); };
+  const esNueva = function (x, lunes) { return !!txt_(x.fecha) && txt_(x.fecha) >= lunes; };
   const lista = todas.filter(function (x) {
     if (zona && normal_(x.zona) !== zona) return false;
     const f = cuando(x);
@@ -117,13 +121,14 @@ function accPuertas_(u, p) {
   const lunes = lunesDe_(hoyISO_());
   const semanaPasada = Utilities.formatDate(new Date(fecha_(lunes).getTime() - 7 * 86400000),
                                             zonaHoraria_(), 'yyyy-MM-dd');
-  const nuevas = todas.filter(function (x) { return cuando(x) >= lunes; });
+  const nuevas = todas.filter(function (x) { return esNueva(x, lunes); });
   const previas = todas.filter(function (x) {
-    const f = cuando(x); return f >= semanaPasada && f < lunes; });
+    const f = txt_(x.fecha); return f && f >= semanaPasada && f < lunes; });
+  const sinFecha = todas.filter(function (x) { return !txt_(x.fecha); }).length;
 
   const porSemana = {};
   todas.forEach(function (x) {
-    const f = cuando(x); if (!f) return;
+    const f = txt_(x.fecha); if (!f) return;
     const l = lunesDe_(f);
     porSemana[l] = (porSemana[l] || 0) + 1;
   });
@@ -136,9 +141,10 @@ function accPuertas_(u, p) {
               fecha: txt_(x.fecha), hora: txt_(x.hora), nota: txt_(x.nota),
               categoria: txt_(x.categoria), lista: txt_(x.lista),
               lat: num_(x.lat), lon: num_(x.lon),
-              nueva: cuando(x) >= lunes ? 'si' : 'no'};
+              nueva: esNueva(x, lunes) ? 'si' : 'no'};
     }),
-    semana: {lunes: lunes, nuevas: nuevas.length, semana_pasada: previas.length},
+    semana: {lunes: lunes, nuevas: nuevas.length, semana_pasada: previas.length,
+             sin_fecha: sinFecha},
     zonas: Object.keys(zonas).sort(function (a, b) { return zonas[b] - zonas[a]; })
       .map(function (k) { return {zona: k, n: zonas[k]}; }),
     semanas: Object.keys(porSemana).sort().slice(-16)
@@ -253,8 +259,8 @@ function avisoPuertasSemana() {
 
   const lunes = lunesDe_(hoyISO_());
   const todas = leer_('PUERTAS');
-  const cuando = function (x) { return txt_(x.fecha) || txt_(x.alta_crm); };
-  const nuevas = todas.filter(function (x) { return cuando(x) >= lunes; });
+  const nuevas = todas.filter(function (x) {
+    return !!txt_(x.fecha) && txt_(x.fecha) >= lunes; });
 
   const porZona = {};
   nuevas.forEach(function (x) { const z = txt_(x.zona) || '(sin zona)'; porZona[z] = (porZona[z] || 0) + 1; });
