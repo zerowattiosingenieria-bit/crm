@@ -4727,9 +4727,12 @@ function accDirectorio_(u, p) {
     return heno.indexOf(buscar) >= 0;
   });
 
-  /* Primero los que se han movido hace menos. */
+  /* Primero los que se han movido hace menos. Entre los que no tienen
+     visita apuntada manda la fecha de alta, para que una ficha que se acaba
+     de crear a mano no se hunda al final del archivo. */
   filtrados.sort(function (a, b) {
     return txt_(b.ultima_visita).localeCompare(txt_(a.ultima_visita)) ||
+           txt_(b.alta_crm).localeCompare(txt_(a.alta_crm)) ||
            txt_(a.nombre).localeCompare(txt_(b.nombre));
   });
 
@@ -4802,6 +4805,18 @@ function accPuertas_(u, p) {
     if (hasta && f && f > hasta) return false;
     if (!buscar) return true;
     return normal_([x.nombre, x.direccion, x.zona, x.nota, x.categoria].join(' ')).indexOf(buscar) >= 0;
+  });
+
+  /* Primero las de hoy. Importa que se ordene aquí y no en la pantalla:
+     el listado solo pinta las 600 primeras, así que si se cortara antes de
+     ordenar saldrían las primeras de la hoja, que son las más viejas. Las
+     que no tienen día se van al final, que no se sabe cuándo fueron. */
+  lista.sort(function (a, b) {
+    const fa = txt_(a.fecha), fb = txt_(b.fecha);
+    if (!fa && !fb) return txt_(a.zona).localeCompare(txt_(b.zona));
+    if (!fa) return 1;
+    if (!fb) return -1;
+    return fb.localeCompare(fa) || txt_(b.hora).localeCompare(txt_(a.hora));
   });
 
   /* Lo nuevo de esta semana y el reparto por semanas, que es lo que se mira. */
