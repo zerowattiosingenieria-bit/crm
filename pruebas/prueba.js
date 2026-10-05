@@ -629,5 +629,101 @@ comprobar('entrar deja una sesión escrita', leer_('SESIONES').length === antes 
 comprobar('la sesión recién creada sirve para la siguiente petición',
   !!sesion_(entrada.token), 'token no reconocido');
 
+/* ---------------------------------------------------------------------------
+   El directorio histórico y las puertas
+   ------------------------------------------------------------------------ */
+
+console.log('\n== Directorio y puertas ==');
+
+comprobar('se crean las tres pestañas nuevas',
+  ['DIRECTORIO', 'DIR_VISITAS', 'PUERTAS'].every(h =>
+    !!SpreadsheetApp.openById().getSheetByName(h)));
+
+const tkDir = sesiones.fernando.token;
+comprobar('fernando entra al directorio',
+  despachar_({accion: 'directorio', token: tkDir}).ok === true);
+comprobar('nando también',
+  despachar_({accion: 'directorio', token: sesiones.nando.token}).ok === true);
+comprobar('el superadmin también',
+  despachar_({accion: 'directorio', token: sesiones.superadmin.token}).ok === true);
+comprobar('rober no entra',
+  despachar_({accion: 'directorio', token: sesiones.rober.token}).ok === false);
+comprobar('sandra tampoco',
+  despachar_({accion: 'puertas', token: sesiones.sandra.token}).ok === false);
+comprobar('a rober no le llega ni la lista de quién puede entrar',
+  !JSON.stringify(despachar_({accion: 'datos', token: sesiones.rober.token}).config || {})
+    .includes('directorio_usuarios'));
+comprobar('el permiso viaja con los demás al entrar',
+  sesiones.fernando.permisos.directorio === true && sesiones.rober.permisos.directorio === false);
+
+const impDir = despachar_({accion: 'importarDirectorio', token: tkDir, clientes: [
+  {ref: 'CL-9001', empresa: 'Aurus', nombre: 'Prueba Uno', municipio: 'Las Rozas',
+   direccion: 'Calle Falsa 1', lat: 40.49, lon: -3.87, precision: 'exacta', ultima_visita: '2026-05-02'},
+  {ref: 'CL-9002', empresa: 'Zero Wattios', nombre: 'Prueba Dos', municipio: 'Pozuelo',
+   direccion: 'Calle Falsa 2', ultima_visita: '2026-06-02'}]});
+comprobar('entran dos fichas al directorio', impDir.altas === 2, JSON.stringify(impDir));
+const reDir = despachar_({accion: 'importarDirectorio', token: tkDir, clientes: [
+  {ref: 'CL-9001', empresa: 'Aurus', nombre: 'Prueba Uno Corregido', municipio: 'Las Rozas'}]});
+comprobar('volver a cargar el mismo no duplica, actualiza',
+  reDir.altas === 0 && reDir.actualizados === 1, JSON.stringify(reDir));
+
+const dirLista = despachar_({accion: 'directorio', token: tkDir});
+comprobar('el directorio los devuelve', dirLista.total === 2, dirLista.total);
+comprobar('la corrección se ve',
+  dirLista.clientes.some(c => c.nombre === 'Prueba Uno Corregido'));
+comprobar('el que tiene coordenada sale para el mapa', dirLista.puntos.length === 1, dirLista.puntos.length);
+comprobar('se buscan por texto',
+  despachar_({accion: 'directorio', token: tkDir, buscar: 'pozuelo'}).encontrados === 1);
+comprobar('se filtran por empresa',
+  despachar_({accion: 'directorio', token: tkDir, empresa: 'Aurus'}).encontrados === 1);
+
+despachar_({accion: 'importarDirVisitas', token: tkDir, visitas: [
+  {ref: 'CL-9001', cliente: 'Prueba Uno', fecha: '2026-05-02', hora: '10:00', comercial: 'Rober'}]});
+const fichaDir = despachar_({accion: 'directorioFicha', token: tkDir, ref: 'CL-9001'});
+comprobar('la ficha trae sus visitas', fichaDir.ok === true && fichaDir.visitas.length === 1);
+
+const hoyP = hoyISO_();
+const pu = despachar_({accion: 'importarPuertas', token: tkDir, puertas: [
+  {nombre: 'Puerta vieja', direccion: 'Calle Vieja 1', zona: 'Las Rozas',
+   fecha: '2026-02-10', hora: '11:00', lat: 40.492345, lon: -3.873456, lista: 'Saved places'},
+  {nombre: 'Puerta de hoy', direccion: 'Calle Nueva 2', zona: 'Pozuelo',
+   fecha: hoyP, hora: '09:30', lat: 40.435678, lon: -3.812345, lista: 'Favoritos'}]});
+comprobar('entran las dos puertas', pu.nuevas === 2, JSON.stringify(pu));
+const pu2 = despachar_({accion: 'importarPuertas', token: tkDir, puertas: [
+  {nombre: 'Puerta vieja', direccion: 'Calle Vieja 1', zona: 'Las Rozas',
+   fecha: '2026-02-10', hora: '11:00', lat: 40.492345, lon: -3.873456, lista: 'Saved places'},
+  {nombre: 'Puerta de mañana', direccion: 'Calle Nueva 3', zona: 'Pozuelo',
+   fecha: hoyP, hora: '12:00', lat: 40.436789, lon: -3.813456, lista: 'Favoritos'}]});
+comprobar('la repetida no entra dos veces',
+  pu2.nuevas === 1 && pu2.repetidas === 1, JSON.stringify(pu2));
+
+const pts = despachar_({accion: 'puertas', token: tkDir});
+comprobar('hay tres puertas en total', pts.total === 3, pts.total);
+comprobar('cuenta bien las nuevas de esta semana', pts.semana.nuevas === 2, JSON.stringify(pts.semana));
+comprobar('marca cuáles son las nuevas',
+  pts.puertas.filter(x => x.nueva === 'si').length === 2);
+comprobar('la vieja no se cuela como nueva',
+  pts.puertas.filter(x => x.nombre === 'Puerta vieja')[0].nueva === 'no');
+comprobar('agrupa por zonas', pts.zonas.length === 2, JSON.stringify(pts.zonas));
+comprobar('reparte por semanas', pts.semanas.length >= 2);
+comprobar('se filtran por zona',
+  despachar_({accion: 'puertas', token: tkDir, zona: 'Pozuelo'}).encontradas === 2);
+comprobar('todas las puertas llevan coordenada',
+  pts.puertas.every(x => x.lat && x.lon));
+
+vaciarCorreos();
+const aviso2 = despachar_({accion: 'avisoPuertas', token: tkDir});
+comprobar('el aviso semanal se manda', aviso2.ok === true && correosEnviados().length === 1,
+  JSON.stringify(aviso2).slice(0, 120));
+comprobar('y cuenta las puertas nuevas',
+  /2 puertas nuevas/.test((correosEnviados()[0] || {}).htmlBody || ''));
+/* Fernando y Nando comparten correo, así que salen dos direcciones y no tres. */
+comprobar('va solo a quien puede ver el directorio, sin repetir direcciones',
+  ((correosEnviados()[0] || {}).to || '').split(',').sort().join(',') ===
+  'fernandogarcia@zerowattios.com,fernandogarciasantos87@gmail.com',
+  (correosEnviados()[0] || {}).to);
+comprobar('y no a los comerciales ni captadores',
+  !/robertopaulino|sandrabono|abrahamali/.test((correosEnviados()[0] || {}).to || ''));
+
 console.log('\n' + (fallos ? 'FALLAN ' + fallos + ' de ' + pruebas : 'Todo correcto: ' + pruebas + ' comprobaciones'));
 process.exit(fallos ? 1 : 0);

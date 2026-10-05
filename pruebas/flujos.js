@@ -172,7 +172,87 @@ async function entrar(navegador, usuario) {
   comprobar('sin errores de página en comercial', errCom.length === 0, errCom.join(' | '));
 
   await dir.ctx.close();
+  /* ===== Directorio histórico y puertas tocadas ===== */
+  console.log('\n== Directorio y puertas ==');
+  {
+    const {ctx, pag, errores} = await entrar(navegador, 'fernando');
+    await pag.evaluate(async () => {
+      const api = await import('/assets/js/api.js');
+      const hoy = new Date().toISOString().slice(0, 10);
+      await api.pedir('importarDirectorio', {clientes: [
+        {ref: 'CL-A1', empresa: 'Aurus', nombre: 'Ficha de Aurus', municipio: 'Las Rozas',
+         direccion: 'Calle A 1', telefono: '600000001', lat: 40.49, lon: -3.87,
+         precision: 'exacta', n_visitas: 1, ultima_visita: '2026-05-01'},
+        {ref: 'CL-A2', empresa: 'Zero Wattios', nombre: 'Ficha de Zero', municipio: 'Pozuelo',
+         direccion: 'Calle B 2', telefono: '600000002'}]});
+      await api.pedir('importarDirVisitas', {visitas: [
+        {ref: 'CL-A1', cliente: 'Ficha de Aurus', fecha: '2026-05-01', hora: '10:00', comercial: 'Rober'}]});
+      await api.pedir('importarPuertas', {puertas: [
+        {nombre: 'Puerta vieja', direccion: 'Calle A 1', zona: 'Las Rozas',
+         fecha: '2026-02-01', hora: '10:00', lat: 40.491, lon: -3.871},
+        {nombre: 'Puerta de hoy', direccion: 'Calle B 2', zona: 'Pozuelo',
+         fecha: hoy, hora: '11:00', lat: 40.432, lon: -3.812}]});
+    });
+
+    comprobar('dirección tiene el directorio en el menú',
+      await pag.locator('a.nav', {hasText: 'Directorio'}).count() === 1);
+
+    await pag.goto(BASE + '/#directorio', {waitUntil: 'networkidle'});
+    await pag.waitForSelector('table.datos', {timeout: 10000});
+    const listado = await pag.locator('#vista').innerText();
+    comprobar('el archivo trae las fichas', /Ficha de Aurus/.test(listado) && /Ficha de Zero/.test(listado));
+    comprobar('dice cuántas hay de cuántas', /2 de 2 fichas/.test(listado), listado.slice(0, 60));
+
+    await pag.click('button.btn:has-text("Ver en el mapa")');
+    await pag.waitForSelector('.leaflet-container', {timeout: 10000});
+    await pag.waitForTimeout(1200);
+    comprobar('el mapa del archivo pinta solo los que tienen coordenada',
+      await pag.locator('.leaflet-interactive, .leaflet-marker-icon').count() === 1);
+
+    await pag.locator('tr.pulsable').first().click();
+    await pag.waitForTimeout(800);
+    comprobar('la ficha abre con sus visitas', /Visitas \(1\)/.test(await pag.locator('#vista').innerText()));
+
+    /* Cambiar solo el ancla no recarga la página: hay que esperar a que la
+       pantalla de puertas esté de verdad pintada, no a que llegue la red. */
+    await pag.goto(BASE + '/#directorio/puertas');
+    await pag.waitForFunction(
+      () => /NUEVAS ESTA SEMANA/i.test(document.querySelector('#vista').innerText) &&
+            document.querySelectorAll('.leaflet-interactive, .marker-cluster').length > 0,
+      null, {timeout: 15000});
+    const puertas = await pag.locator('#vista').innerText();
+    comprobar('cuenta las puertas nuevas de la semana', /NUEVAS ESTA SEMANA\n1/i.test(puertas), puertas.slice(0, 120));
+    /* Leaflet agrupa las cercanas, así que se comprueba que el mapa se pinta
+       y que la tarjeta dice las dos que hay, no cuántos círculos se ven. */
+    comprobar('el mapa de puertas se pinta',
+      await pag.locator('.leaflet-interactive, .leaflet-marker-icon, .marker-cluster').count() >= 1);
+    comprobar('y dice que hay dos puertas', /2 puertas en el mapa/.test(puertas), puertas.slice(0, 80));
+    comprobar('hay reparto por semanas', /Puertas por semana/.test(puertas));
+
+    await pag.click('button.btn:has-text("Ver en listado")');
+    await pag.waitForFunction(
+      () => /Puerta vieja/.test(document.querySelector('#vista').innerText),
+      null, {timeout: 15000});
+    const tablaPuertas = await pag.locator('#vista').innerText();
+    comprobar('en listado se marca cuál es nueva', /nueva/.test(tablaPuertas));
+    comprobar('y están las dos', /Puerta vieja/.test(tablaPuertas) && /Puerta de hoy/.test(tablaPuertas));
+
+    comprobar('sin errores de página en el directorio', errores.length === 0, errores[0]);
+    await ctx.close();
+  }
+  {
+    const {ctx, pag} = await entrar(navegador, 'rober');
+    comprobar('a rober no le aparece el directorio',
+      await pag.locator('a.nav', {hasText: 'Directorio'}).count() === 0);
+    await pag.goto(BASE + '/#directorio', {waitUntil: 'networkidle'});
+    await pag.waitForTimeout(900);
+    comprobar('y si entra a pelo, el servidor le para',
+      /no está abierta|no tiene acceso/i.test(await pag.locator('#vista').innerText()));
+    await ctx.close();
+  }
+
   await navegador.close();
+
   console.log('\n' + (fallos ? 'FALLAN ' + fallos : 'Flujos correctos'));
   process.exit(fallos ? 1 : 0);
 })();
