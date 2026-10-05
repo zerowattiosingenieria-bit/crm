@@ -153,6 +153,17 @@ function accPuertas_(u, p) {
 
 /* ---------- cargar desde los Excel de la carpeta ---------- */
 
+/* Solo trabajamos en España. En el export de Google Maps se cuelan sitios
+   guardados de viajes, y una puerta en Shanghái no es una puerta: se queda
+   fuera al cargar. La caja cubre península, Baleares y Canarias. */
+const ESPANA = {latMin: 27.5, latMax: 44.0, lonMin: -18.5, lonMax: 4.6};
+
+function enEspana_(la, lo) {
+  const a = num_(la), o = num_(lo);
+  if (!a || !o) return false;
+  return a >= ESPANA.latMin && a <= ESPANA.latMax && o >= ESPANA.lonMin && o <= ESPANA.lonMax;
+}
+
 /** Clave de una puerta: dónde está y qué día se tocó. */
 function clavePuerta_(x) {
   return redondear_(num_(x.lat), 5) + '|' + redondear_(num_(x.lon), 5) + '|' + txt_(x.fecha);
@@ -168,7 +179,9 @@ function accImportarPuertas_(u, p) {
 
   const hoy = hoyISO_();
   const nuevas = [];
+  let fuera = 0;
   entran.forEach(function (x) {
+    if (!enEspana_(x.lat, x.lon)) { fuera++; return; }
     const k = clavePuerta_(x);
     if (ya[k]) return;
     ya[k] = true;
@@ -178,8 +191,10 @@ function accImportarPuertas_(u, p) {
                  lat: num_(x.lat), lon: num_(x.lon), alta_crm: hoy});
   });
   añadirFilas_('PUERTAS', nuevas);
-  registrar_(u, 'importar_puertas', 'PUERTAS', '', nuevas.length + ' nuevas de ' + entran.length);
-  return {ok: true, nuevas: nuevas.length, repetidas: entran.length - nuevas.length,
+  registrar_(u, 'importar_puertas', 'PUERTAS', '',
+    nuevas.length + ' nuevas de ' + entran.length + (fuera ? ', ' + fuera + ' fuera de España' : ''));
+  return {ok: true, nuevas: nuevas.length, fuera_de_espana: fuera,
+          repetidas: entran.length - nuevas.length - fuera,
           total: leer_('PUERTAS').length};
 }
 
@@ -242,6 +257,21 @@ function accImportarDirVisitas_(u, p) {
   });
   añadirFilas_('DIR_VISITAS', nuevas);
   return {ok: true, nuevas: nuevas.length, repetidas: entran.length - nuevas.length};
+}
+
+/** Saca las que ya estaban cargadas y caen fuera de España. */
+function accLimpiarPuertasFuera_(u, p) {
+  exigirDirectorio_(u);
+  const fuera = leer_('PUERTAS').filter(function (x) { return !enEspana_(x.lat, x.lon); });
+  /* De abajo arriba: borrar por filas cambia la numeración de las de debajo. */
+  fuera.sort(function (a, b) { return num_(b._fila) - num_(a._fila); })
+    .forEach(function (x) { borrar_('PUERTAS', x.id); });
+  registrar_(u, 'limpiar_puertas', 'PUERTAS', '', fuera.length + ' fuera de España');
+  return {ok: true, borradas: fuera.length,
+    detalle: fuera.map(function (x) {
+      return {zona: txt_(x.zona), nombre: txt_(x.nombre) || txt_(x.direccion),
+              lat: num_(x.lat), lon: num_(x.lon)}; }),
+    total: leer_('PUERTAS').length};
 }
 
 /* ---------- el correo de las puertas nuevas ---------- */

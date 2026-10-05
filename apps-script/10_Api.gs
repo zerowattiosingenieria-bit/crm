@@ -80,6 +80,7 @@ function acciones_() {
     importarDirectorio: accImportarDirectorio_,
     importarDirVisitas: accImportarDirVisitas_,
     importarPuertas: accImportarPuertas_,
+    limpiarPuertasFuera: accLimpiarPuertasFuera_,
     avisoPuertas: accAvisoPuertas_,
 
     /* banco */
