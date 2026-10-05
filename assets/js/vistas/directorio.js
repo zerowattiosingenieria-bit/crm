@@ -8,9 +8,11 @@
  * igualmente; esto es solo para no enseñar una puerta que no se abre.
  */
 
-import {h, poner, txt, num, miles, fechaCorta, mapsHref, comoLlegarHref} from '../util.js';
+import {h, poner, txt, num, miles, fechaCorta, hoyISO, mapsHref, comoLlegarHref} from '../util.js';
 import * as api from '../api.js';
-import {tarjeta, tabla, kpi, kpis, aviso, avisoError, cargando, filtros} from '../ui.js';
+import {tarjeta, tabla, kpi, kpis, aviso, avisoError, cargando, filtros,
+        ventanaFormulario, confirmar} from '../ui.js';
+import {descargarExcel, informeImprimible, conFecha} from '../exportar.js';
 import {cargarLeaflet} from './mapa.js';
 
 const LIMA = '#b4fa1e';
@@ -52,6 +54,32 @@ function encajar(mapa, puntos) {
   mapa.fitBounds(L.latLngBounds(usar.map(p => [p[0], p[1]])), {padding: [30, 30]});
 }
 
+/* ---------- marcar filas para borrarlas en bloque ---------- */
+
+/* Una casilla por fila y una barra abajo con lo que se lleva marcado. El
+   conjunto vive fuera de la tabla, así que sigue ahí aunque se cambie de
+   página o se reordene. */
+function casilla(marcadas, id, alCambiar) {
+  const c = h('input', {type: 'checkbox', checked: marcadas.has(id),
+    estilo: {width: 'auto', margin: 0, cursor: 'pointer'},
+    onclick: e => {
+      e.stopPropagation();
+      if (e.target.checked) marcadas.add(id); else marcadas.delete(id);
+      alCambiar();
+    }});
+  return c;
+}
+
+function barraMarcadas(marcadas, {uno, varios, alBorrar, alLimpiar}) {
+  if (!marcadas.size) return null;
+  return h('.filtros', {estilo: {alignItems: 'center', padding: '10px 14px',
+    background: 'var(--fondo-2, #f4f6f3)', borderTop: '1px solid var(--linea, #e3e7e0)'}},
+    h('b', miles(marcadas.size) + (marcadas.size === 1 ? ' ' + uno : ' ' + varios) + ' marcad' +
+      (marcadas.size === 1 ? 'a' : 'as')),
+    h('button.btn.peligro', {onclick: alBorrar}, 'Borrar ' + (marcadas.size === 1 ? 'la marcada' : 'las marcadas')),
+    h('button.btn', {onclick: alLimpiar}, 'Quitar la marca'));
+}
+
 /* ---------- pantalla ---------- */
 
 export async function vistaDirectorio({id, ir}) {
@@ -63,6 +91,7 @@ export async function vistaDirectorio({id, ir}) {
 async function pantallaClientes({ir}) {
   const caja = h('div');
   const estado = {buscar: '', empresa: '', municipio: '', pagina: 1};
+  const marcadas = new Set();
   let ultimo = null;
 
   const pestañas = h('.filtros',
@@ -95,7 +124,10 @@ async function pantallaClientes({ir}) {
       {tipo: 'select', id: 'municipio', valor: estado.municipio,
        opciones: [['', 'Todos los municipios']].concat(d.municipios.map(x => [x.municipio, x.municipio + ' (' + x.n + ')']))},
       {tipo: 'boton', et: verMapa ? 'Ocultar el mapa' : 'Ver en el mapa',
-       accion: () => { verMapa = !verMapa; if (verMapa) pintaMapa(ultimo); else poner(zonaMapa); pintaFiltros(ultimo); }}
+       accion: () => { verMapa = !verMapa; if (verMapa) pintaMapa(ultimo); else poner(zonaMapa); pintaFiltros(ultimo); }},
+      {tipo: 'boton', et: 'Excel', accion: () => sacar('excel')},
+      {tipo: 'boton', et: 'PDF', accion: () => sacar('pdf')},
+      {tipo: 'boton', clase: 'primario', et: '+ Nueva ficha', accion: () => editarFicha(null)}
     ], v => {
       let cambio = false;
       ['buscar', 'empresa', 'municipio'].forEach(k => {
@@ -129,6 +161,8 @@ async function pantallaClientes({ir}) {
 
   function pintaLista(d) {
     const cols = [
+      {clave: 'sel', et: '', noOrden: true, ancho: '34px',
+       pinta: c => casilla(marcadas, String(c.id), () => pintaLista(ultimo))},
       {clave: 'nombre', et: 'Cliente', pinta: c => h('div',
         h('b', txt(c.nombre) || '(sin nombre)'),
         c.otros ? h('small.nota', ' · ' + txt(c.otros)) : null)},
@@ -139,13 +173,18 @@ async function pantallaClientes({ir}) {
         : '—'},
       {clave: 'telefono', et: 'Teléfono', pinta: c => txt(c.telefono) || '—'},
       {clave: 'n_visitas', et: 'Visitas', num: true, valor: c => num(c.n_visitas)},
-      {clave: 'ultima_visita', et: 'Última visita', pinta: c => c.ultima_visita ? fechaCorta(c.ultima_visita) : '—'}
+      {clave: 'ultima_visita', et: 'Última visita', pinta: c => c.ultima_visita ? fechaCorta(c.ultima_visita) : '—'},
+      {clave: 'editar', et: '', noOrden: true, ancho: '80px',
+       pinta: c => h('button.btn.mini', {onclick: e => { e.stopPropagation(); editarFicha(c); }}, 'Editar')}
     ];
     const paginas = Math.max(1, Math.ceil(d.encontrados / d.por_pagina));
     poner(zonaLista, tarjeta(
       miles(d.encontrados) + ' de ' + miles(d.total) + ' fichas',
       h('div',
         tabla(cols, d.clientes, {alPulsar: c => abrirFicha(c.ref), vacio: 'Aquí no hay nadie con eso.'}),
+        barraMarcadas(marcadas, {uno: 'ficha', varios: 'fichas',
+          alBorrar: () => borrarFichas([...marcadas]),
+          alLimpiar: () => { marcadas.clear(); pintaLista(ultimo); }}),
         paginas > 1 ? h('.filtros',
           h('button.btn', {disabled: d.pagina <= 1,
             onclick: () => { estado.pagina = d.pagina - 1; pedir(); }}, '← Anteriores'),
@@ -153,6 +192,152 @@ async function pantallaClientes({ir}) {
           h('button.btn', {disabled: d.pagina >= paginas,
             onclick: () => { estado.pagina = d.pagina + 1; pedir(); }}, 'Siguientes →')) : null),
       {sinRelleno: true}));
+  }
+
+  /* ---------- sacar lo que se está viendo ---------- */
+
+  /* La pantalla va de cincuenta en cincuenta, así que para exportar se pide
+     aparte la lista filtrada entera; si no, saldría solo la página. */
+  const COLS_EXCEL = [
+    ['Referencia', c => txt(c.ref)], ['Empresa', c => txt(c.empresa)],
+    ['Cliente', c => txt(c.nombre)], ['Otros', c => txt(c.otros)],
+    ['Teléfono', c => txt(c.telefono)], ['Correo', c => txt(c.email)],
+    ['Dirección', c => txt(c.direccion)], ['Municipio', c => txt(c.municipio)],
+    ['CP', c => txt(c.cp)], ['Interés', c => txt(c.interes)],
+    ['Situación', c => txt(c.situacion)], ['Comerciales', c => txt(c.comerciales)],
+    ['Producto', c => txt(c.producto)], ['Importe', c => num(c.importe) || ''],
+    ['Financiera', c => txt(c.financiera)], ['Instalador', c => txt(c.instalador)],
+    ['Visitas', c => num(c.n_visitas) || 0],
+    ['Primera visita', c => txt(c.primera_visita)], ['Última visita', c => txt(c.ultima_visita)],
+    ['Latitud', c => num(c.lat) || ''], ['Longitud', c => num(c.lon) || ''],
+    ['Precisión', c => txt(c.precision)], ['Notas', c => txt(c.notas)]
+  ];
+
+  function comoSeFiltro() {
+    const trozos = [];
+    if (estado.buscar) trozos.push('buscando «' + estado.buscar + '»');
+    if (estado.empresa) trozos.push('empresa ' + estado.empresa);
+    if (estado.municipio) trozos.push('municipio ' + estado.municipio);
+    return trozos.length ? trozos.join(', ') : 'sin filtrar, el archivo entero';
+  }
+
+  async function sacar(formato) {
+    const d = ultimo;
+    if (!d) return;
+    aviso('Preparando ' + (formato === 'pdf' ? 'el informe' : 'el Excel') + '…');
+    let lista;
+    try {
+      lista = (await api.pedir('directorio', Object.assign({}, estado, {todo: true}))).clientes;
+    } catch (e) { return avisoError(e); }
+
+    if (formato === 'excel') {
+      descargarExcel(conFecha('directorio-zero-wattios'), [{
+        nombre: 'Directorio',
+        cabeceras: COLS_EXCEL.map(c => c[0]),
+        filas: lista.map(c => COLS_EXCEL.map(col => col[1](c)))
+      }]);
+      return aviso(miles(lista.length) + ' fichas en el Excel.', 'bien');
+    }
+
+    const porMunicipio = {};
+    lista.forEach(c => { const m = txt(c.municipio) || '(sin municipio)';
+      porMunicipio[m] = (porMunicipio[m] || 0) + 1; });
+    const conVisita = lista.filter(c => txt(c.ultima_visita)).length;
+    informeImprimible({
+      titulo: 'Directorio de clientes',
+      subtitulo: comoSeFiltro(),
+      resumen: [
+        {et: 'Fichas', valor: miles(lista.length)},
+        {et: 'Del archivo entero', valor: miles(d.total)},
+        {et: 'Con visita apuntada', valor: miles(conVisita)},
+        {et: 'Municipios', valor: miles(Object.keys(porMunicipio).length)}
+      ],
+      reparto: {titulo: 'Por municipio',
+        partes: Object.keys(porMunicipio).sort((a, b) => porMunicipio[b] - porMunicipio[a])
+          .slice(0, 22).map(k => ({et: k, n: porMunicipio[k]}))},
+      cabeceras: [{et: 'Cliente'}, {et: 'Empresa'}, {et: 'Municipio'}, {et: 'Dirección'},
+                  {et: 'Teléfono'}, {et: 'Visitas', num: true}, {et: 'Última visita'}],
+      filas: lista.map(c => [txt(c.nombre) || '(sin nombre)', txt(c.empresa), txt(c.municipio),
+        txt(c.direccion), txt(c.telefono), num(c.n_visitas) || 0,
+        c.ultima_visita ? fechaCorta(c.ultima_visita) : '—']),
+      pie: 'ZERO WATTIOS INGENIERÍA · Directorio interno. En el diálogo de impresión, ' +
+           'elige «Guardar como PDF».'
+    });
+  }
+
+  /* ---------- dar de alta, corregir y quitar ---------- */
+
+  const CAMPOS_FICHA = [
+    {id: 'nombre', et: 'Cliente', ancho: 2, requerido: true},
+    {id: 'empresa', et: 'Empresa', tipo: 'select', vacio: '—',
+     opciones: ['Zero Wattios', 'Aurus']},
+    {id: 'otros', et: 'Otros nombres', ancho: 2},
+    {id: 'telefono', et: 'Teléfono', tipo: 'tel'},
+    {id: 'email', et: 'Correo', tipo: 'email', ancho: 2},
+    {id: 'direccion', et: 'Dirección', ancho: 2},
+    {id: 'municipio', et: 'Municipio'},
+    {id: 'cp', et: 'Código postal'},
+    {separador: 'Dónde cae'},
+    {id: 'lat', et: 'Latitud', tipo: 'numero', paso: '0.000001',
+     ayuda: 'Si la dejas vacía no sale en el mapa.'},
+    {id: 'lon', et: 'Longitud', tipo: 'numero', paso: '0.000001'},
+    {id: 'precision', et: 'Precisión', tipo: 'select', vacio: '—',
+     opciones: [['exacta', 'Exacta'], ['calle', 'Por la calle'], ['municipio', 'Solo el municipio']]},
+    {separador: 'Cómo va'},
+    {id: 'interes', et: 'Interés'},
+    {id: 'situacion', et: 'Situación'},
+    {id: 'comerciales', et: 'Comerciales'},
+    {id: 'producto', et: 'Producto'},
+    {id: 'importe', et: 'Importe', tipo: 'euro'},
+    {id: 'financiera', et: 'Financiera'},
+    {id: 'instalador', et: 'Instalador'},
+    {id: 'etiquetas', et: 'Etiquetas'},
+    {id: 'n_visitas', et: 'Visitas', tipo: 'numero'},
+    {id: 'primera_visita', et: 'Primera visita', tipo: 'fecha'},
+    {id: 'ultima_visita', et: 'Última visita', tipo: 'fecha'},
+    {id: 'notas', et: 'Notas', tipo: 'area', ancho: 3}
+  ];
+
+  function editarFicha(c) {
+    const nueva = !c;
+    ventanaFormulario({
+      titulo: nueva ? 'Nueva ficha del directorio' : 'Editar ' + (txt(c.nombre) || 'la ficha'),
+      ancha: true,
+      campos: CAMPOS_FICHA,
+      valores: c || {},
+      textoBoton: nueva ? 'Dar de alta' : 'Guardar',
+      alGuardar: async datos => {
+        const cliente = Object.assign({}, datos);
+        if (!nueva) cliente.id = c.id;
+        const r = await api.pedir('guardarDirectorio', {cliente});
+        if (r.coordenada_fuera) {
+          aviso('Guardada, pero la coordenada caía fuera de España y se ha quitado.', 'error');
+        } else {
+          aviso(nueva ? 'Ficha dada de alta.' : 'Ficha guardada.', 'bien');
+        }
+        marcadas.clear();
+        await pedir();
+      }
+    });
+  }
+
+  async function borrarFichas(ids) {
+    const cuantas = ids.length;
+    if (!cuantas) return;
+    if (!await confirmar(
+      cuantas === 1
+        ? 'Se borra la ficha y las visitas que tenga apuntadas. Esto no se puede deshacer.'
+        : 'Se borran ' + miles(cuantas) + ' fichas y las visitas que tengan apuntadas. ' +
+          'Esto no se puede deshacer.',
+      {titulo: cuantas === 1 ? '¿Borrar la ficha?' : '¿Borrar ' + miles(cuantas) + ' fichas?',
+       botón: 'Sí, borrar'})) return;
+    try {
+      const r = await api.pedir('borrarDirectorio', {ids});
+      aviso('Fuera ' + miles(r.borradas) + (r.borradas === 1 ? ' ficha' : ' fichas') +
+        (r.visitas_borradas ? ' y ' + miles(r.visitas_borradas) + ' visitas' : '') + '.', 'bien');
+      marcadas.clear();
+      await pedir();
+    } catch (e) { avisoError(e); }
   }
 
   async function abrirFicha(ref) {
@@ -183,6 +368,8 @@ async function pantallaClientes({ir}) {
           ], d.visitas, {vacio: 'No hay visitas apuntadas.'})),
         {acciones: [
           c.direccion ? h('a.btn', {href: comoLlegarHref(c.direccion), target: '_blank', rel: 'noopener'}, 'Cómo llegar') : null,
+          h('button.btn.primario', {onclick: () => editarFicha(c)}, 'Editar'),
+          h('button.btn.peligro', {onclick: () => borrarFichas([String(c.id)])}, 'Borrar'),
           h('button.btn', {onclick: () => pintaLista(ultimo)}, 'Volver al listado')]}));
     } catch (e) { avisoError(e); pintaLista(ultimo); }
   }
@@ -196,6 +383,7 @@ async function pantallaClientes({ir}) {
 async function pantallaPuertas({ir}) {
   const caja = h('div');
   const estado = {zona: '', buscar: '', desde: '', hasta: ''};
+  const marcadas = new Set();
   let verMapa = true;
   let ultimo = null;
 
@@ -240,7 +428,10 @@ async function pantallaPuertas({ir}) {
       {tipo: 'boton', et: 'Solo las de esta semana',
        accion: () => { estado.desde = d.semana.lunes; estado.hasta = ''; pedir(); }},
       {tipo: 'boton', et: verMapa ? 'Ver en listado' : 'Ver en el mapa',
-       accion: () => { verMapa = !verMapa; pintaFiltros(ultimo); pintaCuerpo(ultimo); }}
+       accion: () => { verMapa = !verMapa; pintaFiltros(ultimo); pintaCuerpo(ultimo); }},
+      {tipo: 'boton', et: 'Excel', accion: () => sacar('excel')},
+      {tipo: 'boton', et: 'PDF', accion: () => sacar('pdf')},
+      {tipo: 'boton', clase: 'primario', et: '+ Nueva puerta', accion: () => editarPuerta(null)}
     ], v => {
       let cambio = false;
       ['buscar', 'zona', 'desde', 'hasta'].forEach(k => {
@@ -282,6 +473,8 @@ async function pantallaPuertas({ir}) {
 
   function listaPuertas(d) {
     const cols = [
+      {clave: 'sel', et: '', noOrden: true, ancho: '34px',
+       pinta: p => casilla(marcadas, String(p.id), () => pintaCuerpo(ultimo))},
       {clave: 'fecha', et: 'Fecha', ancho: '120px',
        pinta: p => h('span', p.fecha ? fechaCorta(p.fecha) : '—',
          p.nueva === 'si' ? h('span.etiqueta.marca', {estilo: {marginLeft: '6px'}}, 'nueva') : null)},
@@ -291,16 +484,132 @@ async function pantallaPuertas({ir}) {
         h('b', p.nombre || p.direccion || 'Puerta'),
         p.nombre && p.direccion ? h('small.nota', h('br'), p.direccion) : null)},
       {clave: 'nota', et: 'Nota', pinta: p => p.nota || p.categoria || '—'},
-      {clave: 'ver', et: '', noOrden: true, ancho: '90px',
-       pinta: p => h('a.btn', {href: 'https://www.google.com/maps?q=' + p.lat + ',' + p.lon,
-         target: '_blank', rel: 'noopener'}, 'Ver')}
+      {clave: 'ver', et: '', noOrden: true, ancho: '150px',
+       pinta: p => h('div', {estilo: {display: 'flex', gap: '6px'}},
+         h('a.btn.mini', {href: 'https://www.google.com/maps?q=' + p.lat + ',' + p.lon,
+           target: '_blank', rel: 'noopener'}, 'Ver'),
+         h('button.btn.mini', {onclick: e => { e.stopPropagation(); editarPuerta(p); }}, 'Editar'))}
     ];
     return tarjeta(miles(d.encontradas) + (d.encontradas === 1 ? ' puerta' : ' puertas'),
-      tabla(cols, d.puertas.slice(0, 600), {
-        ordenInicial: {clave: 'fecha', desc: true},
-        vacio: 'No hay puertas con ese filtro.'}),
+      h('div',
+        tabla(cols, d.puertas.slice(0, 600), {
+          ordenInicial: {clave: 'fecha', desc: true},
+          vacio: 'No hay puertas con ese filtro.'}),
+        barraMarcadas(marcadas, {uno: 'puerta', varios: 'puertas',
+          alBorrar: () => borrarPuertas([...marcadas]),
+          alLimpiar: () => { marcadas.clear(); pintaCuerpo(ultimo); }})),
       {sinRelleno: true,
        subtitulo: d.encontradas > 600 ? 'Se muestran las 600 primeras; afina el filtro para ver el resto.' : null});
+  }
+
+  /* ---------- sacar lo que se está viendo ---------- */
+
+  function comoSeFiltro() {
+    const trozos = [];
+    if (estado.buscar) trozos.push('buscando «' + estado.buscar + '»');
+    if (estado.zona) trozos.push('zona ' + estado.zona);
+    if (estado.desde) trozos.push('desde el ' + fechaCorta(estado.desde));
+    if (estado.hasta) trozos.push('hasta el ' + fechaCorta(estado.hasta));
+    return trozos.length ? trozos.join(', ') : 'sin filtrar, todas las que llevamos';
+  }
+
+  function sacar(formato) {
+    const d = ultimo;
+    if (!d) return;
+    const lista = d.puertas;
+
+    if (formato === 'excel') {
+      const cab = ['Fecha', 'Hora', 'Zona', 'Nombre', 'Dirección', 'Nota', 'Categoría',
+                   'Lista', 'Nueva esta semana', 'Latitud', 'Longitud'];
+      descargarExcel(conFecha('puertas-zero-wattios'), [
+        {nombre: 'Puertas', cabeceras: cab,
+         filas: lista.map(p => [txt(p.fecha), txt(p.hora), txt(p.zona), txt(p.nombre),
+           txt(p.direccion), txt(p.nota), txt(p.categoria), txt(p.lista),
+           p.nueva === 'si' ? 'Sí' : 'No', num(p.lat) || '', num(p.lon) || ''])},
+        {nombre: 'Por zona', cabeceras: ['Zona', 'Puertas'],
+         filas: d.zonas.map(z => [z.zona, z.n])},
+        {nombre: 'Por semana', cabeceras: ['Semana del', 'Puertas'],
+         filas: d.semanas.map(x => [x.semana, x.n])}
+      ]);
+      return aviso(miles(lista.length) + ' puertas en el Excel.', 'bien');
+    }
+
+    const porZona = {};
+    lista.forEach(p => { const z = txt(p.zona) || '(sin zona)'; porZona[z] = (porZona[z] || 0) + 1; });
+    informeImprimible({
+      titulo: 'Puertas tocadas',
+      subtitulo: comoSeFiltro(),
+      resumen: [
+        {et: 'En este listado', valor: miles(lista.length)},
+        {et: 'Tocadas en total', valor: miles(d.total)},
+        {et: 'Nuevas esta semana', valor: miles(d.semana.nuevas),
+         nota: 'desde el lunes ' + fechaCorta(d.semana.lunes)},
+        {et: 'La semana pasada', valor: miles(d.semana.semana_pasada)},
+        {et: 'Sin fecha', valor: miles(d.semana.sin_fecha)}
+      ],
+      reparto: {titulo: 'Por zona',
+        partes: Object.keys(porZona).sort((a, b) => porZona[b] - porZona[a])
+          .slice(0, 22).map(k => ({et: k, n: porZona[k]}))},
+      cabeceras: [{et: 'Fecha'}, {et: 'Hora'}, {et: 'Zona'}, {et: 'Dónde'}, {et: 'Nota'}, {et: 'Nueva'}],
+      filas: lista.slice()
+        .sort((a, b) => txt(b.fecha).localeCompare(txt(a.fecha)))
+        .map(p => [p.fecha ? fechaCorta(p.fecha) : '—', txt(p.hora) || '—', txt(p.zona),
+          txt(p.nombre) || txt(p.direccion) || 'Puerta', txt(p.nota) || txt(p.categoria),
+          p.nueva === 'si' ? 'Sí' : '']),
+      pie: 'ZERO WATTIOS INGENIERÍA · Puerta a puerta. En el diálogo de impresión, ' +
+           'elige «Guardar como PDF».'
+    });
+  }
+
+  /* ---------- dar de alta, corregir y quitar ---------- */
+
+  function editarPuerta(p) {
+    const nueva = !p;
+    ventanaFormulario({
+      titulo: nueva ? 'Nueva puerta' : 'Editar la puerta',
+      ancha: true,
+      campos: [
+        {id: 'nombre', et: 'Nombre o referencia', ancho: 2},
+        {id: 'direccion', et: 'Dirección', ancho: 2},
+        {id: 'zona', et: 'Zona', requerido: true},
+        {id: 'fecha', et: 'Día que se tocó', tipo: 'fecha',
+         ayuda: 'Sin fecha no cuenta como nueva de la semana.'},
+        {id: 'hora', et: 'Hora', tipo: 'hora'},
+        {separador: 'Dónde cae'},
+        {id: 'lat', et: 'Latitud', tipo: 'numero', paso: '0.000001', requerido: true},
+        {id: 'lon', et: 'Longitud', tipo: 'numero', paso: '0.000001', requerido: true},
+        {separador: 'Qué pasó'},
+        {id: 'categoria', et: 'Categoría'},
+        {id: 'lista', et: 'Lista de origen'},
+        {id: 'nota', et: 'Nota', tipo: 'area', ancho: 3}
+      ],
+      valores: p || {zona: estado.zona, fecha: hoyISO()},
+      textoBoton: nueva ? 'Apuntar la puerta' : 'Guardar',
+      alGuardar: async datos => {
+        const puerta = Object.assign({}, datos);
+        if (!nueva) puerta.id = p.id;
+        await api.pedir('guardarPuerta', {puerta});
+        aviso(nueva ? 'Puerta apuntada.' : 'Puerta guardada.', 'bien');
+        marcadas.clear();
+        await pedir();
+      }
+    });
+  }
+
+  async function borrarPuertas(ids) {
+    const cuantas = ids.length;
+    if (!cuantas) return;
+    if (!await confirmar(
+      cuantas === 1 ? 'Se borra esa puerta del histórico. Esto no se puede deshacer.'
+                    : 'Se borran ' + miles(cuantas) + ' puertas del histórico. Esto no se puede deshacer.',
+      {titulo: cuantas === 1 ? '¿Borrar la puerta?' : '¿Borrar ' + miles(cuantas) + ' puertas?',
+       botón: 'Sí, borrar'})) return;
+    try {
+      const r = await api.pedir('borrarPuertas', {ids});
+      aviso('Fuera ' + miles(r.borradas) + (r.borradas === 1 ? ' puerta' : ' puertas') + '.', 'bien');
+      marcadas.clear();
+      await pedir();
+    } catch (e) { avisoError(e); }
   }
 
   function semanasPuertas(d) {
