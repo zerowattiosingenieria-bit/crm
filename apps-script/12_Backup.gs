@@ -86,7 +86,8 @@ function copiaSeguridad() {
  */
 function instalarDisparadores() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
-    if (['copiaSeguridad', 'resumenSemanal'].indexOf(t.getHandlerFunction()) >= 0) {
+    if (['copiaSeguridad', 'resumenSemanal', 'avisoPuertasSemana']
+        .indexOf(t.getHandlerFunction()) >= 0) {
       ScriptApp.deleteTrigger(t);
     }
   });
@@ -100,8 +101,15 @@ function instalarDisparadores() {
     .onWeekDay(ScriptApp.WeekDay.FRIDAY)
     .atHour(19).nearMinute(15)
     .create();
-  Logger.log('Disparadores creados: resumen semanal los viernes sobre las 18:00 y ' +
-    'copia de seguridad sobre las 19:15 (zona horaria del proyecto).');
+  /* El lunes a primera hora, lo que se tocó la semana que acaba de cerrar. */
+  ScriptApp.newTrigger('avisoPuertasSemana')
+    .timeBased()
+    .onWeekDay(ScriptApp.WeekDay.MONDAY)
+    .atHour(8).nearMinute(0)
+    .create();
+  Logger.log('Disparadores creados: resumen semanal los viernes sobre las 18:00, ' +
+    'copia de seguridad sobre las 19:15 y aviso de puertas los lunes sobre las 8:00 ' +
+    '(zona horaria del proyecto).');
   return true;
 }
 

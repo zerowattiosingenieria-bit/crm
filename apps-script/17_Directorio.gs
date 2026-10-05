@@ -246,7 +246,7 @@ function accImportarDirVisitas_(u, p) {
 
 /* ---------- el correo de las puertas nuevas ---------- */
 
-function avisoPuertasSemana() {
+function avisoPuertasSemana(desdeLunes) {
   /* Va a quien puede ver el directorio, que para eso es suyo. Si hay un
      «resumen_a» puesto, manda ese, que es el desvío de toda la casa. */
   const cfg = config_();
@@ -257,10 +257,19 @@ function avisoPuertasSemana() {
       .filter(function (e, i, a) { return a.indexOf(e) === i; }).join(',');
   if (!destino) return {ok: false, error: 'No hay nadie a quien mandárselo.'};
 
-  const lunes = lunesDe_(hoyISO_());
+  /* Si lo lanza el disparador un lunes, lo interesante es la semana que
+     acaba de cerrarse, de lunes a domingo. Si se pide a mano, la semana en
+     curso desde su lunes hasta hoy. */
+  const hoy = fecha_(hoyISO_());
+  const esLunes = !txt_(desdeLunes) && hoy && hoy.getDay() === 1;
+  const lunes = txt_(desdeLunes) || (esLunes
+    ? Utilities.formatDate(new Date(hoy.getTime() - 7 * 86400000), zonaHoraria_(), 'yyyy-MM-dd')
+    : lunesDe_(hoyISO_()));
+  const hasta = esLunes ? hoyISO_() : '';     // el lunes se corta en domingo
   const todas = leer_('PUERTAS');
   const nuevas = todas.filter(function (x) {
-    return !!txt_(x.fecha) && txt_(x.fecha) >= lunes; });
+    const f = txt_(x.fecha);
+    return !!f && f >= lunes && (!hasta || f < hasta); });
 
   const porZona = {};
   nuevas.forEach(function (x) { const z = txt_(x.zona) || '(sin zona)'; porZona[z] = (porZona[z] || 0) + 1; });
@@ -286,7 +295,8 @@ function avisoPuertasSemana() {
       '<div style="padding:22px">' +
         '<h2 style="margin:0 0 4px;font-size:19px;color:#17191c">' + nuevas.length +
         ' puertas nuevas</h2>' +
-        '<p style="margin:0 0 16px;color:#5b6159;font-size:13.5px">Desde el lunes ' + lunes +
+        '<p style="margin:0 0 16px;color:#5b6159;font-size:13.5px">' +
+        (hasta ? 'Semana del ' + lunes + ' al ' + hasta : 'Desde el lunes ' + lunes) +
         '. En total llevamos ' + todas.length + ' puertas tocadas.</p>' +
         (zonas.length ? '<p style="margin:0 0 16px;font-size:13.5px">' + zonas.map(function (z) {
           return '<b>' + z + '</b> ' + porZona[z]; }).join(' · ') + '</p>' : '') +
@@ -311,5 +321,5 @@ function avisoPuertasSemana() {
 
 function accAvisoPuertas_(u, p) {
   exigirDirectorio_(u);
-  return {ok: true, resultado: avisoPuertasSemana()};
+  return {ok: true, resultado: avisoPuertasSemana(txt_(p.desde))};
 }
