@@ -16,7 +16,7 @@ const COLORES = {
 const color = estado => COLORES[normal(estado)] || '#5b6159';
 
 let cargadoLeaflet = false;
-function cargarLeaflet() {
+export function cargarLeaflet() {
   if (cargadoLeaflet) return Promise.resolve();
   return new Promise((resolve, reject) => {
     const css = (href) => {
