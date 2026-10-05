@@ -62,8 +62,11 @@ function accDirectorio_(u, p) {
     encontrados: filtrados.length,
     pagina: pagina, por_pagina: porPagina,
     clientes: filtrados.slice(desde, desde + porPagina),
-    /* Para el mapa hace falta todo lo que tenga coordenada, pero en corto. */
-    puntos: filtrados.filter(function (c) { return c.lat && c.lon; }).map(function (c) {
+    /* Para el mapa hace falta todo lo que tenga coordenada, pero en corto.
+       Si una coordenada cae fuera de España no se pinta: aquí solo
+       trabajamos aquí, y un punto perdido abre el mapa en medio del mundo. */
+    puntos: filtrados.filter(function (c) {
+      return c.lat && c.lon && enEspana_(c.lat, c.lon); }).map(function (c) {
       return [txt_(c.ref), num_(c.lat), num_(c.lon), txt_(c.nombre), txt_(c.empresa),
               txt_(c.municipio), txt_(c.precision)];
     }),
@@ -219,6 +222,9 @@ function accImportarDirectorio_(u, p) {
     const fila = {};
     campos.forEach(function (c) { fila[c] = x[c] === undefined || x[c] === null ? '' : x[c]; });
     fila.actualizado = hoy;
+    /* El cliente entra igual, pero una coordenada de fuera de España no:
+       se queda sin punto en el mapa antes que mandar el mapa a China. */
+    if (txt_(fila.lat) !== '' && !enEspana_(fila.lat, fila.lon)) { fila.lat = ''; fila.lon = ''; }
     if (porRef[ref]) {
       /* Al actualizar no se pisa con vacío lo que ya estaba: si el Excel de
          esta semana no trae un dato, el que había sigue valiendo. */
