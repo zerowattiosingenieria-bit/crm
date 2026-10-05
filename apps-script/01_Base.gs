@@ -210,6 +210,10 @@ function ahora_() { return Utilities.formatDate(new Date(), zonaHoraria_(), 'yyy
    que conservarla: si no, 'expira' se quedaba en el día pelado y toda sesión
    parecía caducada nada más crearla. */
 function fechaHoja_(d) {
+  /* Una celda con solo la hora la guarda Google como una fecha del 30 de
+     diciembre de 1899, que es su día cero. Eso no es una fecha, es una
+     hora: sale como 09:22 y no como «1899-12-30 09:22:00». */
+  if (d.getFullYear() < 1900) return Utilities.formatDate(d, zonaHoraria_(), 'HH:mm');
   const conHora = d.getHours() || d.getMinutes() || d.getSeconds();
   return Utilities.formatDate(d, zonaHoraria_(), conHora ? 'yyyy-MM-dd HH:mm:ss' : 'yyyy-MM-dd');
 }
