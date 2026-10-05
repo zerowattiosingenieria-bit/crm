@@ -11,6 +11,7 @@ Apps Script. No hay servidores que mantener ni cuotas que pagar.
 - **Aplicación:** https://zerowattiosingenieria-bit.github.io/crm/
 - **Instalación paso a paso:** [docs/INSTALACION.md](docs/INSTALACION.md)
 - **Manual de uso:** [docs/MANUAL.md](docs/MANUAL.md)
+- **Qué se ha cambiado y por qué:** [docs/HISTORIAL.md](docs/HISTORIAL.md)
 
 ## Qué hace
 
@@ -113,7 +114,7 @@ assets/js/
   vistas/               una pantalla por archivo
 assets/vendor/leaflet/  mapa (incluido en el repositorio, no depende de CDN)
 apps-script/            el backend: 11 archivos .gs para el proyecto de Apps Script
-docs/                   instalación y manual de uso
+docs/                   instalación, manual de uso e historial de cambios
 pruebas/                simulador del backend, pruebas y recorrido con navegador
 ```
 
