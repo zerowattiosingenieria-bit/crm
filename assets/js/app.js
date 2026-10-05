@@ -10,6 +10,7 @@ import {vistaClientes, vistaCliente} from './vistas/clientes.js';
 import {vistaOperaciones} from './vistas/operaciones.js';
 import {vistaCaptaciones} from './vistas/captaciones.js';
 import {vistaMapa} from './vistas/mapa.js';
+import {vistaDirectorio} from './vistas/directorio.js';
 import {vistaContabilidad, vistaFacturas, vistaGastos, vistaCobros} from './vistas/finanzas.js';
 import {vistaBanco} from './vistas/banco.js';
 import {vistaEquipo, vistaResumen, vistaPartes} from './vistas/equipo.js';
@@ -29,6 +30,7 @@ const VISTAS = {
   operaciones:  {titulo: 'Instalaciones',      pinta: vistaOperaciones},
   captaciones:  {titulo: 'Captaciones',        pinta: vistaCaptaciones},
   mapa:         {titulo: 'Mapa de clientes',   pinta: vistaMapa,          permiso: 'direccion'},
+  directorio:   {titulo: 'Directorio y puertas', pinta: vistaDirectorio,  permiso: 'directorio'},
   contabilidad: {titulo: 'Contabilidad',       pinta: vistaContabilidad,  permiso: 'finanzas'},
   facturas:     {titulo: 'Facturas',           pinta: vistaFacturas,      permiso: 'finanzas'},
   gastos:       {titulo: 'Gastos',             pinta: vistaGastos,        permiso: 'finanzas'},
@@ -73,6 +75,7 @@ function menuDe(rol) {
       {id: 'operaciones', et: 'Mis instalaciones', ico: '⚡'},
       {id: 'captaciones', et: 'Captaciones', ico: '⚑'},
       {id: 'parte', et: 'Parte del día', ico: '✓'},
+      {id: 'directorio', et: 'Directorio', ico: '🗂'},
       {grupo: 'Lo mío'},
       {id: 'resumen', et: 'Mi resumen', ico: '◔'},
       {id: 'nomina', et: 'Mi nómina', ico: '€'},
@@ -88,6 +91,7 @@ function menuDe(rol) {
     {id: 'operaciones', et: 'Instalaciones', ico: '⚡'},
     {id: 'captaciones', et: 'Captaciones', ico: '⚑'},
     {id: 'mapa', et: 'Mapa', ico: '◎'},
+    {id: 'directorio', et: 'Directorio y puertas', ico: '🗂'},
     {grupo: 'Dinero'},
     {id: 'contabilidad', et: 'Contabilidad', ico: '€'},
     {id: 'facturas', et: 'Facturas', ico: '▤'},
