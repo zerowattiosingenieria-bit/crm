@@ -762,6 +762,15 @@ comprobar('y no se lleva por delante a las demás',
 comprobar('ni toca Canarias',
   leer_('PUERTAS').some(x => txt_(x.nombre) === 'Casa en Teguise'));
 
+/* Una celda que solo lleva la hora la guarda Google como una fecha de 1899.
+   Sale como hora, que es lo que es. */
+comprobar('una celda de solo hora sale como hora',
+  fechaHoja_(new Date(1899, 11, 30, 9, 22, 0)) === '09:22',
+  fechaHoja_(new Date(1899, 11, 30, 9, 22, 0)));
+comprobar('y una fecha de verdad sigue saliendo como fecha',
+  fechaHoja_(new Date(2026, 9, 5)) === '2026-10-05',
+  fechaHoja_(new Date(2026, 9, 5)));
+
 /* ---------- tocar el directorio y las puertas a mano ---------- */
 
 /* Dar de alta una ficha desde el CRM, sin esperar al Excel del lunes. */
