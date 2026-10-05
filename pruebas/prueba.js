@@ -762,6 +762,49 @@ comprobar('y no se lleva por delante a las demás',
 comprobar('ni toca Canarias',
   leer_('PUERTAS').some(x => txt_(x.nombre) === 'Casa en Teguise'));
 
+/* ---------- que la facturación cuadre ---------- */
+
+/* Esto salió de un lío real: primero se facturó el 50% y luego otra
+   factura por el total en vez de por la mitad que faltaba. */
+const cliCuadre = despachar_({accion: 'guardarCliente', token: sesiones.fernando.token,
+  cliente: {nombre: 'Cliente del cuadre', direccion: 'Calle del Cuadre 1', municipio: 'Madrid'}}).cliente;
+const opCuadre = despachar_({accion: 'guardarOperacion', token: sesiones.fernando.token, operacion: {
+  cliente_id: cliCuadre.id, tipo: 'aero', estado: 'instalada', forma_pago: 'financiado',
+  importe_aero: 10000, iva_pct: 21}}).operacion;
+despachar_({accion: 'guardarFactura', token: sesiones.fernando.token, factura: {
+  numero: 'FPRU2026-001', operacion_id: opCuadre.id, base: 4132.23, fecha_emision: hoyISO_()}});
+const sinAviso = despachar_({accion: 'alertas', token: sesiones.fernando.token}).alertas;
+comprobar('con una sola factura del 50% no salta nada',
+  !sinAviso.some(a => a.tipo === 'sobrefacturado'));
+
+despachar_({accion: 'guardarFactura', token: sesiones.fernando.token, factura: {
+  numero: 'FPRU2026-002', operacion_id: opCuadre.id, base: 8264.46, fecha_emision: hoyISO_()}});
+const conAviso = despachar_({accion: 'alertas', token: sesiones.fernando.token}).alertas;
+const sobre = conAviso.filter(a => a.tipo === 'sobrefacturado' && a.operacion_id === opCuadre.id);
+comprobar('pero si la segunda va por el total, salta el aviso', sobre.length === 1,
+  JSON.stringify(conAviso.filter(a => a.tipo === 'sobrefacturado')).slice(0, 160));
+comprobar('y dice cuánto sobra', /Sobran 5000 €/.test(sobre[0].texto), sobre[0] && sobre[0].texto);
+
+/* Cobrar más de lo facturado también canta. */
+despachar_({accion: 'guardarCobro', token: sesiones.fernando.token, cobro: {
+  operacion_id: opCuadre.id, concepto: 'firma', importe: 20000, fecha_cobro: hoyISO_()}});
+comprobar('cobrar por encima de lo facturado salta',
+  despachar_({accion: 'alertas', token: sesiones.fernando.token}).alertas
+    .some(a => a.tipo === 'cobrado_sin_factura' && a.operacion_id === opCuadre.id));
+
+/* Un hueco en la numeración quiere decir que falta meter una factura. */
+despachar_({accion: 'guardarFactura', token: sesiones.fernando.token, factura: {
+  numero: 'FPRU2026-005', operacion_id: opCuadre.id, base: 100, fecha_emision: hoyISO_()}});
+const huecos = despachar_({accion: 'alertas', token: sesiones.fernando.token}).alertas
+  .filter(a => a.tipo === 'hueco_facturas');
+comprobar('el hueco de numeración se avisa', huecos.length >= 1, JSON.stringify(huecos).slice(0, 160));
+comprobar('y dice cuáles faltan',
+  huecos.some(a => /FPRU2026-003/.test(a.texto) && /FPRU2026-004/.test(a.texto)),
+  huecos.map(a => a.texto).join(' | ').slice(0, 200));
+comprobar('el cuadre no se le enseña a quien no ve las finanzas',
+  !despachar_({accion: 'alertas', token: sesiones.rober.token}).alertas
+    .some(a => ['sobrefacturado','cobrado_sin_factura','hueco_facturas'].indexOf(a.tipo) >= 0));
+
 /* Siempre lo más reciente primero, y ordenado en el servidor: el listado
    solo pinta las 600 primeras, así que si se cortara antes de ordenar
    saldrían las más viejas de la hoja. */
