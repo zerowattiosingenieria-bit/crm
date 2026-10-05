@@ -705,6 +705,18 @@ comprobar('marca cuáles son las nuevas',
 comprobar('la vieja no se cuela como nueva',
   pts.puertas.filter(x => x.nombre === 'Puerta vieja')[0].nueva === 'no');
 comprobar('agrupa por zonas', pts.zonas.length === 2, JSON.stringify(pts.zonas));
+
+/* Una puerta sin fecha se carga igual, pero no se cuenta como tocada esta
+   semana solo porque el Excel haya entrado hoy. */
+despachar_({accion: 'importarPuertas', token: tkDir, puertas: [
+  {nombre: 'Puerta sin fecha', direccion: 'Calle X 9', zona: 'Las Rozas',
+   fecha: '', hora: '', lat: 40.4999, lon: -3.8999, lista: 'Saved places'}]});
+const pts2 = despachar_({accion: 'puertas', token: tkDir});
+comprobar('la puerta sin fecha entra', pts2.total === 4, pts2.total);
+comprobar('pero no cuenta como nueva de la semana',
+  pts2.semana.nuevas === 2, JSON.stringify(pts2.semana));
+comprobar('y se avisa de cuántas no tienen fecha',
+  pts2.semana.sin_fecha === 1, JSON.stringify(pts2.semana));
 comprobar('reparte por semanas', pts.semanas.length >= 2);
 comprobar('se filtran por zona',
   despachar_({accion: 'puertas', token: tkDir, zona: 'Pozuelo'}).encontradas === 2);
