@@ -181,7 +181,9 @@ async function pantallaClientes({ir}) {
     poner(zonaLista, tarjeta(
       miles(d.encontrados) + ' de ' + miles(d.total) + ' fichas',
       h('div',
-        tabla(cols, d.clientes, {alPulsar: c => abrirFicha(c.ref), vacio: 'Aquí no hay nadie con eso.'}),
+        tabla(cols, d.clientes, {alPulsar: c => abrirFicha(c.ref),
+          ordenInicial: {clave: 'ultima_visita', desc: true},
+          vacio: 'Aquí no hay nadie con eso.'}),
         barraMarcadas(marcadas, {uno: 'ficha', varios: 'fichas',
           alBorrar: () => borrarFichas([...marcadas]),
           alLimpiar: () => { marcadas.clear(); pintaLista(ultimo); }}),
@@ -476,6 +478,7 @@ async function pantallaPuertas({ir}) {
       {clave: 'sel', et: '', noOrden: true, ancho: '34px',
        pinta: p => casilla(marcadas, String(p.id), () => pintaCuerpo(ultimo))},
       {clave: 'fecha', et: 'Fecha', ancho: '120px',
+       orden: p => txt(p.fecha) ? txt(p.fecha) + ' ' + txt(p.hora) : '',
        pinta: p => h('span', p.fecha ? fechaCorta(p.fecha) : '—',
          p.nueva === 'si' ? h('span.etiqueta.marca', {estilo: {marginLeft: '6px'}}, 'nueva') : null)},
       {clave: 'hora', et: 'Hora', ancho: '70px', pinta: p => p.hora || '—'},
@@ -551,8 +554,7 @@ async function pantallaPuertas({ir}) {
         partes: Object.keys(porZona).sort((a, b) => porZona[b] - porZona[a])
           .slice(0, 22).map(k => ({et: k, n: porZona[k]}))},
       cabeceras: [{et: 'Fecha'}, {et: 'Hora'}, {et: 'Zona'}, {et: 'Dónde'}, {et: 'Nota'}, {et: 'Nueva'}],
-      filas: lista.slice()
-        .sort((a, b) => txt(b.fecha).localeCompare(txt(a.fecha)))
+      filas: lista
         .map(p => [p.fecha ? fechaCorta(p.fecha) : '—', txt(p.hora) || '—', txt(p.zona),
           txt(p.nombre) || txt(p.direccion) || 'Puerta', txt(p.nota) || txt(p.categoria),
           p.nueva === 'si' ? 'Sí' : '']),
