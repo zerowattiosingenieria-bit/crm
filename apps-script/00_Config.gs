@@ -141,6 +141,16 @@ const ESQUEMA = {
 
   SESIONES: ['token','usuario_id','creado','expira','agente'],
 
+  /* El archivo histórico: clientes de Zero Wattios y de Aurus, sus visitas
+     y las puertas tocadas. Vive aparte del pipeline a propósito. */
+  DIRECTORIO: ['id','ref','empresa','nombre','otros','telefono','email','direccion','municipio','cp',
+    'lat','lon','precision','interes','situacion','etiquetas','comerciales','n_visitas',
+    'primera_visita','ultima_visita','importe','producto','financiera','instalador',
+    'n_documentos','carpeta','notas','ultima_actividad','alta_crm','actualizado'],
+  DIR_VISITAS: ['id','ref','cliente','empresa','fecha','hora','comercial','etiquetas','tarjeta'],
+  PUERTAS: ['id','lista','nota','categoria','nombre','direccion','zona','fecha','hora',
+    'lat','lon','alta_crm'],
+
   LOG: ['fecha','usuario_id','usuario','accion','entidad','entidad_id','detalle']
 };
 
@@ -310,6 +320,8 @@ const CONFIG_INICIAL = [
   ['coste_estructura_mes','12000','Coste fijo mensual de la empresa (€)'],
   ['dias_vacaciones','22','Días laborables de vacaciones al año por persona'],
   ['resumen_semanal','si','Enviar el resumen semanal por correo los viernes (si/no)'],
+  ['directorio_usuarios','superadmin,fernando,nando',
+   'Usuarios que pueden ver el directorio histórico y las puertas, separados por comas'],
   ['resumen_a','fernandogarcia@zerowattios.com','Mientras tenga un correo, TODOS los resúmenes van ahí y no a cada persona'],
   ['copia_resumen','','Correo que recibe copia de todos los resúmenes (opcional)'],
   ['festivos','','Festivos del año, separados por comas (aaaa-mm-dd)'],

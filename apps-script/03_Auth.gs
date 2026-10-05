@@ -31,7 +31,7 @@ function accLogin_(p) {
   limpiarSesiones_();
   registrar_(u, 'login', 'USUARIOS', u.id, '');
 
-  return {ok: true, token: tk, usuario: publico_(u), permisos: PERMISOS[u.rol] || PERMISOS.captador,
+  return {ok: true, token: tk, usuario: publico_(u), permisos: permisos_(u),
           catalogo: CATALOGO, config: configVisible_(u), version: VERSION};
 }
 
@@ -113,7 +113,14 @@ function publicoConNomina_(u) {
   return o;
 }
 
-function permisos_(u) { return PERMISOS[u.rol] || PERMISOS.captador; }
+function permisos_(u) {
+  const base = PERMISOS[u.rol] || PERMISOS.captador;
+  const o = {};
+  Object.keys(base).forEach(function (k) { o[k] = base[k]; });
+  /* El directorio no va por rol sino por lista de personas. */
+  o.directorio = veDirectorio_(u);
+  return o;
+}
 
 function exigir_(u, permiso) {
   if (!permisos_(u)[permiso]) throw new Error('Tu usuario no tiene acceso a esta parte del CRM.');
@@ -124,6 +131,7 @@ function configVisible_(u) {
   const c = config_();
   if (permisos_(u).finanzas) return c;
   const fuera = ['coste_estructura_mes', 'margen_objetivo_pct'];
+  if (!veDirectorio_(u)) fuera.push('directorio_usuarios');
   const o = {};
   Object.keys(c).forEach(function (k) { if (fuera.indexOf(k) < 0) o[k] = c[k]; });
   return o;

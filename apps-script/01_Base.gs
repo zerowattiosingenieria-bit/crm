@@ -72,6 +72,22 @@ function insertar_(nombre, obj) {
   return obj;
 }
 
+/* Meter mil filas de una en una tarda una eternidad y se queda a medias.
+   Esto reserva los identificadores de golpe y escribe todo de una vez. */
+function añadirFilas_(nombre, objetos) {
+  const lista = objetos || [];
+  if (!lista.length) return 0;
+  const h = hoja_(nombre);
+  const cab = cabeceras_(nombre);
+  const ids = cab.indexOf('id') >= 0 ? nuevosIds_(nombre, lista.length) : null;
+  const filas = lista.map(function (o, i) {
+    if (ids) o.id = o.id || ids[i];
+    return cab.map(function (c) { return o[c] === undefined || o[c] === null ? '' : o[c]; });
+  });
+  h.getRange(h.getLastRow() + 1, 1, filas.length, cab.length).setValues(filas);
+  return filas.length;
+}
+
 /** Actualiza por id solo los campos que vengan en el objeto. */
 function actualizar_(nombre, id, cambios) {
   const h = hoja_(nombre);
@@ -137,7 +153,8 @@ function insertarLote_(nombre, objetos) {
 const PREFIJO = {
   USUARIOS:'U', CLIENTES:'C', OPERACIONES:'OP', COBROS:'CO', FACTURAS:'F',
   GASTOS:'G', SEGUIMIENTO:'S', CAPTACIONES:'CA', PARTES:'P', NOMINAS:'N', JORNADAS:'J',
-  BANCO:'B', VACACIONES:'V', SESIONES:'SE', LOG:'L'
+  BANCO:'B', VACACIONES:'V', SESIONES:'SE', LOG:'L',
+  DIRECTORIO:'D', DIR_VISITAS:'DV', PUERTAS:'PU'
 };
 
 /** Identificador corto, legible y único: C-000412. */
@@ -273,11 +290,18 @@ function registrar_(usuario, accion, entidad, entidadId, detalle) {
 
 /* ---------- configuración ---------- */
 
+/* La configuración se lee muchas veces en una misma petición y siempre dice
+   lo mismo, así que se guarda mientras dura. Al tocarla se tira la copia. */
+var _configCache = null;
 function config_() {
+  if (_configCache) return _configCache;
   const c = {};
   leer_('CONFIG').forEach(function (r) { c[r.clave] = r.valor; });
+  _configCache = c;
   return c;
 }
+
+function olvidarConfig_() { _configCache = null; }
 
 function configNum_(clave, porDefecto) {
   const c = config_();

@@ -73,6 +73,15 @@ function acciones_() {
     guardarConfig: accGuardarConfig_,
     registro: accRegistro_,
 
+    /* directorio histórico y puertas */
+    directorio: accDirectorio_,
+    directorioFicha: accDirectorioFicha_,
+    puertas: accPuertas_,
+    importarDirectorio: accImportarDirectorio_,
+    importarDirVisitas: accImportarDirVisitas_,
+    importarPuertas: accImportarPuertas_,
+    avisoPuertas: accAvisoPuertas_,
+
     /* banco */
     banco: accBanco_,
     importarBanco: accImportarBanco_,
@@ -133,6 +142,7 @@ function json_(o) {
 
 function accGuardarConfig_(u, p) {
   exigir_(u, 'config');
+  olvidarConfig_();                      // lo que había en memoria ya no vale
   const cambios = p.config || {};
   const h = hoja_('CONFIG');
   const filas = leer_('CONFIG');
