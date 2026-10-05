@@ -724,7 +724,7 @@ comprobar('todas las puertas llevan coordenada',
   pts.puertas.every(x => x.lat && x.lon));
 
 vaciarCorreos();
-const aviso2 = despachar_({accion: 'avisoPuertas', token: tkDir});
+const aviso2 = despachar_({accion: 'avisoPuertas', token: tkDir, desde: lunesDe_(hoyISO_())});
 comprobar('el aviso semanal se manda', aviso2.ok === true && correosEnviados().length === 1,
   JSON.stringify(aviso2).slice(0, 120));
 comprobar('y cuenta las puertas nuevas',
@@ -736,6 +736,16 @@ comprobar('va solo a quien puede ver el directorio, sin repetir direcciones',
   (correosEnviados()[0] || {}).to);
 comprobar('y no a los comerciales ni captadores',
   !/robertopaulino|sandrabono|abrahamali/.test((correosEnviados()[0] || {}).to || ''));
+
+/* El aviso automático del lunes habla de la semana que acaba de cerrar, de
+   lunes a domingo, no de la que empieza hoy. */
+vaciarCorreos();
+const avisoLunes = avisoPuertasSemana(
+  Utilities.formatDate(new Date(fecha_(lunesDe_(hoyISO_())).getTime() - 7 * 86400000),
+                       zonaHoraria_(), 'yyyy-MM-dd'));
+comprobar('el aviso de una semana concreta sale', avisoLunes.ok === true);
+comprobar('y la acota de lunes a lunes',
+  /Semana del|Desde el lunes/.test((correosEnviados()[0] || {}).htmlBody || ''));
 
 console.log('\n' + (fallos ? 'FALLAN ' + fallos + ' de ' + pruebas : 'Todo correcto: ' + pruebas + ' comprobaciones'));
 process.exit(fallos ? 1 : 0);
