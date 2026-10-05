@@ -677,6 +677,19 @@ comprobar('se buscan por texto',
 comprobar('se filtran por empresa',
   despachar_({accion: 'directorio', token: tkDir, empresa: 'Aurus'}).encontrados === 1);
 
+/* Un cliente con la coordenada de un viaje entra igual, pero sin punto: la
+   ficha vale, el mapa no se va a la otra punta del mundo. */
+despachar_({accion: 'importarDirectorio', token: tkDir, clientes: [
+  {ref: 'CL-9003', empresa: 'Aurus', nombre: 'Prueba Tres', municipio: 'Shanghai',
+   direccion: 'Jin Men Lu 20', lat: 31.2293, lon: 121.4867, precision: 'exacta'}]});
+const dirConRaro = despachar_({accion: 'directorio', token: tkDir});
+comprobar('el cliente con coordenada de fuera entra igual', dirConRaro.total === 3, dirConRaro.total);
+comprobar('pero no se pinta en el mapa', dirConRaro.puntos.length === 1, dirConRaro.puntos.length);
+comprobar('y se le ha quitado la coordenada',
+  dirConRaro.clientes.filter(c => c.ref === 'CL-9003')
+    .every(c => txt_(c.lat) === '' && txt_(c.lon) === ''));
+borrar_('DIRECTORIO', leer_('DIRECTORIO').filter(c => txt_(c.ref) === 'CL-9003')[0].id);
+
 despachar_({accion: 'importarDirVisitas', token: tkDir, visitas: [
   {ref: 'CL-9001', cliente: 'Prueba Uno', fecha: '2026-05-02', hora: '10:00', comercial: 'Rober'}]});
 const fichaDir = despachar_({accion: 'directorioFicha', token: tkDir, ref: 'CL-9001'});
