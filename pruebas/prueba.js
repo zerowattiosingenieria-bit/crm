@@ -723,6 +723,32 @@ comprobar('se filtran por zona',
 comprobar('todas las puertas llevan coordenada',
   pts.puertas.every(x => x.lat && x.lon));
 
+/* Solo se trabaja en España: lo que viene de un viaje guardado en el móvil
+   no entra, y si ya estaba cargado se puede sacar. */
+const china = despachar_({accion: 'importarPuertas', token: tkDir, puertas: [
+  {nombre: 'Pagoda Leifeng', direccion: 'Hangzhou', zona: 'Otra zona',
+   fecha: '2026-03-08', hora: '12:00', lat: 30.231384, lon: 120.149706},
+  {nombre: 'Puerta de Boadilla', direccion: 'Calle Z 1', zona: 'Boadilla',
+   fecha: '2026-03-08', hora: '12:30', lat: 40.405, lon: -3.878}]});
+comprobar('la de China no entra y la de Boadilla sí',
+  china.nuevas === 1 && china.fuera_de_espana === 1, JSON.stringify(china));
+comprobar('Canarias sí es España',
+  despachar_({accion: 'importarPuertas', token: tkDir, puertas: [
+    {nombre: 'Casa en Teguise', direccion: 'Teguise', zona: 'Teguise',
+     fecha: '2026-09-13', hora: '10:00', lat: 29.0525, lon: -13.5607}]}).nuevas === 1);
+
+/* Y si alguna se coló antes de poner la regla, se saca a mano. */
+añadirFilas_('PUERTAS', [{lista: 'Quiero ir', nombre: 'Shanghai', direccion: '',
+  zona: 'Otra zona', fecha: '2026-03-20', hora: '', lat: 31.2443, lon: 121.4661,
+  alta_crm: hoyISO_()}]);
+const antesLimpiar = leer_('PUERTAS').length;
+const limpia = despachar_({accion: 'limpiarPuertasFuera', token: tkDir});
+comprobar('saca la que se había colado', limpia.borradas === 1, JSON.stringify(limpia.detalle));
+comprobar('y no se lleva por delante a las demás',
+  leer_('PUERTAS').length === antesLimpiar - 1);
+comprobar('ni toca Canarias',
+  leer_('PUERTAS').some(x => txt_(x.nombre) === 'Casa en Teguise'));
+
 vaciarCorreos();
 const aviso2 = despachar_({accion: 'avisoPuertas', token: tkDir, desde: lunesDe_(hoyISO_())});
 comprobar('el aviso semanal se manda', aviso2.ok === true && correosEnviados().length === 1,
