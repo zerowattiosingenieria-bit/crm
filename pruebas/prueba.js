@@ -762,6 +762,41 @@ comprobar('y no se lleva por delante a las demás',
 comprobar('ni toca Canarias',
   leer_('PUERTAS').some(x => txt_(x.nombre) === 'Casa en Teguise'));
 
+/* Siempre lo más reciente primero, y ordenado en el servidor: el listado
+   solo pinta las 600 primeras, así que si se cortara antes de ordenar
+   saldrían las más viejas de la hoja. */
+despachar_({accion: 'importarPuertas', token: tkDir, puertas: [
+  {nombre: 'Puerta de 2024', direccion: 'Calle Vieja 9', zona: 'Las Rozas',
+   fecha: '2024-01-05', hora: '09:00', lat: 40.4925, lon: -3.8735},
+  {nombre: 'Puerta de ayer tarde', direccion: 'Calle Nueva 9', zona: 'Pozuelo',
+   fecha: '2026-09-30', hora: '18:30', lat: 40.4357, lon: -3.8125},
+  {nombre: 'Puerta de ayer mañana', direccion: 'Calle Nueva 10', zona: 'Pozuelo',
+   fecha: '2026-09-30', hora: '09:15', lat: 40.4358, lon: -3.8126}]});
+const porFecha = despachar_({accion: 'puertas', token: tkDir}).puertas;
+const conFechaPu = porFecha.filter(x => txt_(x.fecha));
+comprobar('las puertas llegan de la más nueva a la más vieja',
+  conFechaPu.every((x, i) => i === 0 || txt_(conFechaPu[i - 1].fecha) >= txt_(x.fecha)),
+  conFechaPu.slice(0, 4).map(x => x.fecha).join(' '));
+comprobar('y dentro del mismo día manda la hora',
+  porFecha.filter(x => txt_(x.fecha) === '2026-09-30').map(x => txt_(x.hora)).join(',') === '18:30,09:15',
+  porFecha.filter(x => txt_(x.fecha) === '2026-09-30').map(x => txt_(x.hora)).join(','));
+comprobar('la de 2024 no se cuela por delante',
+  txt_(porFecha[porFecha.length - 1].fecha) === '' ||
+  txt_(porFecha[conFechaPu.length - 1].fecha) === '2024-01-05',
+  txt_(porFecha[conFechaPu.length - 1].fecha));
+comprobar('y las que no tienen día se quedan al final',
+  porFecha.slice(conFechaPu.length).every(x => !txt_(x.fecha)));
+
+/* En el directorio manda la última visita, y entre los que no tienen
+   ninguna, el que se acaba de dar de alta va por delante. */
+const dirOrden = despachar_({accion: 'directorio', token: tkDir}).clientes;
+const conVisita = dirOrden.filter(c => txt_(c.ultima_visita));
+comprobar('el directorio sale por la última visita, de la más reciente',
+  conVisita.every((c, i) => i === 0 || txt_(conVisita[i - 1].ultima_visita) >= txt_(c.ultima_visita)),
+  conVisita.map(c => c.ultima_visita).join(' '));
+comprobar('y los que no tienen visita van detrás',
+  dirOrden.slice(conVisita.length).every(c => !txt_(c.ultima_visita)));
+
 /* Una celda que solo lleva la hora la guarda Google como una fecha de 1899.
    Sale como hora, que es lo que es. */
 comprobar('una celda de solo hora sale como hora',

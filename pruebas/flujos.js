@@ -236,6 +236,24 @@ async function entrar(navegador, usuario) {
     const tablaPuertas = await pag.locator('#vista').innerText();
     comprobar('en listado se marca cuál es nueva', /nueva/.test(tablaPuertas));
     comprobar('y están las dos', /Puerta vieja/.test(tablaPuertas) && /Puerta de hoy/.test(tablaPuertas));
+    comprobar('arriba del todo va la más reciente',
+      /Puerta de hoy/.test(await pag.locator('table.datos tbody tr').first().innerText()),
+      await pag.locator('table.datos tbody tr').first().innerText());
+
+    /* Una fecha es solo dígitos y guiones, así que antes colaba por número y
+       todo un año ordenaba igual. */
+    const ordenFechas = await pag.evaluate(async () => {
+      const u = await import('/assets/js/util.js');
+      const filas = [{f: '2026-01-22'}, {f: '2026-09-30'}, {f: ''}, {f: '2024-05-01'}];
+      return {
+        baja: u.ordenarPor(filas, 'f', true).map(x => x.f).join('|'),
+        sube: u.ordenarPor(filas, 'f', false).map(x => x.f).join('|')
+      };
+    });
+    comprobar('las fechas del mismo año no empatan',
+      ordenFechas.baja === '2026-09-30|2026-01-22|2024-05-01|', ordenFechas.baja);
+    comprobar('y lo que está vacío se queda al final en los dos sentidos',
+      ordenFechas.sube === '2024-05-01|2026-01-22|2026-09-30|', ordenFechas.sube);
 
     /* ---------- crear, corregir y borrar desde la pantalla ---------- */
 
