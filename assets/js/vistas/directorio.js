@@ -38,9 +38,18 @@ function cuandoTengaSitio(div, fn) {
   mirar();
 }
 
+/* Cuatro puntos sueltos al otro lado del mundo —un viaje guardado en Google
+   Maps que se cuela en el export— dejaban el mapa en vista planeta. Se encaja
+   sobre donde está el grueso y los raros se ven igual, pero no mandan. */
 function encajar(mapa, puntos) {
   if (!puntos.length) return;
-  mapa.fitBounds(L.latLngBounds(puntos.map(p => [p[0], p[1]])), {padding: [30, 30]});
+  const orden = n => puntos.map(p => p[n]).sort((a, b) => a - b);
+  const la = orden(0), lo = orden(1);
+  const medio = v => v[Math.floor(v.length / 2)];
+  const cerca = puntos.filter(p =>
+    Math.abs(p[0] - medio(la)) < 3 && Math.abs(p[1] - medio(lo)) < 3);
+  const usar = cerca.length >= Math.max(3, puntos.length * 0.6) ? cerca : puntos;
+  mapa.fitBounds(L.latLngBounds(usar.map(p => [p[0], p[1]])), {padding: [30, 30]});
 }
 
 /* ---------- pantalla ---------- */
