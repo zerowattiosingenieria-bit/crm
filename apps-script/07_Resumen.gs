@@ -440,6 +440,7 @@ function accAlertas_(u, p) {
           'Factura ' + f.numero + ' vencida el ' + txt_(f.fecha_vencimiento) + ' (' + redondear_(num_(f.total), 0) + ' €).'});
       }
     });
+    cuadreFacturacion_().forEach(function (x) { avisos.push(x); });
   }
 
   /* ¿Falta el parte de hoy? */
@@ -453,4 +454,83 @@ function accAlertas_(u, p) {
   const orden = {alto: 0, medio: 1, bajo: 2};
   avisos.sort(function (a, b) { return orden[a.nivel] - orden[b.nivel]; });
   return {ok: true, alertas: avisos.slice(0, 80)};
+}
+
+
+/* ---------- que la facturación cuadre con las operaciones ----------
+ *
+ * Esto nació de un lío de verdad: a una operación se le emitió primero el
+ * 50% y luego otra factura por el total en vez de por la mitad que
+ * faltaba, y nadie se dio cuenta hasta que se cruzaron las facturas con el
+ * banco meses después. Y al revés: cinco facturas que estaban en la
+ * carpeta del Drive nunca llegaron al CRM, y la numeración saltaba de la
+ * 141 a la 147 sin que saltara ningún aviso.
+ *
+ * Son tres comprobaciones de aritmética, baratas, que cualquiera de las
+ * dos cosas la cantan el mismo día que pasa.
+ */
+function cuadreFacturacion_() {
+  const avisos = [];
+  const operaciones = leer_('OPERACIONES');
+  const facturas = leer_('FACTURAS');
+  const cobros = leer_('COBROS');
+
+  const porOp = {};
+  operaciones.forEach(function (o) {
+    porOp[String(o.id)] = {op: o, facturado: 0, cobrado: 0};
+  });
+  facturas.forEach(function (f) {
+    const r = porOp[String(f.operacion_id)];
+    if (r) r.facturado += num_(f.total);
+  });
+  cobros.forEach(function (c) {
+    const r = porOp[String(c.operacion_id)];
+    if (r && normal_(c.estado) === 'cobrado') r.cobrado += num_(c.importe);
+  });
+
+  /* Un euro de margen: los redondeos del IVA no son un descuadre. */
+  Object.keys(porOp).forEach(function (k) {
+    const r = porOp[k];
+    const total = num_(r.op.total);
+    if (!total) return;
+    const nombre = txt_(r.op.referencia) || k;
+    if (r.facturado > total + 1) {
+      avisos.push({tipo: 'sobrefacturado', nivel: 'alto', operacion_id: k, cliente_id: r.op.cliente_id,
+        texto: 'Facturado de más en ' + nombre + ': ' + redondear_(r.facturado, 0) + ' € en facturas para ' +
+               'una operación de ' + redondear_(total, 0) + ' €. Sobran ' + redondear_(r.facturado - total, 0) + ' €.'});
+    }
+    if (r.cobrado > r.facturado + 1) {
+      avisos.push({tipo: 'cobrado_sin_factura', nivel: 'alto', operacion_id: k, cliente_id: r.op.cliente_id,
+        texto: 'Cobrado sin factura en ' + nombre + ': ' + redondear_(r.cobrado, 0) + ' € cobrados y solo ' +
+               redondear_(r.facturado, 0) + ' € facturados.'});
+    }
+  });
+
+  /* Si la numeración salta, es que hay facturas emitidas que no se han
+     metido. Se mira por serie y por año, que cada una va por su cuenta. */
+  const series = {};
+  const anchos = {};
+  facturas.forEach(function (f) {
+    const m = String(txt_(f.numero)).match(/^(.*?)(\d+)$/);
+    if (!m) return;
+    const serie = m[1];
+    (series[serie] = series[serie] || []).push(parseInt(m[2], 10));
+    /* El número que falta se escribe con los mismos ceros delante que
+       llevan los que sí están, que si no no se encuentra en la carpeta. */
+    anchos[serie] = Math.max(anchos[serie] || 0, m[2].length);
+  });
+  Object.keys(series).forEach(function (serie) {
+    const nums = series[serie].sort(function (a, b) { return a - b; });
+    const faltan = [];
+    for (let i = nums[0] + 1; i < nums[nums.length - 1]; i++) {
+      if (nums.indexOf(i) < 0) faltan.push(serie + String(i).padStart(anchos[serie], '0'));
+    }
+    if (!faltan.length) return;
+    avisos.push({tipo: 'hueco_facturas', nivel: 'medio', texto:
+      (faltan.length === 1 ? 'Falta una factura por registrar: ' : 'Faltan ' + faltan.length +
+       ' facturas por registrar: ') + faltan.slice(0, 12).join(', ') +
+      (faltan.length > 12 ? ' y ' + (faltan.length - 12) + ' más' : '') + '.'});
+  });
+
+  return avisos;
 }
