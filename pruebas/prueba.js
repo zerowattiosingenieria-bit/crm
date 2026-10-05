@@ -762,6 +762,99 @@ comprobar('y no se lleva por delante a las demás',
 comprobar('ni toca Canarias',
   leer_('PUERTAS').some(x => txt_(x.nombre) === 'Casa en Teguise'));
 
+/* ---------- tocar el directorio y las puertas a mano ---------- */
+
+/* Dar de alta una ficha desde el CRM, sin esperar al Excel del lunes. */
+const dirAlta = despachar_({accion: 'guardarDirectorio', token: tkDir, cliente: {
+  nombre: 'Alta a mano', empresa: 'Zero Wattios', municipio: 'Boadilla del Monte',
+  direccion: 'Calle Nueva 7', telefono: '600112233', lat: 40.405, lon: -3.878}});
+comprobar('se da de alta una ficha a mano', alta.ok === true && !!dirAlta.cliente.id,
+  JSON.stringify(alta).slice(0, 120));
+comprobar('y se le pone referencia sola', /^D-\d{6}$/.test(txt_(dirAlta.cliente.ref)), dirAlta.cliente.ref);
+comprobar('con la fecha de alta puesta', txt_(dirAlta.cliente.alta_crm) === hoyISO_());
+
+comprobar('sin nombre ni dirección no entra',
+  despachar_({accion: 'guardarDirectorio', token: tkDir,
+    cliente: {municipio: 'Pozuelo'}}).ok === false);
+comprobar('ni repitiendo una referencia que ya está',
+  despachar_({accion: 'guardarDirectorio', token: tkDir,
+    cliente: {nombre: 'Otro', ref: 'CL-9001'}}).ok === false);
+
+/* La coordenada de fuera no se guarda, pero la ficha sí. */
+const dirAltaRara = despachar_({accion: 'guardarDirectorio', token: tkDir, cliente: {
+  nombre: 'Con coordenada de viaje', lat: 30.2314, lon: 120.1497}});
+comprobar('la ficha con coordenada de fuera entra sin coordenada',
+  dirAltaRara.ok === true && dirAltaRara.coordenada_fuera === true &&
+  txt_(dirAltaRara.cliente.lat) === '', JSON.stringify(dirAltaRara).slice(0, 140));
+
+/* Corregir una ficha. */
+const dirCorregida = despachar_({accion: 'guardarDirectorio', token: tkDir,
+  cliente: {id: dirAlta.cliente.id, nombre: 'Alta a mano dirCorregida', ref: 'ME-LA-INVENTO'}});
+comprobar('se corrige la ficha', dirCorregida.ok === true &&
+  txt_(dirCorregida.cliente.nombre) === 'Alta a mano dirCorregida');
+comprobar('pero la referencia no se puede cambiar',
+  txt_(dirCorregida.cliente.ref) === txt_(dirAlta.cliente.ref), dirCorregida.cliente.ref);
+
+/* Borrar se lleva por delante las visitas de esa ficha, no las de otras. */
+despachar_({accion: 'importarDirVisitas', token: tkDir, visitas: [
+  {ref: txt_(dirAlta.cliente.ref), cliente: 'Alta a mano', fecha: '2026-06-01', hora: '09:00'},
+  {ref: txt_(dirAlta.cliente.ref), cliente: 'Alta a mano', fecha: '2026-06-08', hora: '09:00'}]});
+const dirVisitasAntes = leer_('DIR_VISITAS').length;
+const dirFuera = despachar_({accion: 'borrarDirectorio', token: tkDir,
+  ids: [dirAlta.cliente.id, dirAltaRara.cliente.id]});
+comprobar('se borran dos fichas de una vez',
+  dirFuera.ok === true && dirFuera.borradas === 2, JSON.stringify(dirFuera));
+comprobar('y se van con ellas sus visitas',
+  dirFuera.visitas_borradas === 2 && leer_('DIR_VISITAS').length === dirVisitasAntes - 2);
+comprobar('las visitas de los demás siguen ahí',
+  leer_('DIR_VISITAS').some(v => txt_(v.ref) === 'CL-9001'));
+comprobar('sin marcar nada no borra nada',
+  despachar_({accion: 'borrarDirectorio', token: tkDir, ids: []}).ok === false);
+
+/* Lo mismo con las puertas. */
+const puNueva = despachar_({accion: 'guardarPuerta', token: tkDir, puerta: {
+  nombre: 'Puerta a mano', direccion: 'Calle Mano 1', zona: 'Boadilla',
+  fecha: '2026-04-02', hora: '18:00', lat: 40.4051, lon: -3.8781}});
+comprobar('se apunta una puerta a mano', puNueva.ok === true && !!puNueva.puerta.id);
+comprobar('la misma puerta el mismo día no se apunta dos veces',
+  despachar_({accion: 'guardarPuerta', token: tkDir, puerta: {
+    nombre: 'Puerta a mano', zona: 'Boadilla', fecha: '2026-04-02',
+    lat: 40.4051, lon: -3.8781}}).ok === false);
+comprobar('una puerta de fuera de España no se apunta',
+  despachar_({accion: 'guardarPuerta', token: tkDir, puerta: {
+    nombre: 'Shanghai', zona: 'Otra', fecha: '2026-04-03',
+    lat: 31.2293, lon: 121.4867}}).ok === false);
+comprobar('una puerta sin coordenada tampoco',
+  despachar_({accion: 'guardarPuerta', token: tkDir, puerta: {
+    nombre: 'Sin sitio', zona: 'Boadilla', fecha: '2026-04-04'}}).ok === false);
+
+const puCorregida = despachar_({accion: 'guardarPuerta', token: tkDir,
+  puerta: {id: puNueva.puerta.id, nota: 'No estaban en casa'}});
+comprobar('se corrige una puerta', puCorregida.ok === true &&
+  txt_(puCorregida.puerta.nota) === 'No estaban en casa');
+
+const puAntes = leer_('PUERTAS').length;
+const puFuera = despachar_({accion: 'borrarPuertas', token: tkDir,
+  ids: [puNueva.puerta.id]});
+comprobar('se borra una puerta marcada',
+  puFuera.ok === true && puFuera.borradas === 1 &&
+  leer_('PUERTAS').length === puAntes - 1);
+comprobar('sin marcar nada no borra ninguna puerta',
+  despachar_({accion: 'borrarPuertas', token: tkDir, ids: []}).ok === false);
+
+/* Nada de esto lo puede tocar quien no tiene el directorio abierto. */
+comprobar('un comercial no puede dar de alta en el directorio',
+  despachar_({accion: 'guardarDirectorio', token: sesiones.rober.token,
+    cliente: {nombre: 'Por la puerta de atrás'}}).ok === false);
+comprobar('ni borrar puertas',
+  despachar_({accion: 'borrarPuertas', token: sesiones.rober.token, ids: ['x']}).ok === false);
+
+/* Para exportar hace falta la lista filtrada entera, no la página. */
+const dirParaExportar = despachar_({accion: 'directorio', token: tkDir, todo: true});
+comprobar('el directorio se puede pedir entero para exportar',
+  dirParaExportar.clientes.length === dirParaExportar.encontrados,
+  dirParaExportar.clientes.length + ' de ' + dirParaExportar.encontrados);
+
 vaciarCorreos();
 const aviso2 = despachar_({accion: 'avisoPuertas', token: tkDir, desde: lunesDe_(hoyISO_())});
 comprobar('el aviso semanal se manda', aviso2.ok === true && correosEnviados().length === 1,

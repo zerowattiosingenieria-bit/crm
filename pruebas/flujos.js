@@ -237,6 +237,125 @@ async function entrar(navegador, usuario) {
     comprobar('en listado se marca cuál es nueva', /nueva/.test(tablaPuertas));
     comprobar('y están las dos', /Puerta vieja/.test(tablaPuertas) && /Puerta de hoy/.test(tablaPuertas));
 
+    /* ---------- crear, corregir y borrar desde la pantalla ---------- */
+
+    await pag.click('button.btn:has-text("+ Nueva puerta")');
+    await pag.waitForSelector('.ventana');
+    await pag.fill('#c_nombre', 'Puerta a mano');
+    await pag.fill('#c_zona', 'Boadilla');
+    await pag.fill('#c_lat', '40.405');
+    await pag.fill('#c_lon', '-3.878');
+    await pag.click('.ventana footer button.primario');
+    await pag.waitForSelector('.ventana', {state: 'detached', timeout: 10000});
+    await pag.waitForFunction(
+      () => /Puerta a mano/.test(document.querySelector('#vista').innerText),
+      null, {timeout: 15000});
+    comprobar('se apunta una puerta desde la pantalla', true);
+
+    /* Corregirla: se le pone una nota y tiene que verse en el listado. */
+    await pag.locator('tr', {hasText: 'Puerta a mano'}).first()
+      .locator('button.btn:has-text("Editar")').click();
+    await pag.waitForSelector('.ventana');
+    await pag.fill('#c_nota', 'No estaban en casa');
+    await pag.click('.ventana footer button.primario');
+    await pag.waitForSelector('.ventana', {state: 'detached', timeout: 10000});
+    await pag.waitForFunction(
+      () => /No estaban en casa/.test(document.querySelector('#vista').innerText),
+      null, {timeout: 15000});
+    comprobar('se corrige la puerta y se ve la nota', true);
+
+    /* El Excel: se descarga de verdad y se mira por dentro. */
+    const bajada = await Promise.all([
+      pag.waitForEvent('download', {timeout: 20000}),
+      pag.click('button.btn:has-text("Excel")')
+    ]);
+    const destino = path.join(SALIDA, 'puertas.xlsx');
+    await bajada[0].saveAs(destino);
+    comprobar('el Excel de puertas se descarga',
+      /^puertas-zero-wattios-\d{8}\.xlsx$/.test(bajada[0].suggestedFilename()),
+      bajada[0].suggestedFilename());
+    const dentro = require('child_process')
+      .execSync('unzip -p ' + JSON.stringify(destino) + ' xl/worksheets/sheet1.xml').toString();
+    comprobar('y por dentro es un xlsx con las puertas',
+      /Puerta a mano/.test(dentro) && /No estaban en casa/.test(dentro),
+      dentro.slice(0, 120));
+    const hojas = require('child_process')
+      .execSync('unzip -l ' + JSON.stringify(destino)).toString();
+    comprobar('con sus tres pestañas', /sheet3\.xml/.test(hojas));
+
+    /* El PDF se monta en un marco escondido y se manda imprimir; aquí se
+       mira que la hoja lleve lo que tiene que llevar. */
+    await pag.click('button.btn:has-text("PDF")');
+    await pag.waitForFunction(
+      () => {
+        const m = [...document.querySelectorAll('iframe')]
+          .map(x => { try { return x.contentDocument; } catch (e) { return null; } })
+          .filter(d => d && /Puertas tocadas/.test(d.body.innerText || ''));
+        return m.length ? m[0].body.innerText : false;
+      }, null, {timeout: 15000});
+    const informe = await pag.evaluate(() => {
+      const d = [...document.querySelectorAll('iframe')]
+        .map(x => x.contentDocument).filter(x => x && /Puertas tocadas/.test(x.body.innerText))[0];
+      return {texto: d.body.innerText, filas: d.querySelectorAll('tbody tr').length,
+              titulo: d.title, marca: !!d.querySelector('.marca')};
+    });
+    comprobar('el informe en PDF lleva la marca y el título',
+      informe.marca && informe.titulo === 'Puertas tocadas');
+    comprobar('con el resumen de la semana', /NUEVAS ESTA SEMANA|Nuevas esta semana/i.test(informe.texto),
+      informe.texto.slice(0, 150));
+    comprobar('el reparto por zona', /por zona/i.test(informe.texto), informe.texto.slice(0, 200));
+    comprobar('y una fila por puerta', informe.filas === 3, informe.filas);
+
+    /* Borrar marcando la casilla. */
+    await pag.locator('tr', {hasText: 'Puerta a mano'}).first()
+      .locator('input[type=checkbox]').check();
+    await pag.waitForFunction(
+      () => /marcada/.test(document.querySelector('#vista').innerText),
+      null, {timeout: 10000});
+    await pag.click('button.btn.peligro:has-text("Borrar la marcada")');
+    await pag.waitForSelector('.ventana');
+    await pag.click('.ventana footer button.peligro');
+    await pag.waitForFunction(
+      () => !/Puerta a mano/.test(document.querySelector('#vista').innerText),
+      null, {timeout: 15000});
+    comprobar('se borra la puerta marcada', true);
+
+    /* Y lo mismo en el archivo de clientes. */
+    await pag.goto(BASE + '/#directorio');
+    await pag.waitForSelector('table.datos', {timeout: 10000});
+    await pag.click('button.btn:has-text("+ Nueva ficha")');
+    await pag.waitForSelector('.ventana');
+    await pag.fill('#c_nombre', 'Ficha a mano');
+    await pag.fill('#c_municipio', 'Boadilla del Monte');
+    await pag.click('.ventana footer button.primario');
+    await pag.waitForSelector('.ventana', {state: 'detached', timeout: 10000});
+    await pag.waitForFunction(
+      () => /Ficha a mano/.test(document.querySelector('#vista').innerText),
+      null, {timeout: 15000});
+    comprobar('se da de alta una ficha desde la pantalla', true);
+
+    const bajadaDir = await Promise.all([
+      pag.waitForEvent('download', {timeout: 20000}),
+      pag.click('button.btn:has-text("Excel")')
+    ]);
+    const destinoDir = path.join(SALIDA, 'directorio.xlsx');
+    await bajadaDir[0].saveAs(destinoDir);
+    const dentroDir = require('child_process')
+      .execSync('unzip -p ' + JSON.stringify(destinoDir) + ' xl/worksheets/sheet1.xml').toString();
+    comprobar('el Excel del directorio trae las tres fichas',
+      /Ficha a mano/.test(dentroDir) && /Ficha de Aurus/.test(dentroDir) &&
+      /Ficha de Zero/.test(dentroDir));
+
+    await pag.locator('tr', {hasText: 'Ficha a mano'}).first()
+      .locator('input[type=checkbox]').check();
+    await pag.click('button.btn.peligro:has-text("Borrar la marcada")');
+    await pag.waitForSelector('.ventana');
+    await pag.click('.ventana footer button.peligro');
+    await pag.waitForFunction(
+      () => !/Ficha a mano/.test(document.querySelector('#vista').innerText),
+      null, {timeout: 15000});
+    comprobar('y se borra marcándola', true);
+
     comprobar('sin errores de página en el directorio', errores.length === 0, errores[0]);
     await ctx.close();
   }
