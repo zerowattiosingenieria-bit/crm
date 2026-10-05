@@ -137,12 +137,22 @@ export const agrupar = (lista, clave) => lista.reduce((m, x) => {
 }, {});
 export const suma = (lista, campo) => lista.reduce((a, x) =>
   a + num(typeof campo === 'function' ? campo(x) : x[campo]), 0);
+/* Una fecha como 2026-01-22 es solo dígitos y guiones, así que colaba por
+   número: parseFloat se queda en 2026 y todo un año ordenaba igual. Las
+   fechas se comparan como texto, que ya vienen en año-mes-día. */
+const esFechaISO = v => /^\d{4}-\d{2}-\d{2}/.test(String(v ?? '').trim());
+
 export const ordenarPor = (lista, campo, desc) => lista.slice().sort((a, b) => {
   const x = typeof campo === 'function' ? campo(a) : a[campo];
   const y = typeof campo === 'function' ? campo(b) : b[campo];
   const nx = num(x), ny = num(y);
   const esNum = String(x).trim() !== '' && String(y).trim() !== '' && !isNaN(nx) && !isNaN(ny)
+    && !esFechaISO(x) && !esFechaISO(y)
     && /^[\d.,\s€%-]+$/.test(String(x)) && /^[\d.,\s€%-]+$/.test(String(y));
+  /* Lo que está vacío va siempre al final, se ordene como se ordene: una
+     fila sin fecha no es ni la más nueva ni la más vieja. */
+  const vacioX = String(x ?? '').trim() === '', vacioY = String(y ?? '').trim() === '';
+  if (vacioX !== vacioY) return vacioX ? 1 : -1;
   const r = esNum ? nx - ny : String(x ?? '').localeCompare(String(y ?? ''), 'es');
   return desc ? -r : r;
 });
