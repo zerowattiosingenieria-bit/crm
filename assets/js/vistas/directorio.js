@@ -215,6 +215,8 @@ async function pantallaPuertas({ir}) {
       kpi('Nuevas esta semana', miles(d.semana.nuevas), 'desde el lunes ' + fechaCorta(d.semana.lunes),
           {destacado: true, estado: d.semana.nuevas ? 'bien' : null}),
       kpi('La semana pasada', miles(d.semana.semana_pasada), 'para comparar'),
+      d.semana.sin_fecha ? kpi('Sin fecha', miles(d.semana.sin_fecha),
+        'tocadas, pero no sabemos qué día') : null,
       kpi('Zona más trabajada', mejor ? mejor.zona : '—',
           mejor ? miles(mejor.n) + (mejor.n === 1 ? ' puerta' : ' puertas') : '')));
   }
