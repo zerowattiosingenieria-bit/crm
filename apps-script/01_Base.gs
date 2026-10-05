@@ -161,6 +161,27 @@ const PREFIJO = {
 function nuevoId_(nombre) { return nuevosIds_(nombre, 1)[0]; }
 
 /** Reserva n identificadores seguidos con un unico candado. */
+/* Borrar de uno en uno cuesta una lectura de la hoja por cada id, y
+   borrando cien puertas eso se nota. Aquí se localizan todas de una vez y
+   se quitan de abajo arriba, que si no bailan las filas de debajo. */
+function borrarVarios_(nombre, ids) {
+  const quiero = {};
+  (ids || []).forEach(function (x) { if (String(x)) quiero[String(x)] = true; });
+  if (!Object.keys(quiero).length) return 0;
+  const h = hoja_(nombre);
+  const col = cabeceras_(nombre).indexOf('id') + 1;
+  if (!col) throw new Error('La tabla ' + nombre + ' no tiene columna id.');
+  const n = h.getLastRow();
+  if (n < 2) return 0;
+  const enHoja = h.getRange(2, col, n - 1, 1).getDisplayValues();
+  const filas = [];
+  for (let i = 0; i < enHoja.length; i++) {
+    if (quiero[String(enHoja[i][0])]) filas.push(i + 2);
+  }
+  for (let i = filas.length - 1; i >= 0; i--) h.deleteRow(filas[i]);
+  return filas.length;
+}
+
 function nuevosIds_(nombre, n) {
   const cuantos = Math.max(1, Number(n) || 1);
   const clave = 'SEQ_' + nombre;

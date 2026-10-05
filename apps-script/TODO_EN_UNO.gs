@@ -546,6 +546,27 @@ const PREFIJO = {
 function nuevoId_(nombre) { return nuevosIds_(nombre, 1)[0]; }
 
 /** Reserva n identificadores seguidos con un unico candado. */
+/* Borrar de uno en uno cuesta una lectura de la hoja por cada id, y
+   borrando cien puertas eso se nota. Aquí se localizan todas de una vez y
+   se quitan de abajo arriba, que si no bailan las filas de debajo. */
+function borrarVarios_(nombre, ids) {
+  const quiero = {};
+  (ids || []).forEach(function (x) { if (String(x)) quiero[String(x)] = true; });
+  if (!Object.keys(quiero).length) return 0;
+  const h = hoja_(nombre);
+  const col = cabeceras_(nombre).indexOf('id') + 1;
+  if (!col) throw new Error('La tabla ' + nombre + ' no tiene columna id.');
+  const n = h.getLastRow();
+  if (n < 2) return 0;
+  const enHoja = h.getRange(2, col, n - 1, 1).getDisplayValues();
+  const filas = [];
+  for (let i = 0; i < enHoja.length; i++) {
+    if (quiero[String(enHoja[i][0])]) filas.push(i + 2);
+  }
+  for (let i = filas.length - 1; i >= 0; i--) h.deleteRow(filas[i]);
+  return filas.length;
+}
+
 function nuevosIds_(nombre, n) {
   const cuantos = Math.max(1, Number(n) || 1);
   const clave = 'SEQ_' + nombre;
@@ -3355,6 +3376,10 @@ function acciones_() {
     importarDirectorio: accImportarDirectorio_,
     importarDirVisitas: accImportarDirVisitas_,
     importarPuertas: accImportarPuertas_,
+    guardarDirectorio: accGuardarDirectorio_,
+    borrarDirectorio: accBorrarDirectorio_,
+    guardarPuerta: accGuardarPuerta_,
+    borrarPuertas: accBorrarPuertas_,
     limpiarPuertasFuera: accLimpiarPuertasFuera_,
     avisoPuertas: accAvisoPuertas_,
 
@@ -4704,6 +4729,13 @@ function accDirectorio_(u, p) {
            txt_(a.nombre).localeCompare(txt_(b.nombre));
   });
 
+  /* Para exportar hace falta la lista filtrada entera, no la página que se
+     está mirando. Se pide aparte y sin el resto del aparato. */
+  if (p.todo) {
+    return {ok: true, total: todos.length, encontrados: filtrados.length,
+            clientes: filtrados};
+  }
+
   const desde = (pagina - 1) * porPagina;
   return {ok: true,
     total: todos.length,
@@ -4917,9 +4949,7 @@ function accImportarDirVisitas_(u, p) {
 function accLimpiarPuertasFuera_(u, p) {
   exigirDirectorio_(u);
   const fuera = leer_('PUERTAS').filter(function (x) { return !enEspana_(x.lat, x.lon); });
-  /* De abajo arriba: borrar por filas cambia la numeración de las de debajo. */
-  fuera.sort(function (a, b) { return num_(b._fila) - num_(a._fila); })
-    .forEach(function (x) { borrar_('PUERTAS', x.id); });
+  borrarVarios_('PUERTAS', fuera.map(function (x) { return x.id; }));
   registrar_(u, 'limpiar_puertas', 'PUERTAS', '', fuera.length + ' fuera de España');
   return {ok: true, borradas: fuera.length,
     detalle: fuera.map(function (x) {
@@ -5006,4 +5036,134 @@ function avisoPuertasSemana(desdeLunes) {
 function accAvisoPuertas_(u, p) {
   exigirDirectorio_(u);
   return {ok: true, resultado: avisoPuertasSemana(txt_(p.desde))};
+}
+
+/* ================= tocar el directorio a mano =================
+ *
+ * El grueso entra por el Excel de cada semana, pero hace falta poder
+ * arreglar una ficha mal puesta, dar de alta la que falta y quitar la que
+ * sobra sin esperar al lunes. Todo esto solo lo ve y lo toca quien tiene el
+ * directorio abierto.
+ */
+
+/** Alta o corrección de una ficha del directorio. */
+function accGuardarDirectorio_(u, p) {
+  exigirDirectorio_(u);
+  const d = p.cliente || {};
+  const campos = ESQUEMA.DIRECTORIO.filter(function (c) {
+    return ['id', 'alta_crm', 'actualizado'].indexOf(c) < 0;
+  });
+
+  /* La coordenada de fuera de España no se guarda: aquí solo trabajamos
+     aquí y un punto perdido abre el mapa en medio del mundo. */
+  const coordenadaRara = txt_(d.lat) !== '' && !enEspana_(d.lat, d.lon);
+  if (coordenadaRara) { d.lat = ''; d.lon = ''; }
+
+  if (d.id) {
+    const actual = leer_('DIRECTORIO').filter(function (c) { return String(c.id) === String(d.id); })[0];
+    if (!actual) return {ok: false, error: 'Esa ficha ya no está en el directorio.'};
+    const cambios = {actualizado: hoyISO_()};
+    campos.forEach(function (c) { if (d[c] !== undefined) cambios[c] = d[c]; });
+    /* La referencia es la que casa el Excel de cada semana con la ficha:
+       si se cambia, la semana que viene entraría por duplicado. */
+    delete cambios.ref;
+    const r = actualizar_('DIRECTORIO', d.id, cambios);
+    registrar_(u, 'editar_directorio', 'DIRECTORIO', d.id, txt_(r && r.nombre));
+    return {ok: true, cliente: r, coordenada_fuera: coordenadaRara};
+  }
+
+  if (!txt_(d.nombre) && !txt_(d.direccion)) {
+    return {ok: false, error: 'Ponle al menos un nombre o una dirección.'};
+  }
+  const nuevo = {};
+  campos.forEach(function (c) { nuevo[c] = d[c] === undefined || d[c] === null ? '' : d[c]; });
+  const ref = txt_(nuevo.ref);
+  if (ref && leer_('DIRECTORIO').some(function (c) { return txt_(c.ref) === ref; })) {
+    return {ok: false, error: 'Ya hay una ficha con la referencia ' + ref + '.'};
+  }
+  if (!ref) nuevo.ref = nuevosIds_('DIRECTORIO', 1)[0];
+  nuevo.alta_crm = hoyISO_();
+  nuevo.actualizado = hoyISO_();
+  const r = insertar_('DIRECTORIO', nuevo);
+  registrar_(u, 'alta_directorio', 'DIRECTORIO', r.id, txt_(r.nombre));
+  return {ok: true, cliente: r, coordenada_fuera: coordenadaRara};
+}
+
+/** Quita una ficha o varias, y con ellas sus visitas. */
+function accBorrarDirectorio_(u, p) {
+  exigirDirectorio_(u);
+  const pide = {};
+  [].concat(p.ids || [], p.id ? [p.id] : []).forEach(function (x) { if (txt_(x)) pide[String(x)] = true; });
+  const ids = Object.keys(pide);
+  if (!ids.length) return {ok: false, error: 'No has marcado ninguna ficha.'};
+
+  const fichas = leer_('DIRECTORIO').filter(function (c) { return pide[String(c.id)]; });
+  if (!fichas.length) return {ok: false, error: 'Esas fichas ya no están.'};
+  const refs = {};
+  fichas.forEach(function (c) { if (txt_(c.ref)) refs[txt_(c.ref)] = true; });
+
+  const visitas = leer_('DIR_VISITAS').filter(function (v) { return refs[txt_(v.ref)]; });
+  borrarVarios_('DIR_VISITAS', visitas.map(function (v) { return v.id; }));
+  const borradas = borrarVarios_('DIRECTORIO', fichas.map(function (c) { return c.id; }));
+
+  registrar_(u, 'borrar_directorio', 'DIRECTORIO', ids.join(' '),
+             borradas + ' fichas y ' + visitas.length + ' visitas');
+  return {ok: true, borradas: borradas, visitas_borradas: visitas.length,
+          total: leer_('DIRECTORIO').length};
+}
+
+/** Alta o corrección de una puerta. */
+function accGuardarPuerta_(u, p) {
+  exigirDirectorio_(u);
+  const d = p.puerta || {};
+  const campos = ESQUEMA.PUERTAS.filter(function (c) {
+    return ['id', 'alta_crm'].indexOf(c) < 0;
+  });
+
+  if (txt_(d.lat) !== '' || txt_(d.lon) !== '') {
+    if (!enEspana_(d.lat, d.lon)) {
+      return {ok: false, error: 'Esa coordenada cae fuera de España; aquí solo trabajamos aquí.'};
+    }
+  }
+
+  if (d.id) {
+    const actual = leer_('PUERTAS').filter(function (x) { return String(x.id) === String(d.id); })[0];
+    if (!actual) return {ok: false, error: 'Esa puerta ya no está.'};
+    const cambios = {};
+    campos.forEach(function (c) { if (d[c] !== undefined) cambios[c] = d[c]; });
+    const r = actualizar_('PUERTAS', d.id, cambios);
+    registrar_(u, 'editar_puerta', 'PUERTAS', d.id, txt_(r && (r.nombre || r.direccion)));
+    return {ok: true, puerta: r};
+  }
+
+  if (!txt_(d.nombre) && !txt_(d.direccion)) {
+    return {ok: false, error: 'Ponle al menos un nombre o una dirección.'};
+  }
+  if (!num_(d.lat) || !num_(d.lon)) {
+    return {ok: false, error: 'Una puerta sin coordenada no se puede pintar en el mapa.'};
+  }
+  const nueva = {};
+  campos.forEach(function (c) { nueva[c] = d[c] === undefined || d[c] === null ? '' : d[c]; });
+  /* La misma puerta el mismo día ya está contada: no se apunta dos veces. */
+  const clave = clavePuerta_(nueva);
+  if (leer_('PUERTAS').some(function (x) { return clavePuerta_(x) === clave; })) {
+    return {ok: false, error: 'Esa puerta ya está apuntada con esa fecha.'};
+  }
+  nueva.alta_crm = hoyISO_();
+  const r = insertar_('PUERTAS', nueva);
+  registrar_(u, 'alta_puerta', 'PUERTAS', r.id, txt_(r.nombre || r.direccion));
+  return {ok: true, puerta: r};
+}
+
+/** Quita una puerta o todas las que se hayan marcado. */
+function accBorrarPuertas_(u, p) {
+  exigirDirectorio_(u);
+  const pide = {};
+  [].concat(p.ids || [], p.id ? [p.id] : []).forEach(function (x) { if (txt_(x)) pide[String(x)] = true; });
+  const ids = Object.keys(pide);
+  if (!ids.length) return {ok: false, error: 'No has marcado ninguna puerta.'};
+  const borradas = borrarVarios_('PUERTAS', ids);
+  if (!borradas) return {ok: false, error: 'Esas puertas ya no están.'};
+  registrar_(u, 'borrar_puertas', 'PUERTAS', ids.join(' '), borradas + ' puertas');
+  return {ok: true, borradas: borradas, total: leer_('PUERTAS').length};
 }

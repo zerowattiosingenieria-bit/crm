@@ -80,6 +80,10 @@ function acciones_() {
     importarDirectorio: accImportarDirectorio_,
     importarDirVisitas: accImportarDirVisitas_,
     importarPuertas: accImportarPuertas_,
+    guardarDirectorio: accGuardarDirectorio_,
+    borrarDirectorio: accBorrarDirectorio_,
+    guardarPuerta: accGuardarPuerta_,
+    borrarPuertas: accBorrarPuertas_,
     limpiarPuertasFuera: accLimpiarPuertasFuera_,
     avisoPuertas: accAvisoPuertas_,
 
