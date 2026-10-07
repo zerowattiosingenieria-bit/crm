@@ -4,7 +4,22 @@
 
 Cada persona tiene su usuario (su nombre, en minúsculas y sin acentos) y una
 clave de diez caracteres. La primera vez el CRM avisa de que la clave es la
-inicial: se cambia en **Mi perfil**. La sesión dura doce horas.
+inicial: se cambia en **Mi perfil**.
+
+La primera vez que entras desde un ordenador o un móvil nuevo, el CRM te manda
+un código de seis dígitos a tu correo y te lo pide en la misma pantalla. Caduca
+en diez minutos. Desde ese aparato ya no vuelve a pedírtelo, salvo que pasen
+tres meses sin usarlo o que lo quites tú desde **Mi perfil**, donde está la
+lista de los aparatos en los que confías. Si ves alguno que no reconoces,
+quítalo y cambia la clave.
+
+La sesión dura doce horas, y se cierra sola si la dejas dos horas parada. Si
+fallas la clave cinco veces seguidas, la entrada de ese usuario se cierra diez
+minutos y a dirección le llega un aviso por correo. Cambiar tu clave echa fuera
+a quien estuviera dentro con la anterior.
+
+Si algún día el correo falla y alguien no puede entrar, el superadmin puede
+apagar el código desde **Ajustes**, poniendo `dos_pasos` en `no`.
 
 ---
 

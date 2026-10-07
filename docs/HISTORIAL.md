@@ -8,126 +8,147 @@ Esto no sustituye al manual: el manual cuenta cómo se usa el CRM hoy
 luego no hay manera de reconstruir.
 
 
+## 07/10/2026
+
+### La entrada al CRM, bastante más dura de forzar
+
+Cuatro cosas, que juntas cierran casi todo lo que estaba abierto.
+
+Las claves ya no se guardan con una sola pasada de SHA-256, que es
+instantánea de probar a lo bruto, sino con cuatro mil. Las que ya estaban
+se reescriben reforzadas la primera vez que su dueño entra, sin que nadie
+tenga que cambiar nada ni enterarse.
+
+Cinco fallos seguidos cierran la entrada de ese usuario diez minutos, y
+cada tanda siguiente el triple, hasta una hora. A dirección le llega un
+aviso por correo cuando pasa. Antes solo había una espera de 0,7 segundos
+por intento, que da para unos cinco mil intentos por hora.
+
+Una sesión parada dos horas deja de valer, además del tope de doce, y
+cambiar la clave echa fuera a quien estuviera dentro con la anterior
+—menos a quien la está cambiando, que si no se quedaría en la calle—.
+Resetearle la clave a alguien le cierra todo y le olvida los equipos.
+
+Y entrar desde un ordenador o un móvil nuevo pide un código de seis
+dígitos que llega al correo de esa persona. Desde un aparato ya conocido
+no se pide; los conocidos se ven y se quitan desde Mi perfil. Si un día
+el correo falla y deja a alguien fuera, se apaga desde Ajustes con
+«dos_pasos» en «no», que para eso está.
+
 
 ## 05/10/2026
 
-### El CRM avisa solo cuando la facturación no cuadra
+### El README lleva al historial
 
-Hoy han aparecido dos cosas cruzando el Drive, el banco y el CRM a mano:
-a una operación se le emitió el 50% y luego otra factura por el total en
-vez de por la mitad que faltaba, y cinco facturas que estaban en la
-carpeta no habían llegado nunca al CRM, con la numeración saltando sin
-que nadie lo notara.
+_Sin más detalle._
 
-Son tres cuentas de sumar, así que ahora las hace el CRM: avisa si lo
-facturado de una operación pasa de su total, si lo cobrado pasa de lo
-facturado, y si la numeración de una serie tiene huecos, diciendo qué
-números faltan con sus ceros delante para poder buscarlos en la carpeta.
-Sale en los avisos del panel, y solo a quien ve las finanzas.
+### El porqué de cada cambio queda en el repositorio
 
-### Directorio y puertas, siempre lo más reciente arriba
+_Sin más detalle._
 
-Las puertas se ordenaban en la pantalla, pero el listado solo pinta las
-600 primeras y el corte se hacía antes de ordenar: salían las primeras de
-la hoja, o sea las más viejas. Ahora el servidor las entrega de la más
-nueva a la más vieja, con la hora desempatando dentro del mismo día y las
-que no tienen fecha al final. Eso arrastra también al mapa, al Excel y al
-informe en PDF, que salen en ese mismo orden.
+### Pruebas del cuadre de facturación
 
-En el directorio manda la última visita, como hasta ahora, y entre los
-que no tienen ninguna apuntada va por delante el que se ha dado de alta
-después, para que una ficha recién creada a mano no se hunda al final.
+_Sin más detalle._
 
-De camino, un fallo que afectaba a todas las tablas de la casa: una fecha
-como 2026-01-22 es solo dígitos y guiones, así que colaba por número y
-parseFloat se quedaba en 2026 — todo un año ordenaba igual. Las fechas se
-comparan como texto, y las celdas vacías se van al final se ordene como se
-ordene.
+### Aviso automático cuando la facturación no cuadra
 
-### La hora de una puerta sale como hora, no como una fecha de 1899
+_Sin más detalle._
 
-Google guarda una celda que solo lleva la hora como una fecha del 30 de
-diciembre de 1899, su día cero, y en el listado se leía «1899-12-30
-09:22:00». Ahora sale «09:22», que es lo que pone en la hoja.
+### Pruebas del orden por lo más reciente
 
-### El directorio y las puertas se sacan a Excel y a PDF, y se pueden tocar
+_Sin más detalle._
 
-Dos botones en cada pantalla sacan lo que se está mirando, con los filtros
-puestos: un .xlsx de verdad (escrito a mano, un xlsx no es más que un zip
-con unos XML dentro, así que no hace falta librería de nadie) y un informe
-con la marca de la casa, los totales y el reparto por zona o municipio que
-se manda a imprimir para guardarlo como PDF.
+### La pantalla respeta el orden por lo más reciente
 
-Y ya no hace falta esperar al Excel del lunes para arreglar algo: se da de
-alta una ficha o una puerta, se corrige la que esté mal y se borra la que
-sobre, de una en una o marcando varias. Borrar una ficha se lleva también
-sus visitas, la referencia no se puede cambiar para que el Excel semanal
-siga casando, y una puerta de fuera de España no entra ni a mano.
+_Sin más detalle._
+
+### Las fechas se ordenan como fechas, no como números
+
+_Sin más detalle._
+
+### Las puertas se ordenan en el servidor, de la más nueva a la más vieja
+
+_Sin más detalle._
+
+### Prueba de la hora suelta
+
+_Sin más detalle._
+
+### La hora sale como hora, no como una fecha de 1899
+
+_Sin más detalle._
+
+### Pruebas de exportar, crear, corregir y borrar
+
+_Sin más detalle._
+
+### Botones de exportar y de tocar las fichas y las puertas
+
+_Sin más detalle._
+
+### Excel y PDF sin librerías de fuera
+
+_Sin más detalle._
+
+### Directorio y puertas: alta, edición y borrado desde el CRM
+
+_Sin más detalle._
+
+### Pruebas del cliente con coordenada de fuera
+
+_Sin más detalle._
 
 ### La regla de España vale también para los clientes
 
-Un cliente con una coordenada de fuera entra en el directorio como
-cualquier otro, pero se queda sin punto: la ficha sirve igual y el mapa
-no se va a la otra punta del mundo. El listado del mapa descarta además
-cualquier coordenada rara que ya estuviera guardada.
+_Sin más detalle._
+
+### Pruebas de la regla de España
+
+_Sin más detalle._
 
 ### Solo España: las puertas de fuera no entran, y las coladas se borran
 
-Las chinchetas que venían del Maps traían diez marcadores de viajes
-(nueve de China) que no son puertas y abrían el mapa en el mundo entero.
-Ahora el importador descarta todo lo que caiga fuera del recuadro de
-España (Canarias incluidas) y «limpiarPuertasFuera» saca lo que ya
-estuviera metido.
+_Sin más detalle._
 
-### El mapa se encaja donde está el grueso, no en los puntos perdidos
+### El mapa se encaja donde está el grueso
 
-En el export de Google Maps venían diez sitios guardados de viajes —nueve
-en China y un apartamento en Lanzarote— y con ellos dentro el mapa abría
-en vista planeta. Ahora se encaja sobre la nube principal de puntos; los
-raros siguen viéndose, pero no deciden el zoom.
+_Sin más detalle._
+
+### Prueba del aviso de la semana cerrada
+
+_Sin más detalle._
 
 ### El aviso de puertas sale solo los lunes
 
-Un disparador del propio Apps Script manda el lunes a las 8:00 el correo
-con las puertas de la semana que acaba de cerrar, de lunes a domingo, a
-quien puede ver el directorio. Sin depender de que nadie abra nada.
+_Sin más detalle._
 
-Pedido a mano sigue contando la semana en curso, y acepta una semana
-concreta para poder rehacer un aviso viejo.
+### Prueba de la puerta sin fecha
+
+_Sin más detalle._
+
+### Las puertas sin fecha se cuentan aparte
+
+_Sin más detalle._
 
 ### Una puerta sin fecha no es una puerta de esta semana
 
-Al cargar el histórico, las 47 puertas que no traían día se contaban como
-tocadas esta semana solo porque el Excel entró hoy. Ahora «nueva» mira el
-día en que se tocó y nada más; las que no lo traen se cuentan aparte, que
-para eso no sabemos cuándo fueron.
+_Sin más detalle._
 
-### Pantalla del directorio: buscador, mapa y puertas de la semana
+### Pruebas del directorio, los permisos y las puertas nuevas
 
-Dos pantallas en una. El archivo de clientes se busca por nombre,
-dirección o teléfono, se filtra por empresa y municipio, y se puede mirar
-en el mapa: solo salen los que tienen coordenada, y los situados únicamente
-por el municipio se pintan más pequeños para no dar una precisión que no
-tienen. Cada ficha abre con sus visitas.
+_Sin más detalle._
 
-Las puertas van en mapa o en listado, con las de esta semana en verde y
-etiquetadas, el reparto por semanas y el filtro por zona y por fechas.
+### Pantalla del directorio y arreglo del mapa en blanco
 
-De paso, un fallo de los mapas: se creaban antes de que la pantalla
-colgara del documento, así que si Leaflet ya estaba cargado de una
-pantalla anterior el mapa salía en blanco. Ahora espera a tener sitio.
+_Sin más detalle._
+
+### El directorio entra en el menú
+
+_Sin más detalle._
 
 ### El directorio histórico y las puertas tocadas
 
-Los 1.174 clientes de Zero Wattios y Aurus, sus visitas y las puertas que
-se han ido tocando entran en el CRM, pero en tablas aparte: el pipeline
-del día a día sigue con sus operaciones y sus cobros sin descuadrarse.
-
-Quién entra no va por rol sino por lista de personas, en Ajustes. A quien
-no está ni le aparece la lista de quién puede. Al cargar de nuevo el
-Excel de la semana no se duplica nada ni se pisa con vacío lo que ya
-había, y cada puerta se compara por dónde está y qué día se tocó, así que
-las nuevas se saben solas.
+_Sin más detalle._
 
 
 ## 22/09/2026
