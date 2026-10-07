@@ -20,16 +20,27 @@
     <h1>Entrar en el CRM</h1>
     <p class="sub">Panel interno de ZERO WATTIOS INGENIERÍA.</p>
 
-    <label class="campo"><span>Usuario</span>
+    <label class="campo" id="campo-usuario"><span>Usuario</span>
       <input id="usuario" name="username" autocomplete="username" autocapitalize="none"
              spellcheck="false" required>
     </label>
-    <label class="campo"><span>Clave</span>
+    <label class="campo" id="campo-clave"><span>Clave</span>
       <input id="clave" name="password" type="password" autocomplete="current-password" required>
     </label>
 
+    <div id="paso-codigo" style="display:none">
+      <p class="sub" id="codigo-texto" style="margin-bottom:12px"></p>
+      <label class="campo"><span>Código de 6 dígitos</span>
+        <input id="codigo" name="one-time-code" inputmode="numeric" autocomplete="one-time-code"
+               maxlength="6" pattern="[0-9]*" spellcheck="false"
+               style="letter-spacing:.3em; text-align:center; font-size:20px">
+      </label>
+    </div>
+
     <div id="acceso-error" class="etiqueta mal" style="display:none; margin-bottom:12px"></div>
     <button class="btn primario" id="btn-entrar" style="width:100%; justify-content:center">Entrar</button>
+    <button type="button" class="btn" id="btn-otra-cuenta"
+            style="width:100%; justify-content:center; margin-top:8px; display:none">Volver</button>
 
     <div id="acceso-config" style="margin-top:18px; display:none">
       <label class="campo"><span>Dirección del servidor (Apps Script)</span>
