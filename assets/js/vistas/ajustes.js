@@ -362,12 +362,42 @@ export async function vistaPerfil({ir, refrescar}) {
         h('p.nota', 'Mínimo 8 caracteres. Si la has olvidado, pídele una nueva al superadmin.'),
         h('.acciones', btnClave)))),
 
+    tarjetaEquipos(refrescar),
+
     tarjeta('Tu equipo', tabla([
       {clave: 'nombre', et: 'Persona', pinta: x => h('b', x.nombre)},
       {clave: 'rol', et: 'Rol', pinta: x => capital(x.rol)},
       {clave: 'email', et: 'Correo', pinta: x => txt(x.email) || '—'},
       {clave: 'telefono', et: 'Teléfono', pinta: x => txt(x.telefono) || '—'}
     ], d.usuarios.filter(x => x.activo === 'si'), {vacio: 'Sin equipo.'}), {sinRelleno: true}));
+}
+
+/* Los navegadores desde los que ya se ha verificado un código. Quitar uno
+   obliga a volver a pedir código la próxima vez que se entre desde él. */
+function tarjetaEquipos(refrescar) {
+  const caja = h('div', cargando('Mirando tus equipos…'));
+  const pinta = async () => {
+    try {
+      const d = await api.pedir('misEquipos', {equipo: api.equipo()});
+      poner(caja, tabla([
+        {clave: 'agente', et: 'Equipo', pinta: x => h('div',
+          h('b', x.agente), x.este ? marca(' este', 'bien') : null)},
+        {clave: 'creado', et: 'Verificado', pinta: x => x.creado ? fechaCorta(x.creado) : '—'},
+        {clave: 'ultimo_uso', et: 'Última vez', pinta: x => x.ultimo_uso ? fechaCorta(x.ultimo_uso) : '—'},
+        {clave: 'quitar', et: '', noOrden: true, ancho: '90px', pinta: x =>
+          h('button.btn.mini.peligro', {onclick: async () => {
+            if (!await confirmar('Ese equipo tendrá que verificarse otra vez con un código ' +
+              'la próxima vez que entres desde él.', {titulo: '¿Quitar el equipo?', botón: 'Sí, quitarlo'})) return;
+            try { await api.pedir('olvidarEquipo', {id: x.id}); aviso('Equipo quitado.'); pinta(); }
+            catch (e) { avisoError(e); }
+          }}, 'Quitar')}
+      ], d.equipos, {vacio: 'Todavía no hay ningún equipo verificado.'}));
+    } catch (e) { poner(caja, h('.vacio', txt(e.message))); }
+  };
+  pinta();
+  return tarjeta('Equipos de confianza', caja,
+    {sinRelleno: true,
+     subtitulo: 'Desde estos navegadores no se te pide el código. Si no reconoces alguno, quítalo y cambia la clave.'});
 }
 
 function ventanaJornada(refrescar) {
