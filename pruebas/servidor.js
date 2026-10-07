@@ -34,6 +34,16 @@ const servidor = http.createServer((req, res) => {
     });
     return;
   }
+  /* Solo en pruebas: el último correo enviado, para poder leer el código
+     de verificación desde el navegador de prueba. En producción esto no
+     existe, porque el correo lo manda Google de verdad. */
+  if (req.url.startsWith('/ultimo-correo')) {
+    const c = correosEnviados().slice(-1)[0] || {};
+    res.writeHead(200, {'Content-Type': 'application/json; charset=utf-8',
+      'Access-Control-Allow-Origin': '*'});
+    return res.end(JSON.stringify({to: c.to || '', subject: c.subject || ''}));
+  }
+
   let ruta = decodeURIComponent(req.url.split('?')[0]);
   if (ruta === '/') ruta = '/index.html';
   const archivo = path.join(RAIZ, ruta);

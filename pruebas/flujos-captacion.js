@@ -6,7 +6,16 @@ async function entrar(b,u){const ctx=await b.newContext({viewport:{width:1440,he
  const p=await ctx.newPage(); p.on('pageerror',e=>console.log('ERR',e.message));
  await p.goto('http://localhost:8765',{waitUntil:'networkidle'});
  await p.fill('#usuario',u); await p.fill('#clave',C[u]); await p.click('#btn-entrar');
- await p.waitForSelector('.app.visible'); return {ctx,p};}
+ /* Navegador nuevo: hay que pasar el código del segundo paso. */
+ await Promise.race([p.waitForSelector('.app.visible',{timeout:15000}),
+                     p.waitForSelector('#paso-codigo:visible',{timeout:15000})]);
+ if (await p.locator('#paso-codigo').isVisible()) {
+   const c=await (await fetch('http://localhost:8765/ultimo-correo')).json();
+   await p.fill('#codigo',(String(c.subject||'').match(/(\d{6})/)||[])[1]||'');
+   await p.click('#btn-entrar');
+   await p.waitForSelector('.app.visible',{timeout:15000});
+ }
+ return {ctx,p};}
 (async()=>{
 const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome',args:['--no-sandbox']});
 

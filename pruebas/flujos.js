@@ -23,7 +23,21 @@ async function entrar(navegador, usuario) {
   await pag.fill('#usuario', usuario);
   await pag.fill('#clave', CLAVES[usuario]);
   await pag.click('#btn-entrar');
-  await pag.waitForSelector('.app.visible', {timeout: 10000});
+
+  /* Cada contexto es un navegador nuevo, así que siempre pide el código
+     del segundo paso. Se lee del correo que ha mandado el servidor. */
+  await Promise.race([
+    pag.waitForSelector('.app.visible', {timeout: 15000}),
+    pag.waitForSelector('#paso-codigo:visible', {timeout: 15000})
+  ]);
+  if (await pag.locator('#paso-codigo').isVisible()) {
+    const correo = await (await fetch(BASE + '/ultimo-correo')).json();
+    const codigo = (String(correo.subject || '').match(/(\d{6})/) || [])[1];
+    if (!codigo) throw new Error('No ha llegado el código de ' + usuario);
+    await pag.fill('#codigo', codigo);
+    await pag.click('#btn-entrar');
+    await pag.waitForSelector('.app.visible', {timeout: 15000});
+  }
   return {ctx, pag, errores};
 }
 
@@ -173,6 +187,65 @@ async function entrar(navegador, usuario) {
 
   await dir.ctx.close();
   /* ===== Directorio histórico y puertas tocadas ===== */
+  console.log('\n== Entrada en dos pasos ==');
+  {
+    const ctx = await navegador.newContext({viewport: {width: 1200, height: 900}});
+    await ctx.addInitScript(url => localStorage.setItem('zw.crm.endpoint', url), BASE + '/exec');
+    const pag = await ctx.newPage();
+    await pag.goto(BASE, {waitUntil: 'networkidle'});
+
+    await pag.fill('#usuario', 'fernando');
+    await pag.fill('#clave', 'esta-no-es');
+    await pag.click('#btn-entrar');
+    await pag.waitForSelector('#acceso-error:visible', {timeout: 10000});
+    comprobar('con la clave mal no se entra',
+      /incorrectos/i.test(await pag.textContent('#acceso-error')),
+      await pag.textContent('#acceso-error'));
+
+    await pag.fill('#clave', CLAVES.fernando);
+    await pag.click('#btn-entrar');
+    await pag.waitForSelector('#paso-codigo:visible', {timeout: 15000});
+    comprobar('desde un navegador nuevo pide el código', true);
+    comprobar('y dice a qué correo lo ha mandado, tapado',
+      /•••/.test(await pag.textContent('#codigo-texto')), await pag.textContent('#codigo-texto'));
+    comprobar('se esconden usuario y clave mientras tanto',
+      !(await pag.locator('#campo-clave').isVisible()));
+
+    await pag.fill('#codigo', '000000');
+    await pag.click('#btn-entrar');
+    await pag.waitForSelector('#acceso-error:visible', {timeout: 15000});
+    comprobar('un código inventado no cuela',
+      /no es/i.test(await pag.textContent('#acceso-error')), await pag.textContent('#acceso-error'));
+
+    const correo = await (await fetch(BASE + '/ultimo-correo')).json();
+    const codigo = (String(correo.subject || '').match(/(\d{6})/) || [])[1];
+    await pag.fill('#codigo', codigo);
+    await pag.click('#btn-entrar');
+    await pag.waitForSelector('.app.visible', {timeout: 15000});
+    comprobar('con el código bueno entra', true);
+
+    /* Y desde ese mismo navegador, la segunda vez ya no lo pide. */
+    await pag.evaluate(async () => { const api = await import('/assets/js/api.js'); await api.salir(); });
+    await pag.reload({waitUntil: 'networkidle'});
+    await pag.fill('#usuario', 'fernando');
+    await pag.fill('#clave', CLAVES.fernando);
+    await pag.click('#btn-entrar');
+    await pag.waitForSelector('.app.visible', {timeout: 15000});
+    comprobar('la segunda vez desde el mismo equipo ya no pide código', true);
+
+    await pag.goto(BASE + '/#perfil', {waitUntil: 'networkidle'});
+    /* La tarjeta de equipos se rellena después de pintarse, así que se
+       espera a que la tabla tenga filas, no solo a que esté el título. */
+    await pag.waitForFunction(
+      () => document.querySelectorAll('#vista table.datos tbody tr').length > 0 &&
+            !/Mirando tus equipos/.test(document.querySelector('#vista').innerText),
+      null, {timeout: 20000});
+    const perfil = await pag.locator('#vista').innerText();
+    comprobar('Mi perfil lista el equipo de confianza', /Chrome|Navegador/.test(perfil));
+    comprobar('y marca cuál es el de ahora', /este/i.test(perfil), perfil.slice(0, 200));
+    await ctx.close();
+  }
+
   console.log('\n== Directorio y puertas ==');
   {
     const {ctx, pag, errores} = await entrar(navegador, 'fernando');

@@ -29,8 +29,20 @@ comprobar('hay cobros', leer_('COBROS').length > 0, leer_('COBROS').length);
 comprobar('hay gastos', leer_('GASTOS').length > 0, leer_('GASTOS').length);
 
 console.log('\n== Entrada al sistema ==');
+/* Entrar son dos pasos desde un equipo nuevo: usuario y clave, y después
+   el código que llega al correo. Cada usuario de la prueba usa siempre la
+   misma huella de equipo, así que solo pasa por el código la primera vez. */
+const equipos = {};
 function entrar(usuario) {
-  const r = despachar_({accion: 'login', usuario: usuario, clave: claves[usuario]});
+  const equipo = equipos[usuario] || (equipos[usuario] = 'equipo-de-' + usuario);
+  let r = despachar_({accion: 'login', usuario: usuario, clave: claves[usuario],
+                      equipo: equipo, agente: 'Mozilla/5.0 (Windows NT 10.0) Chrome/130'});
+  if (!r.ok && r.requiere_codigo) {
+    const correo = correosEnviados().slice(-1)[0] || {};
+    const codigo = (String(correo.subject || '').match(/(\d{6})/) || [])[1];
+    if (!codigo) throw new Error('No ha llegado el código de ' + usuario);
+    r = despachar_({accion: 'loginCodigo', pendiente: r.pendiente, codigo: codigo, equipo: equipo});
+  }
   if (!r.ok) throw new Error('No entra ' + usuario + ': ' + r.error);
   return r;
 }
@@ -217,13 +229,27 @@ const altaPorAdmin = despachar_({accion: 'guardarUsuario', token: sesiones.ferna
 comprobar('un administrador no da de alta usuarios', altaPorAdmin.ok === false, altaPorAdmin.error);
 const reset = despachar_({accion: 'resetClave', token: sesiones.superadmin.token, id: altaUsr.usuario.id});
 comprobar('se puede regenerar una clave', reset.ok === true && /^[A-Za-z0-9]{10}$/.test(reset.clave));
+/* Nando abre una segunda sesión (otro equipo) antes de cambiar la clave,
+   para ver que al cambiarla se cierra esa y sobrevive desde la que cambia. */
+const otraDeNando = accLogin_({usuario: 'nando', clave: claves.nando,
+  equipo: equipos.nando, agente: 'prueba'}).token;
 const cambio = despachar_({accion: 'cambiarClave', token: sesiones.nando.token,
   actual: claves.nando, nueva: 'nuevaclave2026'});
 comprobar('cada uno cambia su clave', cambio.ok === true, cambio.error);
 comprobar('la clave vieja ya no vale',
-  despachar_({accion: 'login', usuario: 'nando', clave: claves.nando}).ok === false);
-comprobar('la nueva sí',
-  despachar_({accion: 'login', usuario: 'nando', clave: 'nuevaclave2026'}).ok === true);
+  despachar_({accion: 'login', usuario: 'nando', clave: claves.nando,
+              equipo: equipos.nando}).ok === false);
+comprobar('la nueva sí, y desde su equipo de siempre sin pedir código',
+  despachar_({accion: 'login', usuario: 'nando', clave: 'nuevaclave2026',
+              equipo: equipos.nando}).ok === true);
+/* Cambiar la clave echa fuera a quien estuviera dentro con la anterior,
+   menos a quien la está cambiando, que si no se quedaría en la calle. */
+comprobar('cambiar la clave cierra las otras sesiones',
+  sesion_(otraDeNando) === null, 'la otra sesión de nando sigue viva');
+comprobar('pero no la de quien la cambia',
+  !!sesion_(sesiones.nando.token), 'ha echado fuera a quien cambiaba la clave');
+comprobar('y lo deja apuntado', cambio.sesiones_cerradas === 1, cambio.sesiones_cerradas);
+claves.nando = 'nuevaclave2026';
 
 console.log('\n== Alertas y analítica ==');
 const al = despachar_({accion: 'alertas', token: sesiones.fernando.token});
@@ -560,6 +586,7 @@ comprobar('un comercial no se adjudica captaciones ajenas', adjudicaComercial.ok
 console.log('\n== Resumen semanal por correo ==');
 /* De fábrica «resumen_a» lleva todo a una sola dirección, para rodar el
    envío sin molestar al equipo. Primero se comprueba eso. */
+vaciarCorreos();                 // los códigos de entrada no son resúmenes
 const envioUnico = resumenSemanal();
 const correosUnicos = correosEnviados();
 comprobar('con «resumen_a» puesto, todo va a esa dirección',
@@ -623,11 +650,119 @@ comprobar('un día anterior sí está caducado',
   caducada_('2020-01-01') === true);
 
 const antes = leer_('SESIONES').length;
-const entrada = accLogin_({usuario: 'fernando', clave: claves.fernando, agente: 'prueba'});
+const entrada = accLogin_({usuario: 'fernando', clave: claves.fernando, agente: 'prueba',
+                           equipo: equipos.fernando});
 comprobar('se puede entrar', entrada.ok === true, JSON.stringify(entrada.error || ''));
 comprobar('entrar deja una sesión escrita', leer_('SESIONES').length === antes + 1);
 comprobar('la sesión recién creada sirve para la siguiente petición',
   !!sesion_(entrada.token), 'token no reconocido');
+
+/* ---------- seguridad de la entrada ---------- */
+
+/* El hash lleva miles de vueltas, y las claves guardadas a la antigua se
+   reescriben solas la primera vez que su dueño entra. */
+comprobar('una clave nueva se guarda con muchas vueltas',
+  num_(leer_('USUARIOS').filter(x => x.usuario === 'nando')[0].vueltas) === VUELTAS_CLAVE);
+comprobar('el mismo texto con más vueltas da otro hash',
+  hash_('abc', 'sal', 1) !== hash_('abc', 'sal', 50));
+comprobar('y con las mismas vueltas, siempre el mismo',
+  hash_('abc', 'sal', 50) === hash_('abc', 'sal', 50));
+
+/* Se simula una clave vieja, de una sola pasada, y se mira que al entrar
+   se convierta sola sin que su dueño tenga que hacer nada. */
+const vieja = leer_('USUARIOS').filter(x => x.usuario === 'sandra')[0];
+const salVieja = sal_();
+actualizar_('USUARIOS', vieja.id, {salt: salVieja, hash: hash_('clavevieja1', salVieja, 1), vueltas: ''});
+const entraVieja = accLogin_({usuario: 'sandra', clave: 'clavevieja1', equipo: equipos.sandra});
+comprobar('con la clave guardada a la antigua se entra igual', entraVieja.ok === true, entraVieja.error);
+const trasEntrar = leer_('USUARIOS').filter(x => x.usuario === 'sandra')[0];
+comprobar('y al entrar se reescribe reforzada',
+  num_(trasEntrar.vueltas) === VUELTAS_CLAVE && txt_(trasEntrar.hash) !== hash_('clavevieja1', salVieja, 1));
+comprobar('la clave sigue siendo la misma para su dueño',
+  accLogin_({usuario: 'sandra', clave: 'clavevieja1', equipo: equipos.sandra}).ok === true);
+claves.sandra = 'clavevieja1';
+
+/* Cinco fallos seguidos cierran la puerta un rato. */
+const fallar = () => accLogin_({accion: 'login', usuario: 'abraham', clave: 'noesesa', equipo: equipos.abraham});
+for (let i = 0; i < FALLOS_PARA_BLOQUEO - 1; i++) fallar();
+comprobar('antes del tope todavía se puede intentar',
+  /incorrectos/.test(fallar().error) === true);
+const bloqueado = accLogin_({usuario: 'abraham', clave: claves.abraham, equipo: equipos.abraham});
+comprobar('al llegar al tope se bloquea aunque la clave sea buena',
+  bloqueado.ok === false && /Demasiados intentos/.test(bloqueado.error), bloqueado.error);
+comprobar('y queda apuntado en el registro',
+  leer_('LOG').some(l => txt_(l.accion) === 'usuario_bloqueado'));
+/* Se le quita el bloqueo a mano para seguir con las pruebas. */
+const abr = leer_('USUARIOS').filter(x => x.usuario === 'abraham')[0];
+actualizar_('USUARIOS', abr.id, {bloqueado_hasta: '', intentos: 0, bloqueos: 0});
+comprobar('quitado el bloqueo, vuelve a entrar',
+  accLogin_({usuario: 'abraham', clave: claves.abraham, equipo: equipos.abraham}).ok === true);
+
+/* Una sesión parada demasiado tiempo deja de valer. */
+const dormida = accLogin_({usuario: 'rober', clave: claves.rober, equipo: equipos.rober}).token;
+comprobar('recién abierta, la sesión vale', !!sesion_(dormida));
+const filaDormida = filaDeSesion_(dormida);
+filaDormida.hoja.getRange(filaDormida.fila, cabeceras_('SESIONES').indexOf('ultimo_uso') + 1)
+  .setValue(dentroDe_(-(MINUTOS_INACTIVIDAD + 5)));
+comprobar('parada más de la cuenta, ya no', sesion_(dormida) === null);
+comprobar('y se borra sola de la tabla', filaDeSesion_(dormida) === null);
+
+/* El código del segundo paso: caduca, se equivoca y se agota. */
+vaciarCorreos();
+const nuevoEquipo = accLogin_({usuario: 'ruben', clave: claves.ruben, equipo: 'portatil-de-casa',
+                               agente: 'Mozilla/5.0 (Macintosh; Mac OS X) Safari/605'});
+comprobar('desde un equipo nuevo se pide código',
+  nuevoEquipo.ok === false && nuevoEquipo.requiere_codigo === true, nuevoEquipo.error);
+comprobar('el código llega al correo de esa persona',
+  (correosEnviados()[0] || {}).to === 'rubenleon@zerowattios.com', (correosEnviados()[0] || {}).to);
+comprobar('y el correo se enseña tapado',
+  /^r•••n@zerowattios\.com$/.test(nuevoEquipo.correo), nuevoEquipo.correo);
+const codigoBueno = (String((correosEnviados()[0] || {}).subject || '').match(/(\d{6})/) || [])[1];
+comprobar('un código equivocado no entra',
+  despachar_({accion: 'loginCodigo', pendiente: nuevoEquipo.pendiente, codigo: '000000'}).ok === false);
+comprobar('sin el pendiente correcto tampoco',
+  despachar_({accion: 'loginCodigo', pendiente: 'inventado', codigo: codigoBueno}).ok === false);
+const conCodigo = despachar_({accion: 'loginCodigo', pendiente: nuevoEquipo.pendiente, codigo: codigoBueno});
+comprobar('con el código bueno se entra', conCodigo.ok === true, conCodigo.error);
+comprobar('y el equipo queda de confianza',
+  accLogin_({usuario: 'ruben', clave: claves.ruben, equipo: 'portatil-de-casa'}).ok === true);
+comprobar('el mismo código no sirve dos veces',
+  despachar_({accion: 'loginCodigo', pendiente: nuevoEquipo.pendiente, codigo: codigoBueno}).ok === false);
+
+/* El equipo se puede quitar desde Mi perfil, y entonces vuelve a pedir código. */
+const mios = despachar_({accion: 'misEquipos', token: conCodigo.token, equipo: 'portatil-de-casa'});
+comprobar('los equipos de confianza se listan', mios.ok === true && mios.equipos.length >= 1);
+comprobar('y se reconoce desde cuál se está mirando',
+  mios.equipos.some(e => e.este === true));
+comprobar('con el navegador en cristiano',
+  mios.equipos.some(e => /Safari en Mac/.test(e.agente)), mios.equipos.map(e => e.agente).join(' | '));
+comprobar('un equipo ajeno no se puede quitar',
+  despachar_({accion: 'olvidarEquipo', token: sesiones.rober.token,
+              id: mios.equipos[0].id}).ok === false);
+comprobar('el propio sí',
+  despachar_({accion: 'olvidarEquipo', token: conCodigo.token, id: mios.equipos[0].id}).ok === true);
+comprobar('y al quitarlo vuelve a pedir código',
+  accLogin_({usuario: 'ruben', clave: claves.ruben, equipo: 'portatil-de-casa'}).requiere_codigo === true);
+
+/* Resetear la clave de alguien le cierra todo y le olvida los equipos. */
+const victima = leer_('USUARIOS').filter(x => x.usuario === 'rober')[0];
+const suSesion = accLogin_({usuario: 'rober', clave: claves.rober, equipo: equipos.rober}).token;
+const reseteo = despachar_({accion: 'resetClave', token: sesiones.superadmin.token, id: victima.id});
+comprobar('resetear la clave cierra sus sesiones',
+  reseteo.ok === true && sesion_(suSesion) === null);
+comprobar('y le olvida los equipos de confianza',
+  !leer_('EQUIPOS').some(e => String(e.usuario_id) === String(victima.id)));
+claves.rober = reseteo.clave;
+delete equipos.rober;
+sesiones.rober = entrar('rober');
+
+/* La válvula de escape: con «dos_pasos» en no, se entra sin código. */
+despachar_({accion: 'guardarConfig', token: sesiones.superadmin.token, config: {dos_pasos: 'no'}});
+comprobar('apagando el doble factor se entra desde cualquier equipo',
+  accLogin_({usuario: 'ruben', clave: claves.ruben, equipo: 'un-equipo-cualquiera'}).ok === true);
+despachar_({accion: 'guardarConfig', token: sesiones.superadmin.token, config: {dos_pasos: 'si'}});
+comprobar('y volviéndolo a encender, otra vez pide código',
+  accLogin_({usuario: 'ruben', clave: claves.ruben, equipo: 'otro-equipo-mas'}).requiere_codigo === true);
 
 /* ---------------------------------------------------------------------------
    El directorio histórico y las puertas
