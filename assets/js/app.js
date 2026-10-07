@@ -194,25 +194,65 @@ function mostrarApp() {
   pintaMenu();
 }
 
+/* Cuando el servidor no reconoce el equipo, la misma pantalla se convierte
+   en el paso del código: se esconden usuario y clave y se pide el número
+   que acaba de llegar al correo. */
+let pendienteCodigo = null;
+
+function pasoCodigo(datos) {
+  pendienteCodigo = datos.pendiente;
+  $('#campo-usuario').style.display = 'none';
+  $('#campo-clave').style.display = 'none';
+  $('#paso-codigo').style.display = '';
+  $('#btn-otra-cuenta').style.display = '';
+  $('#codigo-texto').textContent = 'Este equipo es nuevo. Te hemos mandado un código a ' +
+    txt(datos.correo) + '. Caduca en ' + (datos.minutos || 10) + ' minutos.';
+  $('#btn-entrar').textContent = 'Verificar';
+  $('#codigo').value = '';
+  $('#codigo').focus();
+}
+
+function pasoClave() {
+  pendienteCodigo = null;
+  $('#campo-usuario').style.display = '';
+  $('#campo-clave').style.display = '';
+  $('#paso-codigo').style.display = 'none';
+  $('#btn-otra-cuenta').style.display = 'none';
+  $('#acceso-error').style.display = 'none';
+  $('#btn-entrar').textContent = 'Entrar';
+  $('#clave').value = '';
+  $('#usuario').focus();
+}
+
+async function dentro() {
+  await api.cargarDatos();
+  mostrarApp();
+  if (!location.hash || location.hash === '#') location.hash = '#panel';
+  await pintar();
+  if (api.estado.usuario.debe_cambiar_clave === 'si') {
+    aviso('Tu clave es la inicial: cámbiala desde Mi perfil.');
+  }
+}
+
 async function intentarEntrar(usuario, clave) {
   const err = $('#acceso-error');
   const btn = $('#btn-entrar');
   err.style.display = 'none';
   btn.disabled = true;
   const original = btn.textContent;
-  poner(btn, h('span.cargando'), ' Entrando');
+  poner(btn, h('span.cargando'), pendienteCodigo ? ' Verificando' : ' Entrando');
   try {
-    await api.entrar(usuario, clave);
-    await api.cargarDatos();
-    mostrarApp();
-    if (!location.hash || location.hash === '#') location.hash = '#panel';
-    await pintar();
-    if (api.estado.usuario.debe_cambiar_clave === 'si') {
-      aviso('Tu clave es la inicial: cámbiala desde Mi perfil.');
+    if (pendienteCodigo) {
+      await api.entrarConCodigo(pendienteCodigo, $('#codigo').value);
+    } else {
+      const d = await api.entrar(usuario, clave);
+      if (d && d.requiere_codigo) { pasoCodigo(d); return; }
     }
+    await dentro();
   } catch (e) {
     err.textContent = txt(e.message);
     err.style.display = '';
+    if (pendienteCodigo) { $('#codigo').value = ''; $('#codigo').focus(); }
   } finally { btn.disabled = false; btn.textContent = original; }
 }
 
@@ -224,6 +264,7 @@ async function arrancar() {
     e.preventDefault();
     intentarEntrar($('#usuario').value.trim(), $('#clave').value);
   });
+  $('#btn-otra-cuenta').addEventListener('click', pasoClave);
   $('#ver-config').addEventListener('click', e => {
     e.preventDefault();
     const caja = $('#acceso-config');

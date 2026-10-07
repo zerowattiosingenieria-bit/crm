@@ -76,20 +76,61 @@ export async function pedir(accion, params = {}) {
   }
 
   if (d && d.sesion === false) { olvidarSesion(); if (alCaducar) alCaducar(); }
-  if (!d || d.ok === false) throw new Error((d && d.error) || 'Error desconocido.');
+  if (!d || d.ok === false) {
+    const e = new Error((d && d.error) || 'Error desconocido.');
+    /* La respuesta entera viaja con el error: hay casos, como el código de
+       verificación, en los que «no ok» no es un fallo sino un paso más. */
+    e.datos = d || {};
+    throw e;
+  }
   return d;
 }
 
 /* ---------- sesión ---------- */
 
-export async function entrar(usuario, clave) {
-  const d = await pedir('login', {usuario, clave, agente: navigator.userAgent});
+/* Una marca de este navegador, para no pedir el código cada vez que se
+   entra desde el equipo de siempre. No identifica a nadie: es un número al
+   azar que vive solo en este dispositivo. */
+const K_EQUIPO = 'zw.crm.equipo';
+export function equipo() {
+  let e = '';
+  try { e = localStorage.getItem(K_EQUIPO) || ''; } catch (x) { /* modo incógnito */ }
+  if (!e) {
+    e = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()) + Date.now()).replace(/-/g, '');
+    try { localStorage.setItem(K_EQUIPO, e); } catch (x) { /* se pedirá el código cada vez */ }
+  }
+  return e;
+}
+
+function guardarEntrada(d) {
   guardarSesion(d.token, d.usuario);
   estado.usuario = d.usuario;
   estado.permisos = d.permisos;
   estado.catalogo = d.catalogo;
   estado.config = d.config || {};
   return d;
+}
+
+/**
+ * Entra con usuario y clave. Si el servidor no reconoce este equipo,
+ * devuelve {requiere_codigo: true} en vez de lanzar error: entonces hay
+ * que llamar a entrarConCodigo con lo que llegue al correo.
+ */
+export async function entrar(usuario, clave) {
+  let d;
+  try {
+    d = await pedir('login', {usuario, clave, agente: navigator.userAgent, equipo: equipo()});
+  } catch (e) {
+    if (e && e.datos && e.datos.requiere_codigo) return e.datos;
+    throw e;
+  }
+  return guardarEntrada(d);
+}
+
+export async function entrarConCodigo(pendiente, codigo) {
+  const d = await pedir('loginCodigo', {pendiente, codigo,
+    agente: navigator.userAgent, equipo: equipo()});
+  return guardarEntrada(d);
 }
 
 export async function salir() {
