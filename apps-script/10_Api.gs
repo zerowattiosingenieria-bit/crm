@@ -13,6 +13,8 @@ function acciones_() {
     /* sesión */
     salir: accSalir_,
     cambiarClave: accCambiarClave_,
+    misEquipos: accMisEquipos_,
+    olvidarEquipo: accOlvidarEquipo_,
 
     /* datos */
     datos: accDatos_,
@@ -127,6 +129,7 @@ function despachar_(p) {
   try {
     if (accion === 'ping') return {ok: true, version: VERSION, servidor: ahora_()};
     if (accion === 'login') return accLogin_(p);
+    if (accion === 'loginCodigo') return accLoginCodigo_(p);
     const fn = acciones_()[accion];
     if (!fn) return {ok: false, error: 'Acción desconocida: ' + accion};
 

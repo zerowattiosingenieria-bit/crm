@@ -154,7 +154,7 @@ const PREFIJO = {
   USUARIOS:'U', CLIENTES:'C', OPERACIONES:'OP', COBROS:'CO', FACTURAS:'F',
   GASTOS:'G', SEGUIMIENTO:'S', CAPTACIONES:'CA', PARTES:'P', NOMINAS:'N', JORNADAS:'J',
   BANCO:'B', VACACIONES:'V', SESIONES:'SE', LOG:'L',
-  DIRECTORIO:'D', DIR_VISITAS:'DV', PUERTAS:'PU'
+  DIRECTORIO:'D', DIR_VISITAS:'DV', PUERTAS:'PU', EQUIPOS:'EQ'
 };
 
 /** Identificador corto, legible y único: C-000412. */
@@ -216,6 +216,13 @@ function fechaHoja_(d) {
   if (d.getFullYear() < 1900) return Utilities.formatDate(d, zonaHoraria_(), 'HH:mm');
   const conHora = d.getHours() || d.getMinutes() || d.getSeconds();
   return Utilities.formatDate(d, zonaHoraria_(), conHora ? 'yyyy-MM-dd HH:mm:ss' : 'yyyy-MM-dd');
+}
+
+/* Una marca de tiempo a tantos minutos de ahora, en el formato de la hoja.
+   Con minutos negativos, hacia atrás. */
+function dentroDe_(minutos) {
+  return Utilities.formatDate(new Date(Date.now() + (Number(minutos) || 0) * 60000),
+                              zonaHoraria_(), 'yyyy-MM-dd HH:mm:ss');
 }
 
 function mesDe_(iso) { return String(iso || '').slice(0, 7); }
@@ -294,10 +301,51 @@ function claveAleatoria_(largo) {
 
 function sal_() { return Utilities.getUuid().replace(/-/g, '').slice(0, 16); }
 
-function hash_(clave, sal) {
-  const bytes = Utilities.computeDigest(
-    Utilities.DigestAlgorithm.SHA_256, 'zw|' + sal + '|' + clave, Utilities.Charset.UTF_8);
-  return bytes.map(function (b) { return ((b & 0xff) + 0x100).toString(16).slice(1); }).join('');
+/* El hash de una clave, dándole «vueltas» pasadas de SHA-256.
+ *
+ * Las claves viejas se guardaron con una sola pasada; esas se comprueban
+ * pasando vueltas = 1 y se vuelven a guardar reforzadas en cuanto su dueño
+ * entra. Por eso el número de vueltas se guarda junto al hash: así conviven
+ * las de antes y las de ahora sin que nadie tenga que cambiar nada.
+ *
+ * Si no se dice cuántas vueltas, se asume una: más vale quedarse corto y
+ * que la gente pueda entrar que pasarse y dejar a todo el mundo fuera. */
+function hash_(clave, sal, vueltas) {
+  const n = Math.max(1, Math.floor(Number(vueltas) || 0)) || 1;
+  let v = 'zw|' + sal + '|' + clave;
+  for (let i = 0; i < n; i++) {
+    v = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, v, Utilities.Charset.UTF_8)
+      .map(function (b) { return ((b & 0xff) + 0x100).toString(16).slice(1); }).join('');
+  }
+  return v;
+}
+
+/* Dos textos secretos se comparan hasta el final siempre, tarden lo que
+   tarden en diferenciarse: si se saliera al primer carácter distinto, el
+   tiempo de respuesta iría soplando la respuesta letra a letra. */
+function igualSecreto_(a, b) {
+  const x = String(a == null ? '' : a), y = String(b == null ? '' : b);
+  let dif = x.length ^ y.length;
+  const n = Math.max(x.length, y.length);
+  for (let i = 0; i < n; i++) dif |= (x.charCodeAt(i) || 0) ^ (y.charCodeAt(i) || 0);
+  return dif === 0;
+}
+
+/* Una marca de tiempo de la hoja («2026-10-07 09:14:22») como fecha de
+   verdad. fecha_ solo mira el día, y aquí la hora es justo lo que importa. */
+function instante_(marca) {
+  const s = txt_(marca);
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/);
+  if (!m) return null;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]),
+                  Number(m[4] || 0), Number(m[5] || 0), Number(m[6] || 0));
+}
+
+/* Minutos transcurridos desde una marca de tiempo de la hoja. */
+function minutosDesde_(marca) {
+  const f = instante_(marca);
+  if (!f) return 0;
+  return (Date.now() - f.getTime()) / 60000;
 }
 
 function token_() { return Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '').slice(0, 8); }

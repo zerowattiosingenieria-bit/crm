@@ -66,7 +66,8 @@ function instalar() {
       const salt = sal_();
       insertar_('USUARIOS', {
         nombre: u.nombre, usuario: u.usuario, email: u.email, telefono: '',
-        rol: u.rol, activo: 'si', hash: hash_(clave, salt), salt: salt,
+        rol: u.rol, activo: 'si', hash: hash_(clave, salt, VUELTAS_CLAVE), salt: salt,
+        vueltas: VUELTAS_CLAVE, intentos: 0, bloqueado_hasta: '', bloqueos: 0,
         creado: ahora_(), ultimo_acceso: '', debe_cambiar_clave: 'si',
         salario_bruto: u.rol === 'comercial' ? 1500 : (u.rol === 'captador' ? 1300 : 2000),
         dietas_mes: 150, irpf_pct: 15, ss_pct: 6.35,
@@ -124,7 +125,9 @@ function regenerarClave(usuario) {
   if (!u) { Logger.log('No existe el usuario ' + usuario); return ''; }
   const clave = claveAleatoria_(LARGO_CLAVE);
   const salt = sal_();
-  actualizar_('USUARIOS', u.id, {hash: hash_(clave, salt), salt: salt, debe_cambiar_clave: 'si'});
+  actualizar_('USUARIOS', u.id, {hash: hash_(clave, salt, VUELTAS_CLAVE), salt: salt,
+    vueltas: VUELTAS_CLAVE, debe_cambiar_clave: 'si', intentos: 0, bloqueado_hasta: '', bloqueos: 0});
+  cerrarSesionesDe_(u.id, '');
   Logger.log('Nueva clave de ' + u.usuario + ': ' + clave);
   return clave;
 }

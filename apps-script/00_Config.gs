@@ -17,6 +17,27 @@ const NOMBRE_BASE = 'CRM · ZERO WATTIOS — Base de datos';
 /* Duración de la sesión iniciada desde el navegador. */
 const HORAS_SESION = 12;
 
+/* Y aparte, cuánto puede estar una sesión parada antes de pedir la clave
+   otra vez. Un portátil olvidado abierto en una obra deja de valer solo. */
+const MINUTOS_INACTIVIDAD = 120;
+
+/* Vueltas que se le dan al hash de una clave. Una sola pasada de SHA-256 es
+   instantánea, y eso vale para quien prueba claves por fuerza bruta tanto
+   como para nosotros. Repitiéndolo unos miles de veces, comprobar una clave
+   sigue costando un suspiro pero probarlas todas sale carísimo. */
+const VUELTAS_CLAVE = 4000;
+
+/* Intentos fallidos seguidos antes de cerrar la puerta un rato, y cuánto
+   dura el cierre. Al segundo bloqueo seguido, el triple. */
+const FALLOS_PARA_BLOQUEO = 5;
+const MINUTOS_BLOQUEO = 10;
+
+/* Verificación en dos pasos: el código que se manda al correo cuando se
+   entra desde un equipo nuevo. */
+const MINUTOS_CODIGO = 10;
+const FALLOS_CODIGO = 5;
+const DIAS_EQUIPO = 90;
+
 /* Longitud de las claves que genera el sistema. */
 const LARGO_CLAVE = 10;
 
@@ -72,7 +93,8 @@ const PERMISOS = {
 const ESQUEMA = {
 
   USUARIOS: ['id','nombre','usuario','email','telefono','rol','activo',
-    'hash','salt','creado','ultimo_acceso','debe_cambiar_clave',
+    'hash','salt','vueltas','intentos','bloqueado_hasta','bloqueos',
+    'creado','ultimo_acceso','debe_cambiar_clave',
     'salario_bruto','dietas_mes','irpf_pct','ss_pct',
     'comision_fv','comision_aero','comision_fv_ajustada','comision_aero_ajustada',
     'comision_captacion_fv','comision_captacion_aero',
@@ -139,7 +161,12 @@ const ESQUEMA = {
 
   CONFIG: ['clave','valor','descripcion'],
 
-  SESIONES: ['token','usuario_id','creado','expira','agente'],
+  SESIONES: ['token','usuario_id','creado','expira','agente','equipo','ultimo_uso'],
+
+  /* Los navegadores desde los que ya se ha verificado un código. Mientras
+     un equipo esté en esta lista como «confiado», no se vuelve a pedir. */
+  EQUIPOS: ['id','usuario_id','huella','agente','estado','codigo','codigo_expira',
+    'intentos_codigo','pendiente','creado','ultimo_uso'],
 
   /* El archivo histórico: clientes de Zero Wattios y de Aurus, sus visitas
      y las puertas tocadas. Vive aparte del pipeline a propósito. */
@@ -323,6 +350,7 @@ const CONFIG_INICIAL = [
   ['directorio_usuarios','superadmin,fernando,nando',
    'Usuarios que pueden ver el directorio histórico y las puertas, separados por comas'],
   ['resumen_a','fernandogarcia@zerowattios.com','Mientras tenga un correo, TODOS los resúmenes van ahí y no a cada persona'],
+  ['dos_pasos','si','Pedir un código por correo al entrar desde un equipo nuevo. Ponlo en «no» solo si deja a alguien fuera'],
   ['copia_resumen','','Correo que recibe copia de todos los resúmenes (opcional)'],
   ['festivos','','Festivos del año, separados por comas (aaaa-mm-dd)'],
   ['margen_objetivo_pct','32','Margen bruto objetivo (%)'],
