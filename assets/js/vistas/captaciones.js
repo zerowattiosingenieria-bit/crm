@@ -102,6 +102,138 @@ function adjudicar(captacion, refrescar) {
   });
 }
 
+/* ---- Rendimiento de captación: leads, sentadas, ventas y ratios ---- */
+
+/* Estados de operación que cuentan como venta cerrada. */
+const OPERACION_GANADA = ['firmada', 'tramite', 'material', 'instalacion',
+                          'instalada', 'legalizada', 'cerrada'];
+
+/* Días laborables (lunes a viernes) entre dos fechas ISO, ambas incluidas. */
+export function diasLaborables(desdeISO, hastaISO) {
+  if (!desdeISO || !hastaISO || desdeISO > hastaISO) return 0;
+  let n = 0;
+  const d = new Date(desdeISO + 'T12:00:00');
+  const fin = new Date(hastaISO + 'T12:00:00');
+  while (d <= fin) {
+    const s = d.getDay();
+    if (s !== 0 && s !== 6) n++;
+    d.setDate(d.getDate() + 1);
+  }
+  return n;
+}
+
+/* ¿Esta ficha acabó en venta? Vale el resultado marcado a mano o que el
+   cliente tenga ya una operación cerrada. */
+export function captacionEsVenta(c) {
+  if (txt(c.resultado) === 'venta') return true;
+  if (txt(c.operacion_id)) {
+    const o = api.operacion(c.operacion_id);
+    if (o && OPERACION_GANADA.includes(normal(o.estado))) return true;
+  }
+  return api.estado.operaciones.some(o => String(o.cliente_id) === String(c.cliente_id) &&
+    OPERACION_GANADA.includes(normal(o.estado)));
+}
+
+/* ¿Se llegó a sentar con el cliente? Cuenta el resultado marcado y también
+   las citas confirmadas cuya fecha ya ha pasado y que nadie ha descartado. */
+export function captacionEsSentada(c) {
+  if (['sentada', 'venta'].includes(txt(c.resultado))) return true;
+  if (captacionEsVenta(c)) return true;
+  return txt(c.estado_cita) === 'confirmada' && txt(c.fecha) && txt(c.fecha) < hoyISO() &&
+    !['cancelada', 'no_sentada'].includes(txt(c.resultado));
+}
+
+/* Agrupa las fichas por persona y calcula el embudo y los ratios. */
+function embudoPor(lista, campo) {
+  const filas = {};
+  lista.forEach(c => {
+    const k = txt(c[campo]) || '(sin asignar)';
+    if (!filas[k]) filas[k] = {id: k, leads: 0, confirmadas: 0, sentadas: 0, ventas: 0,
+                               primera: '', ultima: '', importe: 0};
+    const f = filas[k];
+    f.leads++;
+    if (txt(c.estado_cita) === 'confirmada') f.confirmadas++;
+    if (captacionEsSentada(c)) f.sentadas++;
+    if (captacionEsVenta(c)) {
+      f.ventas++;
+      const o = api.estado.operaciones.find(x => String(x.cliente_id) === String(c.cliente_id) &&
+        OPERACION_GANADA.includes(normal(x.estado)));
+      if (o) f.importe += num(o.total);
+    }
+    const fe = txt(c.fecha);
+    if (fe) {
+      if (!f.primera || fe < f.primera) f.primera = fe;
+      if (!f.ultima || fe > f.ultima) f.ultima = fe;
+    }
+  });
+  return Object.values(filas).map(f => {
+    const hasta = f.ultima && f.ultima > hoyISO() ? hoyISO() : f.ultima;
+    f.dias = diasLaborables(f.primera, hasta || f.primera);
+    f.porDia = f.dias ? f.leads / f.dias : 0;
+    f.pctSentada = f.leads ? f.sentadas * 100 / f.leads : 0;
+    f.pctVenta = f.sentadas ? f.ventas * 100 / f.sentadas : 0;
+    f.leadsPorVenta = f.ventas ? f.leads / f.ventas : 0;
+    return f;
+  }).sort((a, b) => b.leads - a.leads);
+}
+
+function tablaEmbudo(filas, etiquetaPersona) {
+  return tabla([
+    {clave: 'id', et: etiquetaPersona, valor: f => f.id === '(sin asignar)'
+      ? 'Sin asignar' : api.nombrePersona(f.id),
+     pinta: f => f.id === '(sin asignar)'
+       ? h('span.nota', 'Sin asignar')
+       : h('div', h('b', api.nombrePersona(f.id)),
+           h('div.nota', f.dias + ' día(s) laborable(s)'))},
+    {clave: 'leads', et: 'Leads', num: true, valor: f => f.leads},
+    {clave: 'porDia', et: 'Leads al día', num: true, valor: f => f.porDia,
+     pinta: f => f.porDia ? f.porDia.toFixed(1) : '—'},
+    {clave: 'confirmadas', et: 'Citas confirmadas', num: true, valor: f => f.confirmadas},
+    {clave: 'sentadas', et: 'Sentadas', num: true, valor: f => f.sentadas},
+    {clave: 'pctSentada', et: 'Lead → sentada', num: true, valor: f => f.pctSentada,
+     pinta: f => pct(f.pctSentada)},
+    {clave: 'ventas', et: 'Ventas', num: true, valor: f => f.ventas},
+    {clave: 'pctVenta', et: 'Sentada → venta', num: true, valor: f => f.pctVenta,
+     pinta: f => f.sentadas ? pct(f.pctVenta) : '—'},
+    {clave: 'leadsPorVenta', et: 'Leads por venta', num: true, valor: f => f.leadsPorVenta,
+     pinta: f => f.ventas ? f.leadsPorVenta.toFixed(1) : '—'},
+    {clave: 'importe', et: 'Vendido', num: true, valor: f => f.importe,
+     pinta: f => f.importe ? eur(f.importe) : '—'}
+  ], filas, {vacio: 'Todavía no hay fichas para medir.'});
+}
+
+/* El panel entero: lo de arriba son los números de toda la lista filtrada. */
+function rendimiento(lista) {
+  const leads = lista.length;
+  const sentadas = lista.filter(captacionEsSentada).length;
+  const ventas = lista.filter(captacionEsVenta).length;
+  const fechas = lista.map(c => txt(c.fecha)).filter(Boolean).sort();
+  const primera = fechas[0] || '';
+  const ultima = fechas[fechas.length - 1] || '';
+  const hasta = ultima && ultima > hoyISO() ? hoyISO() : ultima;
+  const dias = diasLaborables(primera, hasta || primera);
+
+  return h('div',
+    kpis(
+      kpi('Leads al día', dias ? (leads / dias).toFixed(1) : '—',
+        dias ? miles(leads) + ' en ' + dias + ' día(s) laborable(s)' : 'sin fechas'),
+      kpi('Lead → sentada', pct(leads ? sentadas * 100 / leads : 0),
+        miles(sentadas) + ' de ' + miles(leads)),
+      kpi('Sentada → venta', sentadas ? pct(ventas * 100 / sentadas) : '—',
+        miles(ventas) + ' de ' + miles(sentadas)),
+      kpi('Leads por venta', ventas ? (leads / ventas).toFixed(1) : '—',
+        ventas ? 'hacen falta de media' : 'aún sin ventas', {estado: ventas ? 'bien' : 'aviso'})
+    ),
+    tarjeta('Rendimiento por captador', tablaEmbudo(embudoPor(lista, 'captador_id'), 'Captador'),
+      {sinRelleno: true}),
+    tarjeta('Rendimiento por comercial', tablaEmbudo(embudoPor(lista, 'comercial_id'), 'Comercial'),
+      {sinRelleno: true}),
+    h('p.nota', 'Cuenta como sentada la ficha marcada como sentada o venta y también la cita ' +
+      'confirmada cuya fecha ya ha pasado y nadie ha descartado. Cuenta como venta la ficha ' +
+      'marcada como venta y la de cualquier cliente que ya tenga una operación cerrada. ' +
+      'Los leads al día se reparten entre los días laborables que van de la primera ficha a la última.'));
+}
+
 export async function vistaCaptaciones({ir, refrescar}) {
   const caja = h('div');
   const contenedor = h('div');
@@ -177,6 +309,7 @@ export async function vistaCaptaciones({ir, refrescar}) {
           'esperando comercial',
           {estado: lista.filter(c => !txt(c.comercial_id)).length ? 'aviso' : 'bien'})
       ),
+      rendimiento(lista),
       tarjeta(miles(lista.length) + ' ficha(s) de captación', t,
         {sinRelleno: true, acciones: [h('button.btn.mini', {onclick: () => t.exportar && t.exportar()}, 'Exportar CSV')]}));
   }
