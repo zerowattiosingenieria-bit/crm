@@ -143,6 +143,14 @@ export function captacionEsSentada(c) {
     !['cancelada', 'no_sentada'].includes(txt(c.resultado));
 }
 
+/* El día en que se metió la ficha, que es lo que mide el ritmo de captación.
+   La fecha de la visita puede ser futura y no sirve para contar leads al día. */
+export function fechaAlta(c) {
+  const cr = txt(c.creado);
+  if (cr) return cr.slice(0, 10);
+  return txt(c.fecha);
+}
+
 /* Agrupa las fichas por persona y calcula el embudo y los ratios. */
 function embudoPor(lista, campo) {
   const filas = {};
@@ -160,7 +168,7 @@ function embudoPor(lista, campo) {
         OPERACION_GANADA.includes(normal(x.estado)));
       if (o) f.importe += num(o.total);
     }
-    const fe = txt(c.fecha);
+    const fe = fechaAlta(c);
     if (fe) {
       if (!f.primera || fe < f.primera) f.primera = fe;
       if (!f.ultima || fe > f.ultima) f.ultima = fe;
@@ -207,7 +215,7 @@ function rendimiento(lista) {
   const leads = lista.length;
   const sentadas = lista.filter(captacionEsSentada).length;
   const ventas = lista.filter(captacionEsVenta).length;
-  const fechas = lista.map(c => txt(c.fecha)).filter(Boolean).sort();
+  const fechas = lista.map(fechaAlta).filter(Boolean).sort();
   const primera = fechas[0] || '';
   const ultima = fechas[fechas.length - 1] || '';
   const hasta = ultima && ultima > hoyISO() ? hoyISO() : ultima;
@@ -231,7 +239,7 @@ function rendimiento(lista) {
     h('p.nota', 'Cuenta como sentada la ficha marcada como sentada o venta y también la cita ' +
       'confirmada cuya fecha ya ha pasado y nadie ha descartado. Cuenta como venta la ficha ' +
       'marcada como venta y la de cualquier cliente que ya tenga una operación cerrada. ' +
-      'Los leads al día se reparten entre los días laborables que van de la primera ficha a la última.'));
+      'Los leads al día se reparten entre los días laborables que van desde que se metio la primera ficha hasta la ultima, no por la fecha de la visita.'));
 }
 
 export async function vistaCaptaciones({ir, refrescar}) {
