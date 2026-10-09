@@ -18,6 +18,7 @@ import {vistaParte} from './vistas/parte.js';
 import {vistaNomina} from './vistas/nominas.js';
 import {vistaVacaciones} from './vistas/vacaciones.js';
 import {vistaUsuarios, vistaAjustes, vistaPerfil, vistaRegistro} from './vistas/ajustes.js';
+import {vistaDashboard} from './vistas/dashboard.js';
 
 export const VERSION = '1.0.0';
 
@@ -45,6 +46,7 @@ const VISTAS = {
   usuarios:     {titulo: 'Usuarios',           pinta: vistaUsuarios,      permiso: 'usuarios'},
   ajustes:      {titulo: 'Ajustes',            pinta: vistaAjustes,       permiso: 'config'},
   registro:     {titulo: 'Registro de actividad', pinta: vistaRegistro,   permiso: 'config'},
+  dashboard:    {titulo: 'Dashboard interactivo', pinta: vistaDashboard, permiso: 'usuarios'},
   perfil:       {titulo: 'Mi perfil',          pinta: vistaPerfil}
 };
 
@@ -104,6 +106,7 @@ function menuDe(rol) {
     {id: 'nomina', et: 'Nóminas', ico: '◧'},
     {id: 'vacaciones', et: 'Vacaciones', ico: '☀'},
     {grupo: 'Sistema'},
+    {id: 'dashboard', et: 'Dashboard interactivo', ico: '◈', soloSuper: true},
     {id: 'usuarios', et: 'Usuarios', ico: '◉', soloSuper: true},
     {id: 'ajustes', et: 'Ajustes', ico: '⚙'},
     {id: 'registro', et: 'Registro', ico: '⟲'},
