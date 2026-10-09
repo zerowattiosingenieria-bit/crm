@@ -18,7 +18,7 @@ import {vistaParte} from './vistas/parte.js';
 import {vistaNomina} from './vistas/nominas.js';
 import {vistaVacaciones} from './vistas/vacaciones.js';
 import {vistaUsuarios, vistaAjustes, vistaPerfil, vistaRegistro} from './vistas/ajustes.js';
-import {vistaDashboard} from './vistas/dashboard.js';
+import {vistaDashboard} from './vistas/dashboard.js?v=2';
 
 export const VERSION = '1.0.0';
 
