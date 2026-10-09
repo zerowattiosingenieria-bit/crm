@@ -263,6 +263,21 @@ async function intentarEntrar(usuario, clave) {
 async function arrancar() {
   $('#version-app').textContent = VERSION;
 
+  /* Un equipo nuevo puede quedar configurado abriendo el CRM con la direccion
+     del servidor en la propia URL: .../crm/?srv=https://script.google.com/...
+     Asi nadie tiene que teclearla a mano en un movil o en una tableta. Se
+     guarda y se limpia la barra de direcciones para no dejarla a la vista. */
+  try {
+    const q = new URLSearchParams(location.search);
+    const srv = (q.get('srv') || '').trim();
+    if (/^https:\/\/script\.google\.com\//.test(srv)) {
+      api.guardarEndpoint(srv);
+      q.delete('srv');
+      const limpia = location.pathname + (q.toString() ? '?' + q : '') + (location.hash || '');
+      history.replaceState(null, '', limpia);
+    }
+  } catch (e) { /* si el navegador no deja tocar la URL, se sigue igual */ }
+
   $('#form-acceso').addEventListener('submit', e => {
     e.preventDefault();
     intentarEntrar($('#usuario').value.trim(), $('#clave').value);
