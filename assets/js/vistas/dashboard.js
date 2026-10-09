@@ -253,9 +253,9 @@ export async function vistaDashboard({ir}) {
       h('.zwd-escena',
         lienzo,
         h('.zwd-zoom',
-          h('button', {type: 'button', title: 'Acercar', onclick: () => { vista.esc = Math.min(2.4, vista.esc * 1.18); dibuja(); }}, '+'),
-          h('button', {type: 'button', title: 'Alejar', onclick: () => { vista.esc = Math.max(.4, vista.esc / 1.18); dibuja(); }}, '−'),
-          h('button', {type: 'button', title: 'Centrar', onclick: () => { vista.esc = 1; vista.dx = 0; vista.dy = 0; dibuja(); }}, '⌂')),
+          h('button', {type: 'button', title: 'Acercar', onclick: () => { encuadrado = true; vista.esc = Math.min(2.4, vista.esc * 1.18); dibuja(); }}, '+'),
+          h('button', {type: 'button', title: 'Alejar', onclick: () => { encuadrado = true; vista.esc = Math.max(.08, vista.esc / 1.18); dibuja(); }}, '−'),
+          h('button', {type: 'button', title: 'Centrar', onclick: () => { encuadrado = false; dibuja(); }}, '⌂')),
         h('.zwd-ley',
           h('div', h('i', {estilo: {background: '#8bc53f'}}), 'Con obra ganada'),
           h('div', h('i', {estilo: {background: '#e2a23a'}}), 'Propuesta o negociando'),
@@ -367,10 +367,28 @@ export async function vistaDashboard({ir}) {
     cx.fillText('ZONA DE TRABAJO', ox + W / 2, oy + 10); cx.textAlign = 'left';
     cx.restore();
   }
+  let encuadrado = false;
+  function encuadra() {
+    const W = lienzo.clientWidth, H = lienzo.clientHeight;
+    if (!W || !H) return;
+    vista.esc = 1; vista.dx = 0; vista.dy = 0;
+    const pts = CONTORNO_MADRID.map(c => proy(c[0], c[1]));
+    const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+    const an = Math.max(1, Math.max.apply(null, xs) - Math.min.apply(null, xs));
+    const al = Math.max(1, Math.max.apply(null, ys) - Math.min.apply(null, ys));
+    vista.esc = Math.min((W - 150) / an, (H - 130) / al);
+    const p2 = CONTORNO_MADRID.map(c => proy(c[0], c[1]));
+    const cxm = (Math.min.apply(null, p2.map(p => p.x)) + Math.max.apply(null, p2.map(p => p.x))) / 2;
+    const cym = (Math.min.apply(null, p2.map(p => p.y)) + Math.max.apply(null, p2.map(p => p.y))) / 2;
+    vista.dx += W / 2 - cxm;
+    vista.dy += H / 2 - cym;
+    encuadrado = true;
+  }
   function dibuja() {
     if (!cx) return;
     const W = lienzo.clientWidth, H = lienzo.clientHeight;
     if (!W || !H) return;
+    if (!encuadrado) encuadra();
     const dpr = Math.min(devicePixelRatio || 1, 2);
     lienzo.width = W * dpr; lienzo.height = H * dpr;
     cx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -398,7 +416,8 @@ export async function vistaDashboard({ir}) {
         edificio({x: pt.x + Math.cos(ang) * rad, y: pt.y + Math.sin(ang) * rad * .5},
           (11 + (torres === 1 ? 6 : 0)) * vista.esc, base * (.55 + .45 * ((i % 3) / 2)), col);
       }
-      etiquetaZona(pt, z.nombre, z.n, esSel);
+      const umbral = vista.esc < 0.45 ? maxN * 0.18 : vista.esc < 0.7 ? maxN * 0.06 : 0;
+      if (esSel || esHov || z.n >= umbral) etiquetaZona(pt, z.nombre, z.n, esSel);
     });
 
     if (bolsa.n) {
@@ -470,7 +489,7 @@ export async function vistaDashboard({ir}) {
   });
   lienzo.addEventListener('wheel', e => {
     e.preventDefault();
-    vista.esc = Math.max(.4, Math.min(2.4, vista.esc * (e.deltaY > 0 ? .92 : 1.08)));
+    encuadrado = true; vista.esc = Math.max(.08, Math.min(2.4, vista.esc * (e.deltaY > 0 ? .92 : 1.08)));
     dibuja();
   }, {passive: false});
 
