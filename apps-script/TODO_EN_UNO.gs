@@ -1971,6 +1971,37 @@ function accGuardarCaptacion_(u, p) {
   return {ok: true, captacion: r};
 }
 
+/**
+ * Borra captaciones. Hasta hoy se podian borrar clientes, operaciones,
+ * facturas, cobros y gastos, pero las captaciones solo se podian cancelar,
+ * asi que los duplicados se quedaban en la hoja estorbando.
+ * Acepta una sola (p.id) o varias de golpe (p.ids).
+ */
+function accBorrarCaptacion_(u, p) {
+  exigir_(u, 'editarTodo');
+  const pedidos = (p.ids && p.ids.length ? p.ids : (p.id ? [p.id] : []))
+    .map(function (x) { return String(x); })
+    .filter(function (x) { return x; });
+  if (!pedidos.length) return {ok: false, error: 'No has dicho que captacion borrar.'};
+
+  const todas = leer_('CAPTACIONES');
+  const suyas = todas.filter(function (c) { return pedidos.indexOf(String(c.id)) >= 0; });
+  if (!suyas.length) return {ok: false, error: 'No existe.'};
+
+  /* Si alguna estaba enganchada a una operacion, esa operacion se queda sin
+     captacion. No se impide, pero queda dicho en el registro para que el
+     rastro no se pierda. */
+  const conOperacion = suyas.filter(function (c) { return txt_(c.operacion_id); })
+    .map(function (c) { return c.id + '>' + c.operacion_id; });
+
+  const borradas = borrarVarios_('CAPTACIONES', suyas.map(function (c) { return c.id; }));
+  registrar_(u, 'borrar_captacion', 'CAPTACIONES',
+    suyas.map(function (c) { return c.id; }).join(' '),
+    borradas + ' captaciones' +
+    (conOperacion.length ? ' - tenian operacion: ' + conOperacion.join(', ') : ''));
+  return {ok: true, borradas: borradas};
+}
+
 /* ---------- búsqueda rápida ---------- */
 
 function accBuscar_(u, p) {
@@ -3789,6 +3820,7 @@ function acciones_() {
     borrarOperacion: accBorrarOperacion_,
     guardarSeguimiento: accGuardarSeguimiento_,
     guardarCaptacion: accGuardarCaptacion_,
+    borrarCaptacion: accBorrarCaptacion_,
 
     /* finanzas */
     finanzas: accFinanzas_,

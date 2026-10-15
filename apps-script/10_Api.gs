@@ -25,6 +25,7 @@ function acciones_() {
     borrarOperacion: accBorrarOperacion_,
     guardarSeguimiento: accGuardarSeguimiento_,
     guardarCaptacion: accGuardarCaptacion_,
+    borrarCaptacion: accBorrarCaptacion_,
 
     /* finanzas */
     finanzas: accFinanzas_,
