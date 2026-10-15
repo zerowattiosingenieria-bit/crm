@@ -197,6 +197,23 @@ function mostrarApp() {
   pintaMenu();
 }
 
+/* ---------- recordar los datos de entrada ---------- */
+/* Para no teclear usuario y clave cada vez en el movil, la tableta o el
+   ordenador de siempre. Solo se guarda si se marca la casilla, y queda en
+   ese aparato, no en el servidor. Al desmarcarla se borra en el acto. */
+const K_RECORDAR = 'zw.crm.recordar';
+
+function datosRecordados() {
+  try { return JSON.parse(localStorage.getItem(K_RECORDAR) || 'null'); } catch (e) { return null; }
+}
+function recordarDatos(usuario, clave) {
+  try { localStorage.setItem(K_RECORDAR, JSON.stringify({usuario: usuario, clave: clave})); }
+  catch (e) { /* si el navegador no deja guardar, se entra a mano y ya */ }
+}
+function olvidarDatos() {
+  try { localStorage.removeItem(K_RECORDAR); } catch (e) { /* nada que borrar */ }
+}
+
 /* Cuando el servidor no reconoce el equipo, la misma pantalla se convierte
    en el paso del código: se esconden usuario y clave y se pide el número
    que acaba de llegar al correo. */
@@ -206,6 +223,7 @@ function pasoCodigo(datos) {
   pendienteCodigo = datos.pendiente;
   $('#campo-usuario').style.display = 'none';
   $('#campo-clave').style.display = 'none';
+  $('#campo-recordar').style.display = 'none';
   $('#paso-codigo').style.display = '';
   $('#btn-otra-cuenta').style.display = '';
   $('#codigo-texto').textContent = 'Este equipo es nuevo. Te hemos mandado un código a ' +
@@ -219,6 +237,7 @@ function pasoClave() {
   pendienteCodigo = null;
   $('#campo-usuario').style.display = '';
   $('#campo-clave').style.display = '';
+  $('#campo-recordar').style.display = '';
   $('#paso-codigo').style.display = 'none';
   $('#btn-otra-cuenta').style.display = 'none';
   $('#acceso-error').style.display = 'none';
@@ -251,6 +270,8 @@ async function intentarEntrar(usuario, clave) {
       const d = await api.entrar(usuario, clave);
       if (d && d.requiere_codigo) { pasoCodigo(d); return; }
     }
+    if ($('#recordar').checked) recordarDatos($('#usuario').value.trim(), $('#clave').value);
+    else olvidarDatos();
     await dentro();
   } catch (e) {
     err.textContent = txt(e.message);
@@ -283,6 +304,7 @@ async function arrancar() {
     intentarEntrar($('#usuario').value.trim(), $('#clave').value);
   });
   $('#btn-otra-cuenta').addEventListener('click', pasoClave);
+  $('#recordar').addEventListener('change', e => { if (!e.target.checked) olvidarDatos(); });
   $('#ver-config').addEventListener('click', e => {
     e.preventDefault();
     const caja = $('#acceso-config');
@@ -326,7 +348,16 @@ async function arrancar() {
       return;
     } catch (e) { api.olvidarSesion(); }
   }
-  $('#usuario').focus();
+  /* Lo recordado en este aparato se deja puesto: asi solo hay que dar a Entrar. */
+  const recordado = datosRecordados();
+  if (recordado && recordado.usuario) {
+    $('#usuario').value = recordado.usuario;
+    $('#clave').value = recordado.clave || '';
+    $('#recordar').checked = true;
+    $('#btn-entrar').focus();
+  } else {
+    $('#usuario').focus();
+  }
 }
 
 arrancar();
