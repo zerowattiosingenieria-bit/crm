@@ -196,6 +196,16 @@ export const guardarOperacion = operacion => pedir('guardarOperacion', {operacio
 export const guardarSeguimiento = seguimiento => pedir('guardarSeguimiento', {seguimiento});
 export const guardarCaptacion = captacion => pedir('guardarCaptacion', {captacion});
 export const borrarCaptacion = ids => pedir('borrarCaptacion', Array.isArray(ids) ? {ids} : {id: ids});
+
+/* La carpeta del cliente: fotos, documentos y el PDF del proyecto. */
+export const proyectoDe = cliente_id => pedir('proyecto', {cliente_id});
+export const guardarProyecto = datos => pedir('guardarProyecto', datos);
+export const subirArchivo = datos => pedir('subirArchivo', datos);
+export const descargarArchivo = id => pedir('descargarArchivo', {id});
+export const borrarArchivo = id => pedir('borrarArchivo', {id});
+export const entregarProyecto = datos => pedir('entregarProyecto', datos);
+export const estadoProyecto = (cliente_id, estado) => pedir('estadoProyecto', {cliente_id, estado});
+export const proyectosPendientes = estado => pedir('proyectosPendientes', {estado});
 export const guardarCobro = cobro => pedir('guardarCobro', {cobro});
 export const guardarFactura = factura => pedir('guardarFactura', {factura});
 export const guardarGasto = gasto => pedir('guardarGasto', {gasto});
