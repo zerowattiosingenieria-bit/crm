@@ -132,6 +132,24 @@ label.recordarme{
   font-weight:600; margin:-2px 0 14px; cursor:pointer; user-select:none;
 }
 label.recordarme input{width:17px; height:17px; margin:0; flex:0 0 auto; accent-color:var(--lima-osc)}
+
+/* ---------- la carpeta del cliente (fotos y documentos) ---------- */
+.zw-fotos{display:grid; gap:10px; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); margin-top:12px}
+.zw-foto{position:relative; aspect-ratio:4/3; border:1px solid var(--linea); border-radius:var(--r-s);
+         overflow:hidden; background:var(--papel-2)}
+.zw-foto img{width:100%; height:100%; object-fit:cover; display:block}
+.zw-foto .sinfoto{display:flex; align-items:center; justify-content:center; height:100%; font-size:26px}
+.zw-foto button{position:absolute; top:5px; border:0; border-radius:999px; width:24px; height:24px;
+                cursor:pointer; background:rgba(23,25,28,.72); color:#fff; font-size:13px; line-height:1;
+                padding:0; opacity:0; transition:opacity .12s}
+.zw-foto .quitar{right:5px}
+.zw-foto .abrir{right:34px}
+.zw-foto:hover button, .zw-foto:focus-within button{opacity:1}
+@media (hover:none){ .zw-foto button{opacity:.9} }
+ul.zw-docs{list-style:none; padding:0; margin:10px 0 0}
+ul.zw-docs li{display:flex; align-items:center; gap:10px; padding:7px 0;
+              border-bottom:1px solid var(--linea); font-size:13.5px}
+ul.zw-docs li span:first-child{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .rejilla{display:grid; gap:0 14px; grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
 .rejilla.dos{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
 
