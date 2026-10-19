@@ -27,6 +27,16 @@ function acciones_() {
     guardarCaptacion: accGuardarCaptacion_,
     borrarCaptacion: accBorrarCaptacion_,
 
+    /* carpeta del cliente y proyecto */
+    proyecto: accProyecto_,
+    guardarProyecto: accGuardarProyecto_,
+    subirArchivo: accSubirArchivo_,
+    descargarArchivo: accDescargarArchivo_,
+    borrarArchivo: accBorrarArchivo_,
+    entregarProyecto: accEntregarProyecto_,
+    estadoProyecto: accEstadoProyecto_,
+    proyectosPendientes: accProyectosPendientes_,
+
     /* finanzas */
     finanzas: accFinanzas_,
     guardarCobro: accGuardarCobro_,

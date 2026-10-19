@@ -178,6 +178,14 @@ const ESQUEMA = {
   PUERTAS: ['id','lista','nota','categoria','nombre','direccion','zona','fecha','hora',
     'lat','lon','alta_crm'],
 
+  /* La carpeta del cliente: lo que sube el comercial y el proyecto que vuelve. */
+  PROYECTOS: ['id','cliente_id','descripcion','estado','carpeta_id','archivo_id','archivo_nombre',
+              'creado','creado_por','pedido','pedido_por','entregado','entregado_por',
+              'modificado','modificado_por','notas'],
+
+  ARCHIVOS: ['id','cliente_id','proyecto_id','clase','nombre','archivo_id','mime','bytes',
+             'miniatura','subido_por','subido','notas'],
+
   LOG: ['fecha','usuario_id','usuario','accion','entidad','entidad_id','detalle']
 };
 
