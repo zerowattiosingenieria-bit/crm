@@ -6,6 +6,7 @@ import * as api from '../api.js';
 import {tarjeta, tabla, kpi, kpis, etiquetaEstado, marca, ventanaFormulario, ventana,
         aviso, avisoError, confirmar, filtros} from '../ui.js';
 import {editorOperacion, tarjetaOperacion} from './operaciones.js';
+import {panelProyecto} from './proyecto.js';
 
 /* ---------- campos del formulario de cliente ---------- */
 export const camposCliente = () => [
@@ -217,6 +218,7 @@ export async function vistaCliente({id, ir, refrescar}) {
     ['Instalaciones (' + ops.length + ')', () => panelOperaciones(c, ops, refrescar)],
     ['Seguimiento (' + seg.length + ')', () => panelSeguimiento(c, seg, refrescar)],
     ['Vivienda y consumo', () => panelVivienda(c)],
+    ['Proyecto', () => panelProyecto(c)],
     ...(cap ? [['Captación', () => panelCaptacion(cap)]] : [])
   ];
   tabs.forEach(([nombre, pinta], i) => {
