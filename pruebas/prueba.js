@@ -768,6 +768,82 @@ comprobar('y volviéndolo a encender, otra vez pide código',
    El directorio histórico y las puertas
    ------------------------------------------------------------------------ */
 
+console.log('\n== Carpeta del cliente y proyecto ==');
+{   /* en su propio bloque: los nombres no chocan con el resto del fichero */
+  const clipro = despachar_({accion: 'guardarCliente', token: sesiones.nando.token,
+    cliente: {nombre: 'Cliente con proyecto', direccion: 'Calle del Proyecto 3',
+              municipio: 'Las Rozas de Madrid', telefono: '600111222'}}).cliente;
+
+  const sinNada = despachar_({accion: 'proyecto', token: sesiones.nando.token, cliente_id: clipro.id});
+  comprobar('la ficha de proyecto nace en blanco',
+    sinNada.ok === true && sinNada.proyecto.estado === 'borrador' && sinNada.archivos.length === 0,
+    sinNada.error || sinNada.proyecto);
+
+  const ajenoPro = despachar_({accion: 'proyecto', token: sesiones.rober.token, cliente_id: clipro.id});
+  comprobar('otro comercial no ve esa carpeta', ajenoPro.ok === false, ajenoPro.error);
+
+  const descPro = despachar_({accion: 'guardarProyecto', token: sesiones.nando.token,
+    cliente_id: clipro.id,
+    descripcion: 'Chalet de 220 m2, caldera de gasoleo, cubierta a dos aguas orientada al sur.'});
+  comprobar('se guarda la descripcion', descPro.ok === true, descPro.error);
+  comprobar('sin fotos todavia no se pide', descPro.proyecto.estado === 'borrador', descPro.proyecto.estado);
+
+  const fotoPro = despachar_({accion: 'subirArchivo', token: sesiones.nando.token,
+    cliente_id: clipro.id, clase: 'foto', nombre: 'fachada.jpg', mime: 'image/jpeg',
+    datos: Utilities.base64Encode([10, 20, 30, 40]), miniatura: 'data:image/jpeg;base64,AAAA'});
+  comprobar('el comercial sube una foto', fotoPro.ok === true, fotoPro.error);
+  comprobar('con descripcion y foto el proyecto se pide solo',
+    fotoPro.proyecto.estado === 'pedido', fotoPro.proyecto.estado);
+  comprobar('queda apuntado quien lo pide', txt_(fotoPro.proyecto.pedido_por) === sesiones.nando.usuario.id);
+
+  const pdfPro = despachar_({accion: 'subirArchivo', token: sesiones.nando.token,
+    cliente_id: clipro.id, clase: 'documento', nombre: 'factura-luz.pdf', mime: 'application/pdf',
+    datos: Utilities.base64Encode([1, 2, 3])});
+  comprobar('tambien sube documentos', pdfPro.ok === true, pdfPro.error);
+
+  const bajaFoto = despachar_({accion: 'descargarArchivo', token: sesiones.nando.token, id: fotoPro.archivo.id});
+  comprobar('se descarga lo que subio', bajaFoto.ok === true && bajaFoto.nombre === 'fachada.jpg', bajaFoto.error);
+  const bajaAjena = despachar_({accion: 'descargarArchivo', token: sesiones.rober.token, id: fotoPro.archivo.id});
+  comprobar('y nadie de fuera se lo descarga', bajaAjena.ok === false, bajaAjena.error);
+
+  const entregaComercial = despachar_({accion: 'entregarProyecto', token: sesiones.nando.token,
+    cliente_id: clipro.id, datos: Utilities.base64Encode([9, 9]), nombre: 'falso.pdf'});
+  comprobar('un comercial no puede entregar el proyecto', entregaComercial.ok === false,
+    entregaComercial.error);
+
+  const colaPro = despachar_({accion: 'proyectosPendientes', token: sesiones.fernando.token});
+  comprobar('la direccion ve la cola', colaPro.ok === true && colaPro.proyectos.length >= 1, colaPro.error);
+  const enCola = (colaPro.proyectos || []).filter(x => x.cliente_id === clipro.id)[0];
+  comprobar('la cola trae el recuento de archivos',
+    !!enCola && enCola.fotos === 1 && enCola.documentos === 1, enCola);
+  comprobar('la cola dice de quien es el cliente',
+    !!enCola && enCola.comercial === sesiones.nando.usuario.nombre, enCola && enCola.comercial);
+  const colaComercial = despachar_({accion: 'proyectosPendientes', token: sesiones.nando.token});
+  comprobar('un comercial no ve la cola', colaComercial.ok === false, colaComercial.error);
+
+  const entregaPro = despachar_({accion: 'entregarProyecto', token: sesiones.fernando.token,
+    cliente_id: clipro.id, datos: Utilities.base64Encode([5, 5, 5]),
+    nombre: 'Proyecto_Cliente_con_proyecto.pdf', mime: 'application/pdf'});
+  comprobar('la direccion entrega el PDF', entregaPro.ok === true, entregaPro.error);
+  comprobar('el proyecto queda entregado', entregaPro.proyecto.estado === 'entregado',
+    entregaPro.proyecto.estado);
+
+  const verFinal = despachar_({accion: 'proyecto', token: sesiones.nando.token, cliente_id: clipro.id});
+  const elProyecto = verFinal.archivos.filter(a => a.clase === 'proyecto');
+  comprobar('el comercial ve el PDF del proyecto en su ficha', elProyecto.length === 1, verFinal.archivos);
+  comprobar('y se lo puede descargar',
+    despachar_({accion: 'descargarArchivo', token: sesiones.nando.token, id: elProyecto[0].id}).ok === true);
+  comprobar('los archivos no viajan con el contenido dentro',
+    verFinal.archivos.every(a => a.datos === undefined));
+
+  const borraAjeno = despachar_({accion: 'borrarArchivo', token: sesiones.rober.token, id: pdfPro.archivo.id});
+  comprobar('otro comercial no borra archivos ajenos', borraAjeno.ok === false, borraAjeno.error);
+  const borraSuyo = despachar_({accion: 'borrarArchivo', token: sesiones.nando.token, id: pdfPro.archivo.id});
+  comprobar('quien lo subio si lo borra', borraSuyo.ok === true, borraSuyo.error);
+  comprobar('el proyecto no se puede quitar desde el comercial',
+    despachar_({accion: 'borrarArchivo', token: sesiones.nando.token, id: elProyecto[0].id}).ok === false);
+}
+
 console.log('\n== Directorio y puertas ==');
 
 comprobar('se crean las tres pestañas nuevas',
