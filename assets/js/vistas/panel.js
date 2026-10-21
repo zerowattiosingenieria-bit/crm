@@ -4,6 +4,8 @@ import {h, eur, eurCorto, miles, pct, num, txt, fechaCorta, haceDias, mesLargo, 
 import * as api from '../api.js';
 import {kpi, kpis, tarjeta, etiquetaEstado, tabla, marca} from '../ui.js';
 import {lineas, barras, embudo, progreso, anillo} from '../graficos.js';
+import {abrirArchivo} from './proyecto.js';
+import {avisoError} from '../ui.js';
 
 export async function vistaPanel({ir}) {
   const u = api.estado.usuario;
@@ -12,6 +14,12 @@ export async function vistaPanel({ir}) {
   if (esDir) peticiones.push(api.pedir('analitica'), api.pedir('finanzas'));
   const [res, al, an, fin] = await Promise.all(peticiones);
   const r = res.resumen;
+
+  /* Proyectos con el PDF hecho y sin enviar. Solo los ve su comercial y la
+     dirección; si el servidor todavía no tiene la acción, el panel sigue
+     pintándose igual. */
+  const listos = u.rol === 'captador' ? []
+    : await api.proyectosPendientes('entregado').then(x => x.proyectos || []).catch(() => []);
 
   const saludo = (() => {
     const hora = new Date().getHours();
@@ -25,13 +33,13 @@ export async function vistaPanel({ir}) {
       ? 'Así va la empresa hoy, ' + fechaCorta(hoyISO()) + '.'
       : 'Esto es lo que tienes entre manos ahora mismo.'));
 
-  return esDir ? panelDireccion({cabecera, r, al, an, fin, ir})
+  return esDir ? panelDireccion({cabecera, r, al, an, fin, listos, ir})
                : (u.rol === 'captador' ? panelCaptador({cabecera, r, al, ir})
-                                       : panelComercial({cabecera, r, al, ir}));
+                                       : panelComercial({cabecera, r, al, listos, ir}));
 }
 
 /* ================= dirección ================= */
-function panelDireccion({cabecera, r, al, an, fin, ir}) {
+function panelDireccion({cabecera, r, al, an, fin, listos, ir}) {
   const f = fin.resumen;
   const ev = fin.evolucion.slice(-8);
   const nota = fin.nota;
@@ -62,6 +70,8 @@ function panelDireccion({cabecera, r, al, an, fin, ir}) {
       kpi('Cartera abierta', eurCorto(an.prevision_ponderada), an.cartera_abierta + ' propuestas vivas'),
       kpi('Ticket medio', eurCorto(f.ticket_medio), 'por instalación')
     ),
+
+    tarjetaProyectosListos(listos, ir),
 
     h('.doble',
       tarjeta('Ingresos y costes por mes',
@@ -111,7 +121,7 @@ function panelDireccion({cabecera, r, al, an, fin, ir}) {
 }
 
 /* ================= comercial ================= */
-function panelComercial({cabecera, r, al, ir}) {
+function panelComercial({cabecera, r, al, listos, ir}) {
   const ev = r.evolucion.slice(-6);
   const proximas = r.proximas.slice(0, 8);
 
@@ -127,6 +137,8 @@ function panelComercial({cabecera, r, al, ir}) {
         {estado: r.conversion_propuesta_venta >= 35 ? 'bien' : 'aviso'}),
       kpi('Comisiones', eur(r.comisiones.total), 'devengadas en el periodo')
     ),
+
+    tarjetaProyectosListos(listos, ir),
 
     h('.doble',
       tarjeta('Objetivo del periodo',
@@ -225,4 +237,28 @@ function panelCaptador({cabecera, r, al, ir}) {
     al.alertas.length ? tarjeta('Avisos', h('ul.lista-avisos', al.alertas.map(a =>
       h('li', h('span.nivel.' + a.nivel), h('span', a.texto))))) : null
   );
+}
+
+/* ---------- proyectos con el PDF hecho, pendientes de enviar ---------- */
+function tarjetaProyectosListos(listos, ir) {
+  if (!listos || !listos.length) return null;
+  const descarga = async (ev, p) => {
+    const b = ev.currentTarget;
+    b.disabled = true;
+    try { await abrirArchivo({id: p.archivo_id, nombre: p.archivo_nombre}); }
+    catch (e) { avisoError(e); }
+    finally { b.disabled = false; }
+  };
+  return tarjeta('Proyectos listos para enviar (' + listos.length + ')',
+    h('ul.zw-listos', listos.map(p => h('li',
+      h('div', {estilo: {flex: '1', minWidth: '0', cursor: 'pointer'},
+                onclick: () => ir('cliente/' + p.cliente_id)},
+        h('b', txt(p.cliente) || '(sin nombre)'),
+        h('.nota', [[txt(p.direccion), txt(p.municipio)].filter(Boolean).join(', '),
+                    txt(p.entregado) ? 'listo el ' + fechaCorta(p.entregado) : '',
+                    txt(p.comercial)].filter(Boolean).join(' · '))),
+      p.archivo_id
+        ? h('button.btn.primario', {onclick: e => descarga(e, p)}, '⤓ PDF')
+        : h('span.nota', 'sin PDF')))),
+    {subtitulo: 'El proyecto ya está hecho; falta mandárselo al cliente'});
 }

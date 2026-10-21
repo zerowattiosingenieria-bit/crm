@@ -66,7 +66,7 @@ async function prepara(archivo) {
 
 /* ---------- abrir y descargar ---------- */
 
-async function abrirArchivo(a) {
+export async function abrirArchivo(a) {
   const r = await api.descargarArchivo(a.id);
   const binario = atob(r.datos);
   const bytes = new Uint8Array(binario.length);
