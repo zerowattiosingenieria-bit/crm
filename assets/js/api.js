@@ -204,7 +204,8 @@ export const subirArchivo = datos => pedir('subirArchivo', datos);
 export const descargarArchivo = id => pedir('descargarArchivo', {id});
 export const borrarArchivo = id => pedir('borrarArchivo', {id});
 export const entregarProyecto = datos => pedir('entregarProyecto', datos);
-export const estadoProyecto = (cliente_id, estado) => pedir('estadoProyecto', {cliente_id, estado});
+export const estadoProyecto = (cliente_id, estado, faltan) =>
+  pedir('estadoProyecto', {cliente_id, estado, faltan});
 export const proyectosPendientes = estado => pedir('proyectosPendientes', {estado});
 export const guardarCobro = cobro => pedir('guardarCobro', {cobro});
 export const guardarFactura = factura => pedir('guardarFactura', {factura});
