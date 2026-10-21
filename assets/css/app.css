@@ -397,3 +397,29 @@ table.datos tfoot td{font-weight:700; background:var(--papel-2); border-top:2px 
 .calendario .puntos i{width:5px; height:5px; border-radius:50%; display:block}
 .leyenda-visitas{display:flex; gap:12px; flex-wrap:wrap; font-size:12px; color:var(--tx-2); margin-top:10px}
 .leyenda-visitas i{width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:5px}
+
+/* ---------- mi tablero: tareas y grupos por fecha ---------- */
+.zw-grupo{margin-bottom:16px}
+.zw-grupo:last-child{margin-bottom:0}
+.zw-grupo-tit{font-size:12px; text-transform:uppercase; letter-spacing:.04em;
+  color:var(--tx-3); font-weight:700; margin:0 0 6px}
+.zw-grupo-tit.mal{color:var(--mal)}
+.zw-grupo-tit.hoy{color:var(--carbon)}
+.zw-grupo-tit .nota{text-transform:none; letter-spacing:0; font-weight:500}
+ul.zw-tareas{list-style:none; margin:0; padding:0}
+ul.zw-tareas li.zw-tarea{display:flex; gap:10px; align-items:flex-start; padding:10px 0;
+  border-bottom:1px solid var(--linea); font-size:13.5px}
+ul.zw-tareas li.zw-tarea:last-child{border-bottom:0}
+ul.zw-tareas .nivel{width:7px; height:7px; border-radius:50%; margin-top:7px; flex:none}
+ul.zw-tareas .nivel.alto{background:var(--mal)}
+ul.zw-tareas .nivel.medio{background:var(--aviso)}
+ul.zw-tareas .nivel.bajo{background:var(--tx-3)}
+.zw-tarea-pies{display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:5px}
+.zw-tarea-botones{display:flex; gap:6px; flex:none}
+.zw-tarea-botones .btn{padding:4px 10px; font-size:12px}
+.zw-enlace{color:var(--tx-2); text-decoration:underline; cursor:pointer; font-size:12px}
+.zw-enlace:hover{color:var(--carbon)}
+@media (max-width:640px){
+  ul.zw-tareas li.zw-tarea{flex-wrap:wrap}
+  .zw-tarea-botones{width:100%; justify-content:flex-end}
+}
