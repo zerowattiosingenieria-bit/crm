@@ -196,7 +196,7 @@ const ESQUEMA = {
     'lat','lon','alta_crm'],
 
   /* La carpeta del cliente: lo que sube el comercial y el proyecto que vuelve. */
-  PROYECTOS: ['id','cliente_id','descripcion','estado','carpeta_id','archivo_id','archivo_nombre',
+  PROYECTOS: ['id','cliente_id','descripcion','estado','faltan','carpeta_id','archivo_id','archivo_nombre',
               'creado','creado_por','pedido','pedido_por','entregado','entregado_por',
               'modificado','modificado_por','notas'],
 
@@ -5828,13 +5828,20 @@ function archivosDe_(clienteId) {
 /**
  * La regla de la cola: con descripción y al menos una foto, el proyecto se
  * pide solo. Nadie tiene que acordarse de pulsar nada.
+ *
+ * Y lo mismo al revés: si el proyecto estaba parado esperando datos y el
+ * comercial acaba de subir o escribir algo, vuelve solo a la cola y se
+ * borra la lista de lo que faltaba.
  */
 function revisarCola_(proy, cli, u) {
-  if (normal_(proy.estado) !== 'borrador') return proy;
+  const estado = normal_(proy.estado);
+  if (estado !== 'borrador' && estado !== 'faltan_datos') return proy;
   const fotos = archivosDe_(cli.id).filter(function (a) { return normal_(a.clase) === 'foto'; });
   if (!txt_(proy.descripcion) || !fotos.length) return proy;
-  const r = actualizar_('PROYECTOS', proy.id, {estado: 'pedido', pedido: ahora_(), pedido_por: u.id});
-  registrar_(u, 'proyecto_pedido', 'PROYECTOS', proy.id, cli.nombre);
+  const r = actualizar_('PROYECTOS', proy.id, {estado: 'pedido', faltan: '',
+    pedido: ahora_(), pedido_por: u.id});
+  registrar_(u, estado === 'faltan_datos' ? 'proyecto_completado' : 'proyecto_pedido',
+    'PROYECTOS', proy.id, cli.nombre);
   avisarProyectoPedido_(r, cli, u, fotos.length);
   return r;
 }
@@ -6023,19 +6030,59 @@ function accEntregarProyecto_(u, p) {
   return {ok: true, proyecto: proy, archivo: sinDatos_(fila)};
 }
 
-/** Cambia el estado a mano (por ejemplo, ponerlo «en curso»). Solo dirección. */
+/**
+ * Cambia el estado a mano (ponerlo «en curso», o pararlo porque faltan
+ * datos). Solo dirección, que es quien monta los proyectos.
+ *
+ * Con estado "faltan_datos" se manda además «faltan»: la lista corta de lo
+ * que hace falta para poder sacarlo (una frase por cosa, o un array). Eso
+ * es justo lo que ve el comercial en su panel y en la ficha del cliente.
+ */
 function accEstadoProyecto_(u, p) {
   exigir_(u, 'editarTodo');
   const v = clienteVisible_(u, p.cliente_id);
   if (v.error) return {ok: false, error: v.error};
-  const estados = ['borrador', 'pedido', 'en_curso', 'entregado', 'cancelado'];
+  const estados = ['borrador', 'pedido', 'en_curso', 'faltan_datos', 'entregado', 'cancelado'];
   const estado = normal_(p.estado);
   if (estados.indexOf(estado) < 0) return {ok: false, error: 'Ese estado no existe.'};
+
+  const faltan = (Array.isArray(p.faltan) ? p.faltan : [p.faltan])
+    .map(function (x) { return txt_(x); }).filter(function (x) { return x; }).join(' · ');
+  if (estado === 'faltan_datos' && !faltan) {
+    return {ok: false, error: 'Di qué falta para poder sacar el proyecto.'};
+  }
+
   const proy = proyectoDe_(v.cliente, u);
-  const r = actualizar_('PROYECTOS', proy.id, {estado: estado, modificado: ahora_(),
-    modificado_por: u.id});
-  registrar_(u, 'estado_proyecto', 'PROYECTOS', proy.id, estado);
+  const r = actualizar_('PROYECTOS', proy.id, {estado: estado,
+    faltan: estado === 'faltan_datos' ? faltan.slice(0, 500) : '',
+    modificado: ahora_(), modificado_por: u.id});
+  registrar_(u, 'estado_proyecto', 'PROYECTOS', proy.id, estado + (faltan ? ': ' + faltan : ''));
+  if (estado === 'faltan_datos') avisarFaltanDatos_(r, v.cliente, faltan);
   return {ok: true, proyecto: r};
+}
+
+/** Aviso por correo al comercial del cliente cuando el proyecto se para. */
+function avisarFaltanDatos_(proy, cli, faltan) {
+  const usuarios = indexar_(leer_('USUARIOS'));
+  const comercial = usuarios[String(cli.comercial_id)] || {};
+  const destino = [txt_(comercial.email), correoDeAvisos_()].filter(String).join(',');
+  if (!destino) return;
+  const html =
+    '<div style="font-family:Arial,Helvetica,sans-serif;background:#f4f6f3;padding:22px">' +
+    '<div style="max-width:620px;margin:auto;background:#fff;border:1px solid #e3e7e0;border-radius:10px">' +
+    '<div style="padding:16px 22px;background:#242422;color:#B4FA1E;font-weight:700">' +
+    'Falta algo para sacar el proyecto · ' + txt_(cli.nombre) + '</div>' +
+    '<div style="padding:18px 22px;color:#17191c;font-size:13.5px;line-height:1.5">' +
+    '<p style="margin:0 0 10px"><b>' + txt_(cli.nombre) + '</b><br>' +
+    txt_(cli.direccion) + (txt_(cli.municipio) ? ', ' + txt_(cli.municipio) : '') + '</p>' +
+    '<p style="margin:0 0 6px"><b>Qué falta:</b></p><ul style="margin:0 0 12px;padding-left:18px">' +
+    faltan.split(' · ').map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ul>' +
+    '<p style="margin:0">En cuanto lo subas a la pestaña Proyecto del cliente, vuelve solo a la cola.</p>' +
+    '</div></div></div>';
+  try {
+    MailApp.sendEmail({to: destino, subject: 'Proyecto parado: falta algo · ' + txt_(cli.nombre),
+                       htmlBody: html});
+  } catch (e) { /* si el correo falla, el panel lo sigue enseñando igual */ }
 }
 
 /** La cola para el Centro de Mando: lo que está pedido y sin entregar. */
@@ -6043,7 +6090,8 @@ function accEstadoProyecto_(u, p) {
  * La cola de proyectos. La dirección la ve entera; un comercial, solo la de
  * sus clientes; los captadores no la ven. Sin estado, devuelve los pedidos y
  * los que están en preparación; con estado "entregado", los que ya tienen el
- * PDF y están listos para enviar al cliente.
+ * PDF y están listos para enviar al cliente; con "faltan_datos", los que
+ * están parados esperando algo del comercial.
  */
 function accProyectosPendientes_(u, p) {
   const per = permisos_(u);
@@ -6073,7 +6121,8 @@ function accProyectosPendientes_(u, p) {
             telefono: txt_(c.telefono), email: txt_(c.email),
             comercial: usuarios[String(c.comercial_id)] || '',
             descripcion: txt_(x.descripcion), estado: txt_(x.estado), pedido: txt_(x.pedido),
-            entregado: txt_(x.entregado),
+            entregado: txt_(x.entregado), faltan: txt_(x.faltan),
+            modificado: txt_(x.modificado) || txt_(x.pedido) || txt_(x.creado),
             archivo_id: pdf ? pdf.id : '', archivo_nombre: pdf ? txt_(pdf.nombre) : '',
             fotos: suyos.filter(function (a) { return normal_(a.clase) === 'foto'; }).length,
             documentos: suyos.filter(function (a) { return normal_(a.clase) === 'documento'; }).length,

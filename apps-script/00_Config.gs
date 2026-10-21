@@ -179,7 +179,7 @@ const ESQUEMA = {
     'lat','lon','alta_crm'],
 
   /* La carpeta del cliente: lo que sube el comercial y el proyecto que vuelve. */
-  PROYECTOS: ['id','cliente_id','descripcion','estado','carpeta_id','archivo_id','archivo_nombre',
+  PROYECTOS: ['id','cliente_id','descripcion','estado','faltan','carpeta_id','archivo_id','archivo_nombre',
               'creado','creado_por','pedido','pedido_por','entregado','entregado_por',
               'modificado','modificado_por','notas'],
 
