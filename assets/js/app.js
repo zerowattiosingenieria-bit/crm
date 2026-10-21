@@ -19,12 +19,14 @@ import {vistaNomina} from './vistas/nominas.js';
 import {vistaVacaciones} from './vistas/vacaciones.js';
 import {vistaUsuarios, vistaAjustes, vistaPerfil, vistaRegistro} from './vistas/ajustes.js';
 import {vistaDashboard} from './vistas/dashboard.js?v=2';
+import {vistaTablero, tituloTablero} from './vistas/tablero.js';
 
 export const VERSION = '1.0.0';
 
 /* ---------- pantallas ---------- */
 const VISTAS = {
   panel:        {titulo: 'Panel',              pinta: vistaPanel},
+  tablero:      {titulo: 'Mi tablero',         pinta: vistaTablero},
   agenda:       {titulo: 'Agenda',             pinta: vistaAgenda},
   clientes:     {titulo: 'Clientes',           pinta: vistaClientes},
   cliente:      {titulo: 'Ficha de cliente',   pinta: vistaCliente},
@@ -51,12 +53,19 @@ const VISTAS = {
 };
 
 /* ---------- menú por rol ---------- */
+/* Dirección y contabilidad comparten rol pero no puesto, así que la
+   pestaña propia se llama distinta para cada uno. */
+function etiquetaTablero() {
+  return tituloTablero(api.estado.usuario);
+}
+
 function menuDe(rol) {
   const trabajo = {grupo: 'Trabajo diario'};
   if (rol === 'captador') {
     return [
       trabajo,
       {id: 'panel', et: 'Panel', ico: '▦'},
+      {id: 'tablero', et: 'Mi tablero', ico: '◑'},
       {id: 'agenda', et: 'Agenda', ico: '◷'},
       {id: 'captaciones', et: 'Mis captaciones', ico: '⚑'},
       {id: 'clientes', et: 'Mis clientes', ico: '☰'},
@@ -72,6 +81,7 @@ function menuDe(rol) {
     return [
       trabajo,
       {id: 'panel', et: 'Panel', ico: '▦'},
+      {id: 'tablero', et: 'Mi tablero', ico: '◑'},
       {id: 'agenda', et: 'Agenda', ico: '◷'},
       {id: 'clientes', et: 'Mis clientes', ico: '☰'},
       {id: 'operaciones', et: 'Mis instalaciones', ico: '⚡'},
@@ -88,6 +98,7 @@ function menuDe(rol) {
   return [
     trabajo,
     {id: 'panel', et: 'Panel', ico: '▦'},
+    {id: 'tablero', et: etiquetaTablero(), ico: '◑'},
     {id: 'agenda', et: 'Agenda', ico: '◷'},
     {id: 'clientes', et: 'Clientes', ico: '☰'},
     {id: 'operaciones', et: 'Instalaciones', ico: '⚡'},
@@ -156,7 +167,7 @@ export async function pintar() {
   const {vista, id} = rutaActual();
   const def = VISTAS[vista] || VISTAS.panel;
 
-  $('#titulo').textContent = def.titulo;
+  $('#titulo').textContent = vista === 'tablero' ? tituloTablero(api.estado.usuario) : def.titulo;
   poner($('#acciones-barra'));
   pintaMenu();
 

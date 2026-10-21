@@ -213,3 +213,11 @@ export const guardarUsuario = usuario => pedir('guardarUsuario', {usuario});
 export const guardarConfig = config => pedir('guardarConfig', {config});
 export const guardarJornada = jornada => pedir('guardarJornada', {jornada});
 export const guardarNomina = nomina => pedir('guardarNomina', {nomina});
+
+/* El tablero de cada uno: las cifras del Centro de Mando y las tareas. */
+export const cifras = hasta => pedir('cifras', hasta ? {hasta} : {});
+export const guardarCifras = lista => pedir('guardarCifras', {cifras: lista});
+export const tareas = (opciones = {}) => pedir('tareas', opciones);
+export const guardarTarea = tarea => pedir('guardarTarea', {tarea});
+export const estadoTarea = (id, estado) => pedir('estadoTarea', {id, estado});
+export const borrarTarea = id => pedir('borrarTarea', {id});

@@ -23,7 +23,10 @@ function escala(max) {
   if (max <= 0) return {max: 1, paso: 1};
   const bruto = max / 4;
   const mag = Math.pow(10, Math.floor(Math.log10(bruto)));
-  const paso = [1, 2, 2.5, 5, 10].map(x => x * mag).find(x => x >= bruto) || mag * 10;
+  let paso = [1, 2, 2.5, 5, 10].map(x => x * mag).find(x => x >= bruto) || mag * 10;
+  /* Con dos o tres unidades contadas no tiene sentido marcar medios:
+     saldrían «1, 1, 1» redondeados y parece un error. */
+  if (paso < 1 && max >= 1) paso = 1;
   return {max: Math.ceil(max / paso) * paso, paso};
 }
 
