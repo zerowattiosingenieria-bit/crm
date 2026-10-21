@@ -423,3 +423,12 @@ ul.zw-tareas .nivel.bajo{background:var(--tx-3)}
   ul.zw-tareas li.zw-tarea{flex-wrap:wrap}
   .zw-tarea-botones{width:100%; justify-content:flex-end}
 }
+
+/* ---------- lo que falta para sacar un proyecto ---------- */
+ul.zw-faltan{list-style:none; margin:0; padding:0}
+ul.zw-faltan li{position:relative; padding:6px 0 6px 20px; font-size:13.5px;
+  border-bottom:1px solid var(--linea)}
+ul.zw-faltan li:last-child{border-bottom:0}
+ul.zw-faltan li::before{content:'!'; position:absolute; left:0; top:6px; width:14px; height:14px;
+  border-radius:50%; background:var(--mal-b); color:var(--mal); font-size:10px; font-weight:700;
+  display:flex; align-items:center; justify-content:center}
