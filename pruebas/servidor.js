@@ -13,6 +13,45 @@ const TIPOS = {'.html': 'text/html; charset=utf-8', '.js': 'text/javascript; cha
 /* Datos de arranque */
 instalar();
 cargarDemo();
+
+/* El puesto de cada uno y unas cuantas cifras y tareas de muestra, para
+   poder ver «Mi tablero» con contenido sin tener que meterlo a mano. */
+ponerPuestos();
+(() => {
+  const dir = leer_('USUARIOS').filter(x => x.rol === 'superadmin')[0];
+  const nando = leer_('USUARIOS').filter(x => normal_(x.nombre) === 'nando')[0] ||
+                leer_('USUARIOS').filter(x => x.rol === 'comercial')[0];
+  const crm = cifrasDelCrm_();
+  accGuardarCifras_(dir, {cifras: [
+    {clave: 'cobrado', valor: crm.cobrado + 43754.96, meta: 1000000, fecha: hoyISO_(),
+     nota: 'Extracto de banco'},
+    {clave: 'firmado', valor: crm.firmado, meta: 0},
+    {clave: 'operaciones', valor: crm.operaciones + 4, meta: 50},
+    {clave: 'clientes_vendidos', valor: crm.clientes_vendidos},
+    {clave: 'facturado_mes', valor: crm.facturado_mes + 17890},
+    {clave: 'facturas_mes', valor: crm.facturas_mes + 1},
+    {clave: 'pendiente_cobro', valor: crm.pendiente_cobro},
+    {clave: 'en_cierre', valor: 363741, meta: 0},
+    {clave: 'en_cierre_n', valor: 10},
+    {clave: 'vendido_pendiente_cobro', valor: 58157}
+  ]});
+  accGuardarTarea_(dir, {tarea: {titulo: 'Pasar la FZW2026-151 a 01 INGRESOS',
+    detalle: 'Está emitida con fecha 15/10 pero guardada en la carpeta que no toca.',
+    area: 'contabilidad', vence: sumarDias_(hoyISO_(), -1), prioridad: 'alta',
+    origen: 'panel', origen_id: 'demo-1'}});
+  accGuardarTarea_(dir, {tarea: {titulo: 'Conciliar los cobros de CaixaBank de la semana',
+    area: 'contabilidad', vence: hoyISO_(), origen: 'panel', origen_id: 'demo-2'}});
+  accGuardarTarea_(dir, {tarea: {titulo: 'Aprobar el precio de Olivo 605',
+    detalle: 'Aerotermia + FV + fancoils. Importe aproximado.',
+    area: 'direccion', importe: 39000, vence: hoyISO_(), prioridad: 'urgente',
+    origen: 'panel', origen_id: 'demo-3'}});
+  accGuardarTarea_(dir, {tarea: {titulo: 'Decidir si Borni 20 se registra ya como venta',
+    area: 'direccion', importe: 26890, vence: sumarDias_(hoyISO_(), 3),
+    origen: 'panel', origen_id: 'demo-4'}});
+  if (nando) accGuardarTarea_(dir, {tarea: {titulo: 'Mandar el presupuesto actualizado de Olivo 605',
+    usuario_id: nando.id, vence: hoyISO_(), prioridad: 'alta',
+    origen: 'panel', origen_id: 'demo-5'}});
+})();
 const CLAVES = {};
 (() => {
   const h = SpreadsheetApp.openById().getSheetByName('CLAVES_INICIALES');

@@ -1197,5 +1197,132 @@ comprobar('el aviso de una semana concreta sale', avisoLunes.ok === true);
 comprobar('y la acota de lunes a lunes',
   /Semana del|Desde el lunes/.test((correosEnviados()[0] || {}).htmlBody || ''));
 
+
+console.log('\n== Mi tablero: puestos, cifras y tareas ==');
+{
+/* El puesto decide qué ve cada uno en su pestaña. Por defecto va por el
+   rol; Rubén es la excepción, que lleva contabilidad. */
+const puestos = ponerPuestos();
+const porNombre = {};
+leer_('USUARIOS').forEach(x => { porNombre[normal_(x.nombre)] = txt_(x.area); });
+comprobar('a Rubén le toca contabilidad', porNombre['ruben'] === 'contabilidad', porNombre);
+comprobar('a Fernando, dirección', porNombre['fernando'] === 'direccion', porNombre);
+comprobar('a Nando, comercial', porNombre['nando'] === 'comercial', porNombre);
+comprobar('a Sandra, captación', porNombre['sandra'] === 'captacion', porNombre);
+comprobar('pasarlo dos veces no cambia nada', ponerPuestos().length === 0, puestos.length);
+
+/* --- las cifras del Centro de Mando --- */
+const tkRuben = sesiones.ruben.token;
+comprobar('un comercial no ve las cifras de la casa',
+  despachar_({accion: 'cifras', token: sesiones.rober.token}).ok === false);
+
+const sinVolcar = despachar_({accion: 'cifras', token: tkDir});
+comprobar('dirección sí las ve', sinVolcar.ok === true && Array.isArray(sinVolcar.cifras));
+comprobar('y mientras el panel no vuelque nada, no hay descuadres',
+  sinVolcar.descuadres === 0, sinVolcar.descuadres);
+comprobar('pero el CRM ya calcula las suyas',
+  sinVolcar.cifras.some(c => c.crm !== null && c.panel === null));
+
+const cobradoCrm = sinVolcar.cifras.filter(c => c.clave === 'cobrado')[0].crm;
+const volcado = despachar_({accion: 'guardarCifras', token: tkDir, cifras: [
+  {clave: 'cobrado', valor: cobradoCrm + 1000, meta: 1000000, fecha: '2026-10-20',
+   nota: 'Extracto de banco'},
+  {clave: 'operaciones', valor: 35, meta: 50},
+  {clave: 'vendido_pendiente_cobro', valor: 58157}
+]});
+comprobar('el panel vuelca sus cifras', volcado.ok === true && volcado.nuevas === 3, volcado);
+
+const conCifras = despachar_({accion: 'cifras', token: tkDir});
+const cobrado = conCifras.cifras.filter(c => c.clave === 'cobrado')[0];
+comprobar('se ve la del panel y la del CRM una al lado de la otra',
+  cobrado.panel === cobradoCrm + 1000 && cobrado.crm === cobradoCrm, cobrado);
+comprobar('y la diferencia salta como descuadre',
+  cobrado.descuadre === true && cobrado.diferencia === 1000, cobrado);
+comprobar('se cuentan los descuadres', conCifras.descuadres >= 1, conCifras.descuadres);
+comprobar('una cifra que el CRM no sabe calcular se enseña igual',
+  conCifras.cifras.some(c => c.clave === 'vendido_pendiente_cobro' && c.panel === 58157));
+
+const cuadrada = despachar_({accion: 'guardarCifras', token: tkDir,
+  cifras: [{clave: 'cobrado', valor: cobradoCrm}]});
+comprobar('volver a volcar actualiza, no duplica',
+  cuadrada.ok === true && cuadrada.cambiadas === 1 && cuadrada.nuevas === 0, cuadrada);
+comprobar('y entonces ya cuadra',
+  despachar_({accion: 'cifras', token: tkDir}).cifras
+    .filter(c => c.clave === 'cobrado')[0].descuadre === false);
+comprobar('un comercial tampoco puede volcar cifras',
+  despachar_({accion: 'guardarCifras', token: sesiones.nando.token,
+    cifras: [{clave: 'cobrado', valor: 1}]}).ok === false);
+
+/* --- las tareas de cada uno --- */
+const tContable = despachar_({accion: 'guardarTarea', token: tkDir, tarea: {
+  titulo: 'Pasar la FZW2026-151 a 01 INGRESOS', area: 'contabilidad',
+  vence: '2026-10-22', prioridad: 'alta', origen: 'panel', origen_id: 'inf-2026-10-21-1'}});
+comprobar('dirección crea una tarea de contabilidad', tContable.ok === true &&
+  tContable.tarea.area === 'contabilidad' && tContable.tarea.estado === 'pendiente', tContable);
+
+const tDireccion = despachar_({accion: 'guardarTarea', token: tkDir, tarea: {
+  titulo: 'Aprobar el precio de Olivo 605', area: 'direccion', importe: 39000}});
+comprobar('y otra para dirección', tDireccion.ok === true);
+
+const tNando = despachar_({accion: 'guardarTarea', token: tkDir, tarea: {
+  titulo: 'Llamar a Elena López Gunn', usuario_id: 'U-000004'}});
+comprobar('una tarea con nombre y apellidos coge el área de su dueño',
+  tNando.ok === true && tNando.tarea.area === 'comercial', tNando.tarea);
+
+const deRuben = despachar_({accion: 'tareas', token: tkRuben});
+comprobar('Rubén ve la suya', deRuben.ok === true && deRuben.tareas.length === 1 &&
+  deRuben.tareas[0].id === tContable.tarea.id, deRuben.tareas);
+comprobar('y el servidor le dice de qué área es', deRuben.area === 'contabilidad');
+comprobar('dirección ve la suya y no la de contabilidad',
+  despachar_({accion: 'tareas', token: tkDir}).tareas
+    .every(t => t.area === 'direccion' || t.usuario_id === 'U-000003'));
+comprobar('y pidiéndolas todas las ve todas',
+  despachar_({accion: 'tareas', token: tkDir, todas: true}).tareas.length === 3);
+comprobar('Nando ve solo la que lleva su nombre',
+  despachar_({accion: 'tareas', token: sesiones.nando.token}).tareas.length === 1);
+comprobar('Rober no ve ninguna',
+  despachar_({accion: 'tareas', token: sesiones.rober.token}).tareas.length === 0);
+
+comprobar('un comercial no puede inventarse tareas',
+  despachar_({accion: 'guardarTarea', token: sesiones.nando.token,
+    tarea: {titulo: 'Darme el día libre', area: 'comercial'}}).ok === false);
+comprobar('ni tocar la de otro',
+  despachar_({accion: 'estadoTarea', token: sesiones.nando.token,
+    id: tContable.tarea.id, estado: 'hecha'}).ok === false);
+
+const hecha = despachar_({accion: 'estadoTarea', token: sesiones.nando.token,
+  id: tNando.tarea.id, estado: 'hecha'});
+comprobar('pero sí dar por hecha la suya', hecha.ok === true &&
+  hecha.tarea.estado === 'hecha' && txt_(hecha.tarea.hecho) !== '', hecha.tarea);
+comprobar('y entonces desaparece de su lista',
+  despachar_({accion: 'tareas', token: sesiones.nando.token}).tareas.length === 0);
+comprobar('salvo que la pida con las cerradas',
+  despachar_({accion: 'tareas', token: sesiones.nando.token, cerradas: true}).tareas.length === 1);
+
+/* El agente del panel repite el volcado cada pocas horas: no debe duplicar. */
+const otraVez = despachar_({accion: 'guardarTarea', token: tkDir, tarea: {
+  titulo: 'Pasar la FZW2026-151 a 01 INGRESOS (y avisar)', origen: 'panel',
+  origen_id: 'inf-2026-10-21-1'}});
+comprobar('repetir el volcado del panel actualiza en vez de duplicar',
+  otraVez.ok === true && otraVez.tarea.id === tContable.tarea.id &&
+  leer_('TAREAS').length === 3, leer_('TAREAS').length);
+
+comprobar('un estado que no existe no cuela',
+  despachar_({accion: 'guardarTarea', token: tkDir,
+    tarea: {id: tDireccion.tarea.id, estado: 'a medias'}}).ok === false);
+comprobar('ni un área inventada',
+  despachar_({accion: 'guardarTarea', token: tkDir,
+    tarea: {titulo: 'x', area: 'marketing'}}).ok === false);
+comprobar('una tarea sin título tampoco',
+  despachar_({accion: 'guardarTarea', token: tkDir, tarea: {area: 'direccion'}}).ok === false);
+
+comprobar('un comercial no borra tareas',
+  despachar_({accion: 'borrarTarea', token: sesiones.nando.token,
+    id: tDireccion.tarea.id}).ok === false);
+comprobar('dirección sí',
+  despachar_({accion: 'borrarTarea', token: tkDir, id: tDireccion.tarea.id}).ok === true &&
+  leer_('TAREAS').length === 2);
+}
+
 console.log('\n' + (fallos ? 'FALLAN ' + fallos + ' de ' + pruebas : 'Todo correcto: ' + pruebas + ' comprobaciones'));
 process.exit(fallos ? 1 : 0);
