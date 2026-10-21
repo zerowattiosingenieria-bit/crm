@@ -856,6 +856,68 @@ console.log('\n== Carpeta del cliente y proyecto ==');
   comprobar('los archivos no viajan con el contenido dentro',
     verFinal.archivos.every(a => a.datos === undefined));
 
+  /* --- cuando al ingeniero le falta algo para poder sacarlo --- */
+  vaciarCorreos();
+  const sinQue = despachar_({accion: 'estadoProyecto', token: sesiones.fernando.token,
+    cliente_id: clipro.id, estado: 'faltan_datos'});
+  comprobar('no se puede parar un proyecto sin decir qué falta', sinQue.ok === false, sinQue.error);
+
+  const parado = despachar_({accion: 'estadoProyecto', token: sesiones.fernando.token,
+    cliente_id: clipro.id, estado: 'faltan_datos',
+    faltan: ['Foto del cuadro eléctrico más clara', 'Factura de la luz del último año']});
+  comprobar('la dirección lo para diciendo qué falta', parado.ok === true &&
+    parado.proyecto.estado === 'faltan_datos' &&
+    /cuadro eléctrico.*Factura/.test(parado.proyecto.faltan), parado);
+  comprobar('y le llega un aviso al comercial del cliente',
+    (correosEnviados()[0] || {}).to.indexOf('nandosalamanca@zerowattios.com') >= 0 ||
+    /nando/i.test((correosEnviados()[0] || {}).to || ''), (correosEnviados()[0] || {}).to);
+
+  const esperando = despachar_({accion: 'proyectosPendientes', token: sesiones.nando.token,
+    estado: 'faltan_datos'});
+  const esteEspera = (esperando.proyectos || []).filter(x => x.cliente_id === clipro.id)[0];
+  comprobar('el comercial lo ve en su panel con lo que falta',
+    !!esteEspera && /Foto del cuadro/.test(esteEspera.faltan), esperando.proyectos);
+  comprobar('y sabe desde cuándo está parado', !!esteEspera && !!esteEspera.modificado);
+  comprobar('la dirección lo ve también',
+    (despachar_({accion: 'proyectosPendientes', token: sesiones.fernando.token,
+                 estado: 'faltan_datos'}).proyectos || [])
+      .some(x => x.cliente_id === clipro.id));
+  comprobar('otro comercial no lo ve',
+    (despachar_({accion: 'proyectosPendientes', token: sesiones.rober.token,
+                 estado: 'faltan_datos'}).proyectos || []).length === 0);
+  comprobar('un captador tampoco',
+    (despachar_({accion: 'proyectosPendientes', token: sesiones.sandra.token,
+                 estado: 'faltan_datos'}).proyectos || []).length === 0);
+  comprobar('mientras está parado no estorba en la cola del ingeniero',
+    !(despachar_({accion: 'proyectosPendientes', token: sesiones.fernando.token}).proyectos || [])
+      .some(x => x.cliente_id === clipro.id));
+
+  /* En cuanto el comercial sube lo que falta, vuelve solo a la cola. */
+  vaciarCorreos();
+  const alSubir = despachar_({accion: 'subirArchivo', token: sesiones.nando.token,
+    cliente_id: clipro.id, clase: 'foto', nombre: 'cuadro-bien.jpg', mime: 'image/jpeg',
+    datos: Utilities.base64Encode([7, 7, 7])});
+  comprobar('el comercial sube lo que faltaba', alSubir.ok === true, alSubir.error);
+  const yaPedido = despachar_({accion: 'proyecto', token: sesiones.nando.token, cliente_id: clipro.id});
+  comprobar('y el proyecto vuelve solo a la cola',
+    yaPedido.proyecto.estado === 'pedido', yaPedido.proyecto.estado);
+  comprobar('y se borra la lista de lo que faltaba',
+    txt_(yaPedido.proyecto.faltan) === '', yaPedido.proyecto.faltan);
+  comprobar('ya no aparece entre los que esperan datos',
+    (despachar_({accion: 'proyectosPendientes', token: sesiones.nando.token,
+                 estado: 'faltan_datos'}).proyectos || []).length === 0);
+
+  comprobar('un comercial no puede parar un proyecto él solo',
+    despachar_({accion: 'estadoProyecto', token: sesiones.nando.token, cliente_id: clipro.id,
+      estado: 'faltan_datos', faltan: 'lo que sea'}).ok === false);
+  comprobar('ni inventarse un estado',
+    despachar_({accion: 'estadoProyecto', token: sesiones.fernando.token, cliente_id: clipro.id,
+      estado: 'a medio hacer'}).ok === false);
+
+  /* Se vuelve a dejar entregado, que es como estaba. */
+  despachar_({accion: 'estadoProyecto', token: sesiones.fernando.token,
+    cliente_id: clipro.id, estado: 'entregado'});
+
   const borraAjeno = despachar_({accion: 'borrarArchivo', token: sesiones.rober.token, id: pdfPro.archivo.id});
   comprobar('otro comercial no borra archivos ajenos', borraAjeno.ok === false, borraAjeno.error);
   const borraSuyo = despachar_({accion: 'borrarArchivo', token: sesiones.nando.token, id: pdfPro.archivo.id});

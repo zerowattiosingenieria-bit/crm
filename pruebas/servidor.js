@@ -51,6 +51,24 @@ ponerPuestos();
   if (nando) accGuardarTarea_(dir, {tarea: {titulo: 'Mandar el presupuesto actualizado de Olivo 605',
     usuario_id: nando.id, vence: hoyISO_(), prioridad: 'alta',
     origen: 'panel', origen_id: 'demo-5'}});
+
+  /* Dos proyectos para ver las tarjetas del panel: uno parado esperando
+     datos y otro ya hecho, listo para mandárselo al cliente. */
+  const suyos = nando ? leer_('CLIENTES')
+    .filter(c => String(c.comercial_id) === String(nando.id)) : [];
+  if (suyos[0]) {
+    accGuardarProyecto_(nando, {cliente_id: suyos[0].id,
+      descripcion: 'Chalet de 190 m², cuatro personas, gasóleo y radiadores. Quiere aerotermia y FV.'});
+    accEstadoProyecto_(dir, {cliente_id: suyos[0].id, estado: 'faltan_datos',
+      faltan: ['Foto del cuadro eléctrico más clara', 'Factura de la luz del último año']});
+  }
+  if (suyos[1]) {
+    accGuardarProyecto_(nando, {cliente_id: suyos[1].id,
+      descripcion: 'Vivienda de 140 m² con radiadores de gas natural y cubierta a dos aguas.'});
+    accEntregarProyecto_(dir, {cliente_id: suyos[1].id, mime: 'application/pdf',
+      nombre: 'Presupuesto_' + String(suyos[1].nombre).replace(/\s+/g, '') + '_ZeroWattios.pdf',
+      datos: Utilities.base64Encode([37, 80, 68, 70])});
+  }
 })();
 const CLAVES = {};
 (() => {
