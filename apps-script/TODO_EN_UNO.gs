@@ -6024,8 +6024,17 @@ function accEstadoProyecto_(u, p) {
 }
 
 /** La cola para el Centro de Mando: lo que está pedido y sin entregar. */
+/**
+ * La cola de proyectos. La dirección la ve entera; un comercial, solo la de
+ * sus clientes; los captadores no la ven. Sin estado, devuelve los pedidos y
+ * los que están en preparación; con estado "entregado", los que ya tienen el
+ * PDF y están listos para enviar al cliente.
+ */
 function accProyectosPendientes_(u, p) {
-  exigir_(u, 'editarTodo');
+  const per = permisos_(u);
+  if (per.alcance !== 'todo' && u.rol !== 'comercial') {
+    return {ok: true, proyectos: []};
+  }
   asegurarProyectos_();
   const clientes = {};
   leer_('CLIENTES').forEach(function (c) { clientes[String(c.id)] = c; });
@@ -6034,20 +6043,33 @@ function accProyectosPendientes_(u, p) {
   const archivos = leer_('ARCHIVOS');
   const quiero = txt_(p.estado) ? [normal_(p.estado)] : ['pedido', 'en_curso'];
   const lista = leer_('PROYECTOS').filter(function (x) {
-    return quiero.indexOf(normal_(x.estado)) >= 0;
+    if (quiero.indexOf(normal_(x.estado)) < 0) return false;
+    const c = clientes[String(x.cliente_id)];
+    if (!c) return false;
+    return per.alcance === 'todo' || String(c.comercial_id) === String(u.id);
   }).map(function (x) {
     const c = clientes[String(x.cliente_id)] || {};
+    const pdf = archivos.filter(function (a) {
+      return String(a.cliente_id) === String(x.cliente_id) && normal_(a.clase) === 'proyecto';
+    }).sort(function (a, b) { return txt_(b.subido).localeCompare(txt_(a.subido)); })[0];
     const suyos = archivos.filter(function (a) { return String(a.cliente_id) === String(x.cliente_id); });
     return {id: x.id, cliente_id: x.cliente_id, cliente: txt_(c.nombre),
             direccion: txt_(c.direccion), municipio: txt_(c.municipio),
             telefono: txt_(c.telefono), email: txt_(c.email),
             comercial: usuarios[String(c.comercial_id)] || '',
             descripcion: txt_(x.descripcion), estado: txt_(x.estado), pedido: txt_(x.pedido),
+            entregado: txt_(x.entregado),
+            archivo_id: pdf ? pdf.id : '', archivo_nombre: pdf ? txt_(pdf.nombre) : '',
             fotos: suyos.filter(function (a) { return normal_(a.clase) === 'foto'; }).length,
             documentos: suyos.filter(function (a) { return normal_(a.clase) === 'documento'; }).length,
             archivos: suyos.filter(function (a) { return normal_(a.clase) !== 'proyecto'; })
                            .map(function (a) { return {id: a.id, clase: a.clase, nombre: a.nombre}; })};
   });
-  lista.sort(function (a, b) { return txt_(a.pedido).localeCompare(txt_(b.pedido)); });
+  /* Los listos para enviar, el más reciente primero; la cola, el más viejo. */
+  lista.sort(function (a, b) {
+    return normal_(a.estado) === 'entregado'
+      ? txt_(b.entregado).localeCompare(txt_(a.entregado))
+      : txt_(a.pedido).localeCompare(txt_(b.pedido));
+  });
   return {ok: true, proyectos: lista};
 }
