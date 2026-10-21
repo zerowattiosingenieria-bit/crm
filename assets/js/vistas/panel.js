@@ -19,11 +19,12 @@ export async function vistaPanel({ir}) {
      servidor todavía no las tiene, el panel sigue pintándose igual. */
   const cif = esDir ? await api.cifras().catch(() => null) : null;
 
-  /* Proyectos con el PDF hecho y sin enviar. Solo los ve su comercial y la
-     dirección; si el servidor todavía no tiene la acción, el panel sigue
-     pintándose igual. */
-  const listos = u.rol === 'captador' ? []
-    : await api.proyectosPendientes('entregado').then(x => x.proyectos || []).catch(() => []);
+  /* Proyectos con el PDF hecho y sin enviar, y proyectos parados porque
+     falta algo. Solo los ve su comercial y la dirección; si el servidor
+     todavía no tiene la acción, el panel sigue pintándose igual. */
+  const cola = e => api.proyectosPendientes(e).then(x => x.proyectos || []).catch(() => []);
+  const [listos, esperando] = u.rol === 'captador' ? [[], []]
+    : await Promise.all([cola('entregado'), cola('faltan_datos')]);
 
   const saludo = (() => {
     const hora = new Date().getHours();
@@ -37,9 +38,9 @@ export async function vistaPanel({ir}) {
       ? 'Así va la empresa hoy, ' + fechaCorta(hoyISO()) + '.'
       : 'Esto es lo que tienes entre manos ahora mismo.'));
 
-  return esDir ? panelDireccion({cabecera, r, al, an, fin, listos, cif, ir})
+  return esDir ? panelDireccion({cabecera, r, al, an, fin, listos, esperando, cif, ir})
                : (u.rol === 'captador' ? panelCaptador({cabecera, r, al, ir})
-                                       : panelComercial({cabecera, r, al, listos, ir}));
+                                       : panelComercial({cabecera, r, al, listos, esperando, ir}));
 }
 
 /* Lo que dice el Centro de Mando, al lado de lo que calcula el CRM. Es el
@@ -73,8 +74,30 @@ function tarjetaCentroDeMando(cif, ir) {
     {subtitulo: 'Las cifras de la casa, tal y como las lleva el panel'});
 }
 
+/* Proyectos parados porque falta algo: una foto que no se ve, la factura de
+   la luz, los metros de la casa… Quien lo tiene que subir es el comercial,
+   así que se lo pone delante con lo que falta escrito. */
+function tarjetaProyectosEsperando(esperando, ir) {
+  if (!esperando || !esperando.length) return null;
+  return tarjeta('Esperando datos para sacar el proyecto (' + esperando.length + ')',
+    h('ul.zw-listos', esperando.map(p => {
+      const dias = p.modificado ? haceDias(txt(p.modificado).slice(0, 10)) : '';
+      return h('li',
+        h('span.nivel.alto', {estilo: {marginTop: '7px'}}),
+        h('div', {estilo: {flex: '1', minWidth: '0', cursor: 'pointer'},
+                  onclick: () => ir('cliente/' + p.cliente_id)},
+          h('b', txt(p.cliente) || '(sin nombre)'),
+          h('.nota', {estilo: {color: 'var(--mal)'}}, txt(p.faltan) || 'Falta información'),
+          h('.nota', [[txt(p.direccion), txt(p.municipio)].filter(Boolean).join(', '),
+                      dias ? 'parado ' + dias : '',
+                      txt(p.comercial)].filter(Boolean).join(' · '))),
+        h('button.btn', {onclick: () => ir('cliente/' + p.cliente_id)}, 'Subirlo'));
+    })),
+    {subtitulo: 'En cuanto se suba lo que falta, el proyecto vuelve solo a la cola'});
+}
+
 /* ================= dirección ================= */
-function panelDireccion({cabecera, r, al, an, fin, listos, cif, ir}) {
+function panelDireccion({cabecera, r, al, an, fin, listos, esperando, cif, ir}) {
   const f = fin.resumen;
   const ev = fin.evolucion.slice(-8);
   const nota = fin.nota;
@@ -109,6 +132,8 @@ function panelDireccion({cabecera, r, al, an, fin, listos, cif, ir}) {
     tarjetaCentroDeMando(cif, ir),
 
     tarjetaProyectosListos(listos, ir),
+
+    tarjetaProyectosEsperando(esperando, ir),
 
     h('.doble',
       tarjeta('Ingresos y costes por mes',
@@ -158,7 +183,7 @@ function panelDireccion({cabecera, r, al, an, fin, listos, cif, ir}) {
 }
 
 /* ================= comercial ================= */
-function panelComercial({cabecera, r, al, listos, ir}) {
+function panelComercial({cabecera, r, al, listos, esperando, ir}) {
   const ev = r.evolucion.slice(-6);
   const proximas = r.proximas.slice(0, 8);
 
@@ -175,9 +200,9 @@ function panelComercial({cabecera, r, al, listos, ir}) {
       kpi('Comisiones', eur(r.comisiones.total), 'devengadas en el periodo')
     ),
 
-    tarjetaCentroDeMando(cif, ir),
-
     tarjetaProyectosListos(listos, ir),
+
+    tarjetaProyectosEsperando(esperando, ir),
 
     h('.doble',
       tarjeta('Objetivo del periodo',

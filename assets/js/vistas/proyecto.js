@@ -11,11 +11,12 @@ import * as api from '../api.js';
 import {tarjeta, marca, aviso, avisoError, confirmar, cargando} from '../ui.js';
 
 const ESTADOS = {
-  borrador:  ['Sin pedir', ''],
-  pedido:    ['Proyecto pedido', 'aviso'],
-  en_curso:  ['En preparación', 'aviso'],
-  entregado: ['Proyecto listo', 'bien'],
-  cancelado: ['Cancelado', 'mal']
+  borrador:     ['Sin pedir', ''],
+  pedido:       ['Proyecto pedido', 'aviso'],
+  en_curso:     ['En preparación', 'aviso'],
+  faltan_datos: ['Falta algo', 'mal'],
+  entregado:    ['Proyecto listo', 'bien'],
+  cancelado:    ['Cancelado', 'mal']
 };
 
 const LADO_MAXIMO = 1600;     // una foto de obra no necesita más
@@ -221,7 +222,20 @@ export function panelProyecto(cliente) {
               })}, 'Marcar en preparación')
             : null))) : null;
 
+    /* --- parado porque falta algo: lo primero que se ve --- */
+    const faltan = txt(proy.estado) === 'faltan_datos'
+      ? tarjeta('Falta esto para poder sacar el proyecto',
+          h('div',
+            h('ul.zw-faltan', txt(proy.faltan).split(' · ').filter(Boolean)
+              .map(x => h('li', x))),
+            h('p.nota', {estilo: {marginTop: '10px', marginBottom: 0}},
+              'Súbelo aquí abajo o escríbelo en la descripción: en cuanto lo tengas, ' +
+              'el proyecto vuelve solo a la cola del Centro de Mando.')),
+          {subtitulo: 'Lo pide quien está montando la propuesta'})
+      : null;
+
     poner(caja,
+      faltan,
       entregado,
       tarjeta('Qué hay que proyectar',
         h('div',
