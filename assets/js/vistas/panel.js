@@ -15,6 +15,10 @@ export async function vistaPanel({ir}) {
   const [res, al, an, fin] = await Promise.all(peticiones);
   const r = res.resumen;
 
+  /* Las cifras buenas de la casa las lleva el Centro de Mando. Si el
+     servidor todavía no las tiene, el panel sigue pintándose igual. */
+  const cif = esDir ? await api.cifras().catch(() => null) : null;
+
   /* Proyectos con el PDF hecho y sin enviar. Solo los ve su comercial y la
      dirección; si el servidor todavía no tiene la acción, el panel sigue
      pintándose igual. */
@@ -33,13 +37,44 @@ export async function vistaPanel({ir}) {
       ? 'Así va la empresa hoy, ' + fechaCorta(hoyISO()) + '.'
       : 'Esto es lo que tienes entre manos ahora mismo.'));
 
-  return esDir ? panelDireccion({cabecera, r, al, an, fin, listos, ir})
+  return esDir ? panelDireccion({cabecera, r, al, an, fin, listos, cif, ir})
                : (u.rol === 'captador' ? panelCaptador({cabecera, r, al, ir})
                                        : panelComercial({cabecera, r, al, listos, ir}));
 }
 
+/* Lo que dice el Centro de Mando, al lado de lo que calcula el CRM. Es el
+   sitio donde se ve de un vistazo si al CRM le falta algo por meter. */
+function tarjetaCentroDeMando(cif, ir) {
+  if (!cif || !cif.cifras) return null;
+  const porClave = {};
+  cif.cifras.forEach(c => { porClave[c.clave] = c; });
+  const cobrado = porClave.cobrado;
+  if (!cobrado || cobrado.panel === null) return null;
+
+  const meta = num(cobrado.meta) || 1000000;
+  const ops = porClave.operaciones || {};
+  const sin = cif.descuadres || 0;
+
+  return tarjeta('Según el Centro de Mando',
+    h('div',
+      progreso(cobrado.panel, meta, {formato: 'eur'}),
+      h('p.nota', {estilo: {marginTop: '10px'}},
+        'Cobrado en banco con IVA' +
+        (cobrado.fecha ? ', dato del ' + fechaCorta(cobrado.fecha) : '') +
+        (ops.panel !== null && ops.panel !== undefined
+          ? ' · ' + miles(ops.panel) + ' de ' + miles(num(ops.meta) || 50) + ' operaciones' : '') +
+        '. ' + (sin
+          ? sin + ' cifra' + (sin > 1 ? 's' : '') + ' no cuadra' + (sin > 1 ? 'n' : '') +
+            ' con lo que hay metido en el CRM.'
+          : 'Todo cuadra con lo que hay metido en el CRM.')),
+      h('div', {estilo: {marginTop: '12px'}},
+        h('button.btn.mini', {onclick: () => ir('tablero')},
+          sin ? 'Ver qué falta' : 'Ver el cuadre'))),
+    {subtitulo: 'Las cifras de la casa, tal y como las lleva el panel'});
+}
+
 /* ================= dirección ================= */
-function panelDireccion({cabecera, r, al, an, fin, listos, ir}) {
+function panelDireccion({cabecera, r, al, an, fin, listos, cif, ir}) {
   const f = fin.resumen;
   const ev = fin.evolucion.slice(-8);
   const nota = fin.nota;
@@ -70,6 +105,8 @@ function panelDireccion({cabecera, r, al, an, fin, listos, ir}) {
       kpi('Cartera abierta', eurCorto(an.prevision_ponderada), an.cartera_abierta + ' propuestas vivas'),
       kpi('Ticket medio', eurCorto(f.ticket_medio), 'por instalación')
     ),
+
+    tarjetaCentroDeMando(cif, ir),
 
     tarjetaProyectosListos(listos, ir),
 
@@ -137,6 +174,8 @@ function panelComercial({cabecera, r, al, listos, ir}) {
         {estado: r.conversion_propuesta_venta >= 35 ? 'bien' : 'aviso'}),
       kpi('Comisiones', eur(r.comisiones.total), 'devengadas en el periodo')
     ),
+
+    tarjetaCentroDeMando(cif, ir),
 
     tarjetaProyectosListos(listos, ir),
 
