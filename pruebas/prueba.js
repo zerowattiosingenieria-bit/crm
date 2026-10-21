@@ -819,7 +819,17 @@ console.log('\n== Carpeta del cliente y proyecto ==');
   comprobar('la cola dice de quien es el cliente',
     !!enCola && enCola.comercial === sesiones.nando.usuario.nombre, enCola && enCola.comercial);
   const colaComercial = despachar_({accion: 'proyectosPendientes', token: sesiones.nando.token});
-  comprobar('un comercial no ve la cola', colaComercial.ok === false, colaComercial.error);
+  comprobar('el comercial ve su cola', colaComercial.ok === true &&
+    colaComercial.proyectos.some(x => x.cliente_id === clipro.id), colaComercial.error);
+  comprobar('y en su cola no hay clientes de otro comercial',
+    colaComercial.proyectos.every(x => x.comercial === sesiones.nando.usuario.nombre),
+    colaComercial.proyectos.map(x => x.comercial));
+  const colaRober = despachar_({accion: 'proyectosPendientes', token: sesiones.rober.token});
+  comprobar('otro comercial no ve ese proyecto',
+    colaRober.ok === true && !colaRober.proyectos.some(x => x.cliente_id === clipro.id));
+  const colaCaptador = despachar_({accion: 'proyectosPendientes', token: sesiones.sandra.token});
+  comprobar('un captador no ve ninguna cola',
+    colaCaptador.ok === true && colaCaptador.proyectos.length === 0, colaCaptador.proyectos);
 
   const entregaPro = despachar_({accion: 'entregarProyecto', token: sesiones.fernando.token,
     cliente_id: clipro.id, datos: Utilities.base64Encode([5, 5, 5]),
@@ -827,6 +837,16 @@ console.log('\n== Carpeta del cliente y proyecto ==');
   comprobar('la direccion entrega el PDF', entregaPro.ok === true, entregaPro.error);
   comprobar('el proyecto queda entregado', entregaPro.proyecto.estado === 'entregado',
     entregaPro.proyecto.estado);
+
+  const listos = despachar_({accion: 'proyectosPendientes', token: sesiones.nando.token, estado: 'entregado'});
+  const esteListo = (listos.proyectos || []).filter(x => x.cliente_id === clipro.id)[0];
+  comprobar('el proyecto entregado sale en los listos para enviar', !!esteListo, listos.error);
+  comprobar('y trae el PDF para descargar',
+    !!esteListo && !!esteListo.archivo_id && /\.pdf$/i.test(esteListo.archivo_nombre || ''),
+    esteListo && esteListo.archivo_nombre);
+  comprobar('se descarga el PDF desde esa lista',
+    despachar_({accion: 'descargarArchivo', token: sesiones.nando.token,
+                id: esteListo ? esteListo.archivo_id : ''}).ok === true);
 
   const verFinal = despachar_({accion: 'proyecto', token: sesiones.nando.token, cliente_id: clipro.id});
   const elProyecto = verFinal.archivos.filter(a => a.clase === 'proyecto');
