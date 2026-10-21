@@ -62,13 +62,17 @@ export async function vistaAgenda({ir, refrescar}) {
 
     const icono = {seguimiento: '☎', cita: '⚑', obra: '⚡'};
 
+    /* Las señas del cliente, para salir de casa sin abrir la ficha. */
+    const senas = c => [txt(c.direccion), txt(c.municipio)].filter(Boolean).join(', ');
+
     const linea = x => h('li',
       h('span.nivel.' + (x.fecha < hoy ? 'alto' : (x.fecha === hoy ? 'medio' : 'bajo'))),
       h('div', {estilo: {flex: '1', cursor: 'pointer'},
         onclick: () => ir('cliente/' + x.cliente.id)},
         h('b', icono[x.tipo] + ' ' + x.cliente.nombre),
-        h('div.nota', x.texto + ' · ' + fechaCorta(x.fecha) + (x.hora ? ' a las ' + x.hora : '') +
-          (txt(x.cliente.municipio) ? ' · ' + x.cliente.municipio : ''))),
+        senas(x.cliente) ? h('div.senas', senas(x.cliente)) : null,
+        h('div.nota', x.texto + ' · ' + fechaCorta(x.fecha) +
+          (x.hora ? ' a las ' + x.hora : ''))),
       h('.acciones',
         txt(x.cliente.telefono)
           ? h('a.btn.mini', {href: 'tel:' + txt(x.cliente.telefono).replace(/\s/g, '')}, 'Llamar') : null,
@@ -85,7 +89,8 @@ export async function vistaAgenda({ir, refrescar}) {
     const calendario = calendarioMes({
       titulo: 'Visitas',
       eventos: todo.map(x => ({fecha: x.fecha, tipo: x.tipo,
-        texto: x.cliente.nombre + ' · ' + x.texto})),
+        texto: x.cliente.nombre + (senas(x.cliente) ? ' · ' + senas(x.cliente) : '') +
+               ' · ' + x.texto})),
       alPulsarDia: fecha => {
         const dia = todo.filter(x => x.fecha === fecha);
         poner(delDia, fecha

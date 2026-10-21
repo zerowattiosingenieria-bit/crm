@@ -310,8 +310,10 @@ function tarjetaSemana(ir) {
           h('div', {estilo: {flex: '1', cursor: 'pointer'},
             onclick: () => ir('cliente/' + x.cliente.id)},
             h('b', x.icono + ' ' + txt(x.cliente.nombre)),
-            h('div.nota', x.que + (x.hora ? ' · ' + x.hora : '') +
-              (x.cliente.municipio ? ' · ' + x.cliente.municipio : ''))))))))) 
+            [txt(x.cliente.direccion), txt(x.cliente.municipio)].filter(Boolean).length
+              ? h('div.senas', [txt(x.cliente.direccion), txt(x.cliente.municipio)]
+                  .filter(Boolean).join(', ')) : null,
+            h('div.nota', x.que + (x.hora ? ' · ' + x.hora : ''))))))))) 
     : h('p.nota', 'No tienes nada en los próximos siete días.'),
     {subtitulo: 'Citas, seguimientos e instalaciones de los próximos siete días'});
 }
