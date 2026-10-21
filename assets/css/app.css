@@ -150,6 +150,12 @@ ul.zw-docs{list-style:none; padding:0; margin:10px 0 0}
 ul.zw-docs li{display:flex; align-items:center; gap:10px; padding:7px 0;
               border-bottom:1px solid var(--linea); font-size:13.5px}
 ul.zw-docs li span:first-child{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+ul.zw-listos{list-style:none; padding:0; margin:0}
+ul.zw-listos li{display:flex; align-items:center; gap:12px; padding:10px 0;
+                border-bottom:1px solid var(--linea)}
+ul.zw-listos li:last-child{border-bottom:0}
+ul.zw-listos b{display:block; font-size:14px}
+ul.zw-listos .nota{font-size:12.5px}
 .rejilla{display:grid; gap:0 14px; grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
 .rejilla.dos{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
 
