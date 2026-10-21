@@ -37,6 +37,14 @@ function acciones_() {
     estadoProyecto: accEstadoProyecto_,
     proyectosPendientes: accProyectosPendientes_,
 
+    /* tablero de cada uno: cifras del Centro de Mando y tareas */
+    cifras: accCifras_,
+    guardarCifras: accGuardarCifras_,
+    tareas: accTareas_,
+    guardarTarea: accGuardarTarea_,
+    estadoTarea: accEstadoTarea_,
+    borrarTarea: accBorrarTarea_,
+
     /* finanzas */
     finanzas: accFinanzas_,
     guardarCobro: accGuardarCobro_,

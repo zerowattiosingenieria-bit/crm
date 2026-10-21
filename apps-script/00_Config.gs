@@ -99,7 +99,7 @@ const ESQUEMA = {
     'comision_fv','comision_aero','comision_fv_ajustada','comision_aero_ajustada',
     'comision_captacion_fv','comision_captacion_aero',
     'responsable_id','comision_equipo_fv','comision_equipo_aero',
-    'objetivo_mes','jornada_horas','fecha_alta','color','notas'],
+    'objetivo_mes','jornada_horas','fecha_alta','color','area','notas'],
 
   CLIENTES: ['id','creado','creado_por','comercial_id','captador_id',
     'nombre','dni','cotitular','telefono','email',
@@ -185,6 +185,13 @@ const ESQUEMA = {
 
   ARCHIVOS: ['id','cliente_id','proyecto_id','clase','nombre','archivo_id','mime','bytes',
              'miniatura','subido_por','subido','notas'],
+
+  CIFRAS: ['clave','grupo','titulo','valor','unidad','meta','nota','fecha',
+           'orden','actualizado','actualizado_por'],
+
+  TAREAS: ['id','creado','creado_por','area','usuario_id','titulo','detalle',
+           'cliente_id','importe','prioridad','vence','estado',
+           'origen','origen_id','hecho','hecho_por','modificado','modificado_por'],
 
   LOG: ['fecha','usuario_id','usuario','accion','entidad','entidad_id','detalle']
 };

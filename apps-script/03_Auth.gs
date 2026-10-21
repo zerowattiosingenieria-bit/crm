@@ -339,7 +339,7 @@ function publico_(u) {
     rol: u.rol, activo: u.activo, ultimo_acceso: u.ultimo_acceso,
     debe_cambiar_clave: u.debe_cambiar_clave, fecha_alta: u.fecha_alta,
     objetivo_mes: num_(u.objetivo_mes), jornada_horas: num_(u.jornada_horas) || 7.5,
-    color: u.color
+    color: u.color, area: areaDe_(u)
   };
 }
 
@@ -456,7 +456,7 @@ function accGuardarUsuario_(u, p) {
     'irpf_pct','ss_pct','comision_fv','comision_aero','comision_fv_ajustada','comision_aero_ajustada',
     'comision_captacion_fv','comision_captacion_aero',
     'responsable_id','comision_equipo_fv','comision_equipo_aero',
-    'objetivo_mes','jornada_horas','fecha_alta','color','notas'];
+    'objetivo_mes','jornada_horas','fecha_alta','color','area','notas'];
   const cambios = {};
   campos.forEach(function (c) { if (d[c] !== undefined) cambios[c] = d[c]; });
   if (cambios.rol && ROLES.indexOf(cambios.rol) < 0) return {ok: false, error: 'Rol desconocido.'};
