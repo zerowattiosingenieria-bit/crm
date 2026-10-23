@@ -3,7 +3,7 @@
 import {h, poner, eur, eurCorto, miles, pct, num, txt, normal, fechaCorta, haceDias, mesLargo, suma, hoyISO,
         etiquetaCliente} from '../util.js';
 import * as api from '../api.js';
-import {kpi, kpis, tarjeta, etiquetaEstado, tabla, marca} from '../ui.js';
+import {kpi, kpis, tarjeta, etiquetaEstado, tabla, marca, aviso} from '../ui.js';
 import {lineas, barras, embudo, progreso, anillo} from '../graficos.js';
 import {abrirArchivo} from './proyecto.js';
 import {bloqueLeadsCaptador, tarjetaLeadsDireccion} from './leads.js';
@@ -30,6 +30,9 @@ export async function vistaPanel({ir}) {
   /* Los proyectos que el comercial ya ha pedido y están en la cola o
      montándose. El servidor solo devuelve los de sus clientes. */
   const solicitados = u.rol === 'captador' ? [] : await cola('');
+  /* La dirección ve además quién ha mandado qué en las dos últimas semanas. */
+  const enviados = esDir
+    ? await api.proyectosEnviados(14).then(x => x.proyectos || []).catch(() => []) : [];
 
   const saludo = (() => {
     const hora = new Date().getHours();
@@ -43,7 +46,7 @@ export async function vistaPanel({ir}) {
       ? 'Así va la empresa hoy, ' + fechaCorta(hoyISO()) + '.'
       : 'Esto es lo que tienes entre manos ahora mismo.'));
 
-  return esDir ? panelDireccion({cabecera, r, al, an, fin, listos, esperando, solicitados, cif, ir})
+  return esDir ? panelDireccion({cabecera, r, al, an, fin, listos, esperando, solicitados, enviados, cif, ir})
                : (u.rol === 'captador' ? panelCaptador({cabecera, r, al, ir})
                                        : panelComercial({cabecera, r, al, listos, esperando, solicitados, ir}));
 }
@@ -173,7 +176,7 @@ async function rellenarConBanco(t) {
 }
 
 /* ================= dirección ================= */
-function panelDireccion({cabecera, r, al, an, fin, listos, esperando, solicitados, cif, ir}) {
+function panelDireccion({cabecera, r, al, an, fin, listos, esperando, solicitados, enviados, cif, ir}) {
   const f = fin.resumen;
   const ev = fin.evolucion.slice(-8);
   const nota = fin.nota;
@@ -217,6 +220,8 @@ function panelDireccion({cabecera, r, al, an, fin, listos, esperando, solicitado
     tarjetaCentroDeMando(cif, ir),
 
     tarjetaProyectosListos(listos, ir),
+
+    tarjetaProyectosEnviados(enviados, ir),
 
     tarjetaProyectosEsperando(esperando, ir),
 
@@ -423,6 +428,36 @@ function tarjetaProyectosSolicitados(solicitados, ir, deTodos = false) {
 }
 
 /* ---------- proyectos con el PDF hecho, pendientes de enviar ---------- */
+const nombreProyecto = p => [txt(p.direccion), txt(p.cliente)].filter(Boolean).join(' · ') || '(sin nombre)';
+
+/* «✓ Enviado al cliente»: el comercial dice que ya se lo ha mandado. No
+   manda nada a nadie, solo lo apunta. Se confirma ahí mismo, en la línea:
+   un clic sin querer no debe sacar el proyecto de la lista. Al marcarlo,
+   la línea se va y el CRM le apunta llamar al cliente a la semana. */
+function botonEnviado(p, li, alQuitar) {
+  const zona = h('span.zw-enviado');
+  const normalito = () => poner(zona, h('button.btn.lima', {onclick: e => { e.stopPropagation(); pregunta(); }},
+    '✓ Enviado al cliente'));
+  const pregunta = () => poner(zona,
+    h('span.nota', '¿Ya se lo has mandado?'),
+    h('button.btn.primario.mini', {onclick: async e => {
+      e.stopPropagation();
+      const b = e.currentTarget;
+      b.disabled = true;
+      try {
+        const r = await api.enviadoProyecto(p.cliente_id);
+        aviso('Apuntado como enviado.' + (r.llamada
+          ? ' Te queda en la agenda llamarle el ' + fechaCorta(r.llamada) + '.'
+          : (r.proximo_ya ? ' Ya tenía un próximo paso el ' + fechaCorta(r.proximo_ya) + ': se queda ese.' : '')));
+        li.remove();
+        alQuitar();
+      } catch (x) { avisoError(x); b.disabled = false; }
+    }}, 'Sí, enviado'),
+    h('button.btn.plano.mini', {onclick: e => { e.stopPropagation(); normalito(); }}, 'No'));
+  normalito();
+  return zona;
+}
+
 function tarjetaProyectosListos(listos, ir) {
   if (!listos || !listos.length) return null;
   const descarga = async (ev, p) => {
@@ -432,16 +467,58 @@ function tarjetaProyectosListos(listos, ir) {
     catch (e) { avisoError(e); }
     finally { b.disabled = false; }
   };
-  return tarjeta('Proyectos listos para enviar (' + listos.length + ')',
-    h('ul.zw-listos', listos.map(p => h('li',
-      h('div', {estilo: {flex: '1', minWidth: '0', cursor: 'pointer'},
-                onclick: () => ir('cliente/' + p.cliente_id)},
-        h('b', [txt(p.direccion), txt(p.cliente)].filter(Boolean).join(' · ') || '(sin nombre)'),
-        h('.nota', [[txt(p.direccion), txt(p.municipio)].filter(Boolean).join(', '),
-                    txt(p.entregado) ? 'listo el ' + fechaCorta(p.entregado) : '',
-                    txt(p.comercial)].filter(Boolean).join(' · '))),
-      p.archivo_id
-        ? h('button.btn.primario', {onclick: e => descarga(e, p)}, '⤓ PDF')
-        : h('span.nota', 'sin PDF')))),
-    {subtitulo: 'El proyecto ya está hecho; falta mandárselo al cliente'});
+  let quedan = listos.length;
+  const t = tarjeta('Proyectos listos para enviar (' + quedan + ')',
+    h('ul.zw-listos', listos.map(p => {
+      const li = h('li');
+      poner(li,
+        h('div', {estilo: {flex: '1', minWidth: '0', cursor: 'pointer'},
+                  onclick: () => ir('cliente/' + p.cliente_id)},
+          h('b', nombreProyecto(p)),
+          h('.nota', [[txt(p.direccion), txt(p.municipio)].filter(Boolean).join(', '),
+                      txt(p.entregado) ? 'listo el ' + fechaCorta(p.entregado) : '',
+                      txt(p.comercial)].filter(Boolean).join(' · '))),
+        h('.zw-listos-botones',
+          p.archivo_id
+            ? h('button.btn.primario', {onclick: e => descarga(e, p)}, '⤓ PDF')
+            : h('span.nota', 'sin PDF'),
+          botonEnviado(p, li, () => {
+            quedan--;
+            const h2 = t.querySelector('header h2');
+            if (h2) h2.textContent = 'Proyectos listos para enviar (' + quedan + ')';
+            if (!quedan) t.remove();
+          })));
+      return li;
+    })),
+    {subtitulo: 'Cuando se lo mandes, pulsa «Enviado al cliente»: sale de aquí y te apunta llamarle a la semana'});
+  return t;
+}
+
+/* ---------- lo enviado en las dos últimas semanas (dirección) ---------- */
+function tarjetaProyectosEnviados(enviados, ir) {
+  if (!enviados || !enviados.length) return null;
+  return tarjeta('Enviados al cliente, últimos 14 días (' + enviados.length + ')',
+    h('ul.zw-listos', enviados.map(p => {
+      const li = h('li');
+      poner(li,
+        h('span.nivel.bajo', {estilo: {marginTop: '7px'}}),
+        h('div', {estilo: {flex: '1', minWidth: '0', cursor: 'pointer'},
+                  onclick: () => ir('cliente/' + p.cliente_id)},
+          h('b', nombreProyecto(p)),
+          h('.nota', ['enviado el ' + fechaCorta(p.enviado) + ' a las ' + txt(p.enviado).slice(11, 16),
+                      'comercial: ' + (txt(p.comercial) || '—'),
+                      txt(p.enviado_por) && txt(p.enviado_por) !== txt(p.comercial)
+                        ? 'marcado por ' + txt(p.enviado_por) : ''].filter(Boolean).join(' · '))),
+        h('button.btn.plano.mini', {title: 'Devolverlo a «listos para enviar»', onclick: async e => {
+          const b = e.currentTarget;
+          b.disabled = true;
+          try {
+            await api.enviadoProyecto(p.cliente_id, true);
+            aviso('Deshecho: vuelve a «listos para enviar».');
+            li.remove();
+          } catch (x) { avisoError(x); b.disabled = false; }
+        }}, 'deshacer'));
+      return li;
+    })),
+    {subtitulo: 'Quién ha mandado qué. Marcarlo no manda nada al cliente: solo lo apunta'});
 }

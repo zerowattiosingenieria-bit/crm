@@ -16,6 +16,7 @@ const ESTADOS = {
   en_curso:     ['En preparación', 'aviso'],
   faltan_datos: ['Falta algo', 'mal'],
   entregado:    ['Proyecto listo', 'bien'],
+  enviado:      ['Enviado al cliente', 'bien'],
   cancelado:    ['Cancelado', 'mal']
 };
 
@@ -107,13 +108,17 @@ export function panelProyecto(cliente) {
       h('div',
         h('.dato', h('.et', 'Archivo'), h('.v', txt(proyectos[0].nombre))),
         h('.dato', h('.et', 'Entregado'), h('.v', fechaCorta(proy.entregado))),
+        txt(proy.enviado) ? h('.dato', h('.et', 'Enviado al cliente'),
+          h('.v', fechaCorta(proy.enviado) + ' · ' + txt(proy.enviado).slice(11, 16) +
+            (api.persona(proy.enviado_por) ? ' · ' + api.persona(proy.enviado_por).nombre : ''))) : null,
         h('.acciones', {estilo: {marginTop: '10px'}},
           h('button.btn.primario', {onclick: e => conEspera(e, () => abrirArchivo(proyectos[0]))},
             '⤓ Descargar el proyecto'),
           proyectos.length > 1
             ? h('span.nota', 'Hay ' + (proyectos.length - 1) + ' versión(es) anterior(es)')
             : null)),
-      {subtitulo: 'Listo para enviar al cliente'}) : null;
+      {subtitulo: txt(proy.estado) === 'enviado'
+        ? 'Enviado al cliente el ' + fechaCorta(proy.enviado) : 'Listo para enviar al cliente'}) : null;
 
     /* --- lo que escribe el comercial --- */
     const texto = h('textarea', {
@@ -241,7 +246,8 @@ export function panelProyecto(cliente) {
         h('div',
           h('.acciones', {estilo: {marginBottom: '10px'}},
             marca(etiqueta, color),
-            txt(proy.pedido) ? h('span.nota', 'Pedido el ' + fechaCorta(proy.pedido)) : null),
+            txt(proy.pedido) ? h('span.nota', 'Pedido el ' + fechaCorta(proy.pedido)) : null,
+            txt(proy.enviado) ? h('span.nota', 'Enviado el ' + fechaCorta(proy.enviado)) : null),
           texto,
           h('.acciones', {estilo: {marginTop: '10px'}}, guardar,
             h('span.nota', 'Con la descripción y una foto, el proyecto se pide solo.'))),

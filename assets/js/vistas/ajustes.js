@@ -1,4 +1,4 @@
-/* vistas/ajustes.js — usuarios, configuración de la casa, perfil y registro. */
+/* vistas/ajustes.js — usuarios, configuración de la casa y perfil. */
 
 import {h, poner, txt, num, eur, miles, pct, fechaCorta, capital, hoyISO, iniciales} from '../util.js';
 import * as api from '../api.js';
@@ -425,15 +425,4 @@ function ventanaJornada(refrescar) {
 }
 
 /* ================= registro ================= */
-export async function vistaRegistro() {
-  const d = await api.pedir('registro', {limite: 300});
-  return tarjeta('Últimos movimientos en el CRM', tabla([
-    {clave: 'fecha', et: 'Cuándo', pinta: r => h('div', h('b', txt(r.fecha).slice(0, 10)),
-      h('div.nota', txt(r.fecha).slice(11, 16)))},
-    {clave: 'usuario', et: 'Quién'},
-    {clave: 'accion', et: 'Qué', pinta: r => marca(txt(r.accion).replace(/_/g, ' '))},
-    {clave: 'entidad', et: 'Dónde'},
-    {clave: 'entidad_id', et: 'Ficha'},
-    {clave: 'detalle', et: 'Detalle', noOrden: true, pinta: r => h('span.nota', txt(r.detalle))}
-  ], d.registro, {vacio: 'Sin actividad registrada.', csv: 'registro_crm.csv'}), {sinRelleno: true});
-}
+/* El registro de conexiones vive en vistas/registro.js. */
