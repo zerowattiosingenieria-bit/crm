@@ -34,6 +34,7 @@ function acciones_() {
     descargarArchivo: accDescargarArchivo_,
     borrarArchivo: accBorrarArchivo_,
     entregarProyecto: accEntregarProyecto_,
+    enviadoProyecto: accEnviadoProyecto_,
     estadoProyecto: accEstadoProyecto_,
     proyectosPendientes: accProyectosPendientes_,
 
@@ -143,21 +144,32 @@ function doGet(e) {
   return json_(despachar_(p));
 }
 
+/* Cada petición queda en el registro (20_Registro.gs): la abre
+   empezarPeticion_ y la cierra cerrarPeticion_, que apunta la fila si la
+   acción no lo ha hecho ya. El «ping» no, que no es nadie haciendo nada. */
 function despachar_(p) {
-  const accion = txt_(p.accion);
+  const accion = txt_(p && p.accion);
+  if (accion === 'ping') return {ok: true, version: VERSION, servidor: ahora_()};
+  empezarPeticion_(p, accion);
+  let r;
   try {
-    if (accion === 'ping') return {ok: true, version: VERSION, servidor: ahora_()};
-    if (accion === 'login') return accLogin_(p);
-    if (accion === 'loginCodigo') return accLoginCodigo_(p);
-    const fn = acciones_()[accion];
-    if (!fn) return {ok: false, error: 'Acción desconocida: ' + accion};
-
-    const u = sesion_(p.token);
-    if (!u) return {ok: false, error: 'Sesión caducada. Vuelve a entrar.', sesion: false};
-    return fn(u, p) || {ok: true};
+    r = atender_(p, accion);
   } catch (err) {
-    return {ok: false, error: String(err && err.message ? err.message : err)};
+    r = {ok: false, error: String(err && err.message ? err.message : err)};
   }
+  cerrarPeticion_(r);
+  return r;
+}
+
+function atender_(p, accion) {
+  if (accion === 'login') return accLogin_(p);
+  if (accion === 'loginCodigo') return accLoginCodigo_(p);
+  const fn = acciones_()[accion];
+  if (!fn) return {ok: false, error: 'Acción desconocida: ' + accion};
+
+  const u = sesion_(p.token);
+  if (!u) return {ok: false, error: 'Sesión caducada. Vuelve a entrar.', sesion: false};
+  return fn(u, p) || {ok: true};
 }
 
 function json_(o) {
@@ -182,9 +194,4 @@ function accGuardarConfig_(u, p) {
   return {ok: true, config: config_()};
 }
 
-function accRegistro_(u, p) {
-  exigir_(u, 'config');
-  const n = Math.min(num_(p.limite) || 200, 500);
-  const todo = leer_('LOG');
-  return {ok: true, registro: todo.slice(Math.max(0, todo.length - n)).reverse()};
-}
+/* accRegistro_ vive en 20_Registro.gs, con el resto del registro. */

@@ -19,7 +19,7 @@ function accLogin_(p) {
   if (u) {
     const quedan = minutosDeBloqueo_(u);
     if (quedan > 0) {
-      registrar_(null, 'login_bloqueado', 'USUARIOS', usuario, Math.ceil(quedan) + ' min');
+      registrar_(u, 'login_bloqueado', 'USUARIOS', u.id, 'cerrado ' + Math.ceil(quedan) + ' min más');
       return {ok: false, error: 'Demasiados intentos fallidos. Prueba otra vez dentro de ' +
               Math.ceil(quedan) + (Math.ceil(quedan) === 1 ? ' minuto.' : ' minutos.')};
     }
@@ -30,10 +30,16 @@ function accLogin_(p) {
   if (!u || !igualSecreto_(hash_(clave, u.salt, vueltas), txt_(u.hash))) {
     if (u) anotarFallo_(u);
     Utilities.sleep(700);                       // frena la prueba de claves a lo bruto
-    registrar_(null, 'login_fallido', 'USUARIOS', usuario, '');
+    /* En el registro sale con el nombre que se tecleó, aunque no exista:
+       así se ve si alguien anda probando usuarios. La clave, nunca. */
+    registrar_(u || {id: '', usuario: usuario}, 'login_fallido', 'USUARIOS', u ? u.id : '',
+               u ? 'clave incorrecta' : 'ese usuario no existe');
     return {ok: false, error: 'Usuario o clave incorrectos.'};
   }
-  if (normal_(u.activo) !== 'si') return {ok: false, error: 'Este usuario está desactivado.'};
+  if (normal_(u.activo) !== 'si') {
+    registrar_(u, 'login_fallido', 'USUARIOS', u.id, 'usuario desactivado');
+    return {ok: false, error: 'Este usuario está desactivado.'};
+  }
 
   /* Acertó: se limpia el contador y, si la clave estaba guardada a la
      antigua, se reescribe reforzada sin que el dueño note nada. */
@@ -90,7 +96,7 @@ function anotarFallo_(u) {
     intentos: 0, bloqueos: bloqueos,
     bloqueado_hasta: dentroDe_(minutos)
   });
-  registrar_(null, 'usuario_bloqueado', 'USUARIOS', u.id, minutos + ' min');
+  registrar_(u, 'usuario_bloqueado', 'USUARIOS', u.id, minutos + ' min');
   avisarDeBloqueo_(u, minutos);
 }
 
@@ -202,7 +208,7 @@ function accLoginCodigo_(p) {
   if (guardado.length !== 2 || !igualSecreto_(hash_(codigo, guardado[0], VUELTAS_CLAVE), guardado[1])) {
     actualizar_('EQUIPOS', eq.id, {intentos_codigo: num_(eq.intentos_codigo) + 1});
     Utilities.sleep(700);
-    registrar_(null, 'codigo_fallido', 'EQUIPOS', eq.id, '');
+    registrar_({id: eq.usuario_id, usuario: ''}, 'codigo_fallido', 'EQUIPOS', eq.id, '');
     return {ok: false, error: 'Ese código no es.'};
   }
 
@@ -212,6 +218,9 @@ function accLoginCodigo_(p) {
   actualizar_('EQUIPOS', eq.id, {estado: 'confiado', codigo: '', codigo_expira: '',
                                  intentos_codigo: 0, pendiente: '', ultimo_uso: ahora_()});
   registrar_(u, 'equipo_verificado', 'EQUIPOS', eq.id, txt_(eq.agente));
+  /* Si el segundo paso no trae el navegador, vale el que se apuntó en el
+     primero: la sesión lo necesita para que el registro diga qué equipo es. */
+  if (!txt_(p.agente) && txt_(eq.agente)) p = Object.assign({}, p, {agente: txt_(eq.agente)});
   return abrirSesion_(u, p, txt_(eq.huella));
 }
 
@@ -252,16 +261,28 @@ function sesion_(token) {
   if (!tk) return null;
   const s = leer_('SESIONES').filter(function (x) { return txt_(x.token) === tk; })[0];
   if (!s) return null;
-  if (caducada_(s.expira)) return null;
+  /* Una sesión que se cae se apunta una vez en el registro y se borra: si
+     se quedara en la tabla, cada petición que llegara con ella volvería a
+     apuntarse. limpiarSesiones_ la habría quitado igual más tarde. */
+  if (caducada_(s.expira)) {
+    sesionCaida_(s, 'pasadas ' + HORAS_SESION + ' h desde la entrada');
+    borrarSesion_(tk);
+    return null;
+  }
 
   /* Además del tope de doce horas, una sesión parada deja de valer: un
      portátil olvidado abierto en una obra no es una puerta abierta. */
   const visto = txt_(s.ultimo_uso) || txt_(s.creado);
   const parada = minutosDesde_(visto);
-  if (visto && parada > MINUTOS_INACTIVIDAD) { borrarSesion_(tk); return null; }
+  if (visto && parada > MINUTOS_INACTIVIDAD) {
+    sesionCaida_(s, 'sin uso más de ' + MINUTOS_INACTIVIDAD + ' min');
+    borrarSesion_(tk);
+    return null;
+  }
 
   const u = leer_('USUARIOS').filter(function (x) { return String(x.id) === String(s.usuario_id); })[0];
   if (!u || normal_(u.activo) !== 'si') return null;
+  peticionConSesion_(u, s);
 
   /* Se apunta el uso, pero no en cada clic: escribir en la hoja cuesta, y
      con refrescarlo cada pocos minutos la cuenta sale igual de bien. */

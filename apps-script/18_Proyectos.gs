@@ -315,7 +315,7 @@ function accEstadoProyecto_(u, p) {
   exigir_(u, 'editarTodo');
   const v = clienteVisible_(u, p.cliente_id);
   if (v.error) return {ok: false, error: v.error};
-  const estados = ['borrador', 'pedido', 'en_curso', 'faltan_datos', 'entregado', 'cancelado'];
+  const estados = ['borrador', 'pedido', 'en_curso', 'faltan_datos', 'entregado', 'enviado', 'cancelado'];
   const estado = normal_(p.estado);
   if (estados.indexOf(estado) < 0) return {ok: false, error: 'Ese estado no existe.'};
 
@@ -332,6 +332,74 @@ function accEstadoProyecto_(u, p) {
   registrar_(u, 'estado_proyecto', 'PROYECTOS', proy.id, estado + (faltan ? ': ' + faltan : ''));
   if (estado === 'faltan_datos') avisarFaltanDatos_(r, v.cliente, faltan);
   return {ok: true, proyecto: r};
+}
+
+/**
+ * «Enviado al cliente»: el comercial dice que ya le ha mandado el proyecto.
+ * Esto NO manda nada a nadie; solo deja constancia de cuándo y quién, y el
+ * proyecto sale de «listos para enviar». Lo puede marcar el comercial del
+ * cliente y la dirección; nadie más (ni captadores ni otros comerciales).
+ *
+ * Con deshacer: true, la dirección lo devuelve a «entregado» (por si se
+ * pulsó sin querer). El comercial no deshace: que lo pida.
+ *
+ * Y la regla de la casa: a la semana de mandar una propuesta, se llama.
+ * Se apunta un seguimiento con ese próximo paso a 7 días, salvo que el
+ * cliente ya tenga uno pendiente antes (de hoy a 7 días): ese se respeta.
+ */
+function accEnviadoProyecto_(u, p) {
+  const v = clienteVisible_(u, p.cliente_id);
+  if (v.error) return {ok: false, error: v.error};
+  const cli = v.cliente;
+  const per = permisos_(u);
+  const suyo = String(cli.comercial_id) === String(u.id);
+  if (!per.editarTodo && !(u.rol === 'comercial' && suyo)) {
+    return {ok: false, error: 'Solo el comercial del cliente o la dirección pueden marcarlo.'};
+  }
+  const proy = proyectoDe_(cli, u);
+  const estado = normal_(proy.estado);
+
+  if (p.deshacer) {
+    if (!per.editarTodo) return {ok: false, error: 'Deshacerlo solo puede la dirección.'};
+    if (estado !== 'enviado') return {ok: false, error: 'Ese proyecto no está marcado como enviado.'};
+    const r = actualizar_('PROYECTOS', proy.id, {estado: 'entregado', enviado: '', enviado_por: '',
+      modificado: ahora_(), modificado_por: u.id});
+    registrar_(u, 'proyecto_no_enviado', 'PROYECTOS', proy.id, etiquetaCliente_(cli));
+    return {ok: true, proyecto: r};
+  }
+
+  if (estado === 'enviado') return {ok: true, proyecto: proy, ya: true};
+  if (estado !== 'entregado') {
+    return {ok: false, error: 'El proyecto todavía no está hecho: no se puede marcar como enviado.'};
+  }
+  const r = actualizar_('PROYECTOS', proy.id, {estado: 'enviado', enviado: ahora_(), enviado_por: u.id,
+    modificado: ahora_(), modificado_por: u.id});
+  registrar_(u, 'proyecto_enviado', 'PROYECTOS', proy.id, etiquetaCliente_(cli));
+
+  /* El recordatorio de llamar a la semana. */
+  let llamada = '', yaTenia = '';
+  try {
+    const dentro7 = sumarDias_(hoyISO_(), 7);
+    const hay = txt_(cli.proxima_fecha).slice(0, 10);
+    const antes = hay && hay >= hoyISO_() && hay <= dentro7;
+    if (!antes) {
+      insertar_('SEGUIMIENTO', {cliente_id: cli.id, operacion_id: '', usuario_id: u.id,
+        fecha: hoyISO_(), canal: 'email', nota: 'Proyecto enviado al cliente (marcado en el CRM).',
+        proximo_paso: 'Llamar: seguimiento de la propuesta', proxima_fecha: dentro7,
+        estado_resultante: '', origen: 'proyecto_enviado', creado: ahora_()});
+      actualizar_('CLIENTES', cli.id, {proxima_accion: 'Llamar: seguimiento de la propuesta',
+        proxima_fecha: dentro7, modificado: ahora_(), modificado_por: u.id});
+      llamada = dentro7;
+    } else {
+      yaTenia = hay;
+    }
+  } catch (e) { /* el recordatorio es un extra: el enviado queda igual */ }
+  return {ok: true, proyecto: r, llamada: llamada, proximo_ya: yaTenia};
+}
+
+/* Los clientes se nombran siempre «dirección · nombre». */
+function etiquetaCliente_(cli) {
+  return [txt_(cli.direccion), txt_(cli.nombre)].filter(String).join(' · ') || txt_(cli.id);
 }
 
 /** Aviso por correo al comercial del cliente cuando el proyecto se para. */
@@ -378,8 +446,12 @@ function accProyectosPendientes_(u, p) {
   leer_('USUARIOS').forEach(function (x) { usuarios[String(x.id)] = txt_(x.nombre); });
   const archivos = leer_('ARCHIVOS');
   const quiero = txt_(p.estado) ? [normal_(p.estado)] : ['pedido', 'en_curso'];
+  /* Con «dias», solo los enviados en esos últimos días (lo que mira la
+     dirección para ver quién ha mandado qué). */
+  const desdeEnvio = num_(p.dias) > 0 ? sumarDias_(hoyISO_(), -num_(p.dias)) : '';
   const lista = leer_('PROYECTOS').filter(function (x) {
     if (quiero.indexOf(normal_(x.estado)) < 0) return false;
+    if (desdeEnvio && txt_(x.enviado).slice(0, 10) < desdeEnvio) return false;
     const c = clientes[String(x.cliente_id)];
     if (!c) return false;
     return per.alcance === 'todo' || String(c.comercial_id) === String(u.id);
@@ -395,6 +467,7 @@ function accProyectosPendientes_(u, p) {
             comercial: usuarios[String(c.comercial_id)] || '',
             descripcion: txt_(x.descripcion), estado: txt_(x.estado), pedido: txt_(x.pedido),
             entregado: txt_(x.entregado), faltan: txt_(x.faltan),
+            enviado: txt_(x.enviado), enviado_por: usuarios[String(x.enviado_por)] || '',
             modificado: txt_(x.modificado) || txt_(x.pedido) || txt_(x.creado),
             archivo_id: pdf ? pdf.id : '', archivo_nombre: pdf ? txt_(pdf.nombre) : '',
             fotos: suyos.filter(function (a) { return normal_(a.clase) === 'foto'; }).length,
@@ -404,6 +477,7 @@ function accProyectosPendientes_(u, p) {
   });
   /* Los listos para enviar, el más reciente primero; la cola, el más viejo. */
   lista.sort(function (a, b) {
+    if (normal_(a.estado) === 'enviado') return txt_(b.enviado).localeCompare(txt_(a.enviado));
     return normal_(a.estado) === 'entregado'
       ? txt_(b.entregado).localeCompare(txt_(a.entregado))
       : txt_(a.pedido).localeCompare(txt_(b.pedido));

@@ -10,10 +10,15 @@ const PROPS = PropertiesService.getScriptProperties();
 
 /* ---------- documento ---------- */
 
+/* El documento se abre una vez por petición: abrirlo cuesta, y una sola
+   petición pasa por aquí muchas veces (y ahora una más, la del registro). */
+var _libro = null;
 function libro_() {
+  if (_libro) return _libro;
   const id = PROPS.getProperty('ID_BASE');
   if (!id) throw new Error('El CRM no está instalado. Ejecuta instalar() una vez desde el editor.');
-  return SpreadsheetApp.openById(id);
+  _libro = SpreadsheetApp.openById(id);
+  return _libro;
 }
 
 function hoja_(nombre) {
@@ -353,13 +358,12 @@ function token_() { return Utilities.getUuid().replace(/-/g, '') + Utilities.get
 
 /* ---------- registro de actividad ---------- */
 
+/* Cada acción que cambia algo lo cuenta aquí con sus palabras. El equipo,
+   la IP, el lugar y el tipo los pone 20_Registro.gs, que sabe de qué
+   petición viene. */
 function registrar_(usuario, accion, entidad, entidadId, detalle) {
-  try {
-    hoja_('LOG').appendRow([ahora_(),
-      usuario ? usuario.id : '', usuario ? usuario.usuario : '',
-      accion, entidad || '', entidadId || '',
-      typeof detalle === 'string' ? detalle : JSON.stringify(detalle || '')]);
-  } catch (e) { /* el registro nunca puede tumbar una operación */ }
+  apuntarLog_({usuario: usuario, accion: accion, entidad: entidad,
+               entidadId: entidadId, detalle: detalle});
 }
 
 /* ---------- configuración ---------- */

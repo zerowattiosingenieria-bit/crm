@@ -181,7 +181,10 @@ const ESQUEMA = {
   /* La carpeta del cliente: lo que sube el comercial y el proyecto que vuelve. */
   PROYECTOS: ['id','cliente_id','descripcion','estado','faltan','carpeta_id','archivo_id','archivo_nombre',
               'creado','creado_por','pedido','pedido_por','entregado','entregado_por',
-              'modificado','modificado_por','notas'],
+              'modificado','modificado_por','notas',
+              /* Cuándo y quién marcó que el proyecto ya se le mandó al
+                 cliente. En las hojas de antes las añade asegurarHoja_. */
+              'enviado','enviado_por'],
 
   ARCHIVOS: ['id','cliente_id','proyecto_id','clase','nombre','archivo_id','mime','bytes',
              'miniatura','subido_por','subido','notas'],
@@ -193,7 +196,11 @@ const ESQUEMA = {
            'cliente_id','importe','prioridad','vence','estado',
            'origen','origen_id','hecho','hecho_por','modificado','modificado_por'],
 
-  LOG: ['fecha','usuario_id','usuario','accion','entidad','entidad_id','detalle']
+  /* El registro de conexiones y actividad. Las cinco últimas columnas
+     llegaron después: en las hojas de antes las añade sola la primera
+     petición que escribe (ver 20_Registro.gs) o instalar(). */
+  LOG: ['fecha','usuario_id','usuario','accion','entidad','entidad_id','detalle',
+        'tipo','equipo','agente','ip','lugar']
 };
 
 /* Estados con los que trabaja la casa. Se envían al navegador para que

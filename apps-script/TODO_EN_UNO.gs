@@ -198,7 +198,10 @@ const ESQUEMA = {
   /* La carpeta del cliente: lo que sube el comercial y el proyecto que vuelve. */
   PROYECTOS: ['id','cliente_id','descripcion','estado','faltan','carpeta_id','archivo_id','archivo_nombre',
               'creado','creado_por','pedido','pedido_por','entregado','entregado_por',
-              'modificado','modificado_por','notas'],
+              'modificado','modificado_por','notas',
+              /* Cuándo y quién marcó que el proyecto ya se le mandó al
+                 cliente. En las hojas de antes las añade asegurarHoja_. */
+              'enviado','enviado_por'],
 
   ARCHIVOS: ['id','cliente_id','proyecto_id','clase','nombre','archivo_id','mime','bytes',
              'miniatura','subido_por','subido','notas'],
@@ -210,7 +213,11 @@ const ESQUEMA = {
            'cliente_id','importe','prioridad','vence','estado',
            'origen','origen_id','hecho','hecho_por','modificado','modificado_por'],
 
-  LOG: ['fecha','usuario_id','usuario','accion','entidad','entidad_id','detalle']
+  /* El registro de conexiones y actividad. Las cinco últimas columnas
+     llegaron después: en las hojas de antes las añade sola la primera
+     petición que escribe (ver 20_Registro.gs) o instalar(). */
+  LOG: ['fecha','usuario_id','usuario','accion','entidad','entidad_id','detalle',
+        'tipo','equipo','agente','ip','lugar']
 };
 
 /* Estados con los que trabaja la casa. Se envían al navegador para que
@@ -438,10 +445,15 @@ const PROPS = PropertiesService.getScriptProperties();
 
 /* ---------- documento ---------- */
 
+/* El documento se abre una vez por petición: abrirlo cuesta, y una sola
+   petición pasa por aquí muchas veces (y ahora una más, la del registro). */
+var _libro = null;
 function libro_() {
+  if (_libro) return _libro;
   const id = PROPS.getProperty('ID_BASE');
   if (!id) throw new Error('El CRM no está instalado. Ejecuta instalar() una vez desde el editor.');
-  return SpreadsheetApp.openById(id);
+  _libro = SpreadsheetApp.openById(id);
+  return _libro;
 }
 
 function hoja_(nombre) {
@@ -781,13 +793,12 @@ function token_() { return Utilities.getUuid().replace(/-/g, '') + Utilities.get
 
 /* ---------- registro de actividad ---------- */
 
+/* Cada acción que cambia algo lo cuenta aquí con sus palabras. El equipo,
+   la IP, el lugar y el tipo los pone 20_Registro.gs, que sabe de qué
+   petición viene. */
 function registrar_(usuario, accion, entidad, entidadId, detalle) {
-  try {
-    hoja_('LOG').appendRow([ahora_(),
-      usuario ? usuario.id : '', usuario ? usuario.usuario : '',
-      accion, entidad || '', entidadId || '',
-      typeof detalle === 'string' ? detalle : JSON.stringify(detalle || '')]);
-  } catch (e) { /* el registro nunca puede tumbar una operación */ }
+  apuntarLog_({usuario: usuario, accion: accion, entidad: entidad,
+               entidadId: entidadId, detalle: detalle});
 }
 
 /* ---------- configuración ---------- */
@@ -1136,7 +1147,7 @@ function accLogin_(p) {
   if (u) {
     const quedan = minutosDeBloqueo_(u);
     if (quedan > 0) {
-      registrar_(null, 'login_bloqueado', 'USUARIOS', usuario, Math.ceil(quedan) + ' min');
+      registrar_(u, 'login_bloqueado', 'USUARIOS', u.id, 'cerrado ' + Math.ceil(quedan) + ' min más');
       return {ok: false, error: 'Demasiados intentos fallidos. Prueba otra vez dentro de ' +
               Math.ceil(quedan) + (Math.ceil(quedan) === 1 ? ' minuto.' : ' minutos.')};
     }
@@ -1147,10 +1158,16 @@ function accLogin_(p) {
   if (!u || !igualSecreto_(hash_(clave, u.salt, vueltas), txt_(u.hash))) {
     if (u) anotarFallo_(u);
     Utilities.sleep(700);                       // frena la prueba de claves a lo bruto
-    registrar_(null, 'login_fallido', 'USUARIOS', usuario, '');
+    /* En el registro sale con el nombre que se tecleó, aunque no exista:
+       así se ve si alguien anda probando usuarios. La clave, nunca. */
+    registrar_(u || {id: '', usuario: usuario}, 'login_fallido', 'USUARIOS', u ? u.id : '',
+               u ? 'clave incorrecta' : 'ese usuario no existe');
     return {ok: false, error: 'Usuario o clave incorrectos.'};
   }
-  if (normal_(u.activo) !== 'si') return {ok: false, error: 'Este usuario está desactivado.'};
+  if (normal_(u.activo) !== 'si') {
+    registrar_(u, 'login_fallido', 'USUARIOS', u.id, 'usuario desactivado');
+    return {ok: false, error: 'Este usuario está desactivado.'};
+  }
 
   /* Acertó: se limpia el contador y, si la clave estaba guardada a la
      antigua, se reescribe reforzada sin que el dueño note nada. */
@@ -1207,7 +1224,7 @@ function anotarFallo_(u) {
     intentos: 0, bloqueos: bloqueos,
     bloqueado_hasta: dentroDe_(minutos)
   });
-  registrar_(null, 'usuario_bloqueado', 'USUARIOS', u.id, minutos + ' min');
+  registrar_(u, 'usuario_bloqueado', 'USUARIOS', u.id, minutos + ' min');
   avisarDeBloqueo_(u, minutos);
 }
 
@@ -1319,7 +1336,7 @@ function accLoginCodigo_(p) {
   if (guardado.length !== 2 || !igualSecreto_(hash_(codigo, guardado[0], VUELTAS_CLAVE), guardado[1])) {
     actualizar_('EQUIPOS', eq.id, {intentos_codigo: num_(eq.intentos_codigo) + 1});
     Utilities.sleep(700);
-    registrar_(null, 'codigo_fallido', 'EQUIPOS', eq.id, '');
+    registrar_({id: eq.usuario_id, usuario: ''}, 'codigo_fallido', 'EQUIPOS', eq.id, '');
     return {ok: false, error: 'Ese código no es.'};
   }
 
@@ -1329,6 +1346,9 @@ function accLoginCodigo_(p) {
   actualizar_('EQUIPOS', eq.id, {estado: 'confiado', codigo: '', codigo_expira: '',
                                  intentos_codigo: 0, pendiente: '', ultimo_uso: ahora_()});
   registrar_(u, 'equipo_verificado', 'EQUIPOS', eq.id, txt_(eq.agente));
+  /* Si el segundo paso no trae el navegador, vale el que se apuntó en el
+     primero: la sesión lo necesita para que el registro diga qué equipo es. */
+  if (!txt_(p.agente) && txt_(eq.agente)) p = Object.assign({}, p, {agente: txt_(eq.agente)});
   return abrirSesion_(u, p, txt_(eq.huella));
 }
 
@@ -1369,16 +1389,28 @@ function sesion_(token) {
   if (!tk) return null;
   const s = leer_('SESIONES').filter(function (x) { return txt_(x.token) === tk; })[0];
   if (!s) return null;
-  if (caducada_(s.expira)) return null;
+  /* Una sesión que se cae se apunta una vez en el registro y se borra: si
+     se quedara en la tabla, cada petición que llegara con ella volvería a
+     apuntarse. limpiarSesiones_ la habría quitado igual más tarde. */
+  if (caducada_(s.expira)) {
+    sesionCaida_(s, 'pasadas ' + HORAS_SESION + ' h desde la entrada');
+    borrarSesion_(tk);
+    return null;
+  }
 
   /* Además del tope de doce horas, una sesión parada deja de valer: un
      portátil olvidado abierto en una obra no es una puerta abierta. */
   const visto = txt_(s.ultimo_uso) || txt_(s.creado);
   const parada = minutosDesde_(visto);
-  if (visto && parada > MINUTOS_INACTIVIDAD) { borrarSesion_(tk); return null; }
+  if (visto && parada > MINUTOS_INACTIVIDAD) {
+    sesionCaida_(s, 'sin uso más de ' + MINUTOS_INACTIVIDAD + ' min');
+    borrarSesion_(tk);
+    return null;
+  }
 
   const u = leer_('USUARIOS').filter(function (x) { return String(x.id) === String(s.usuario_id); })[0];
   if (!u || normal_(u.activo) !== 'si') return null;
+  peticionConSesion_(u, s);
 
   /* Se apunta el uso, pero no en cada clic: escribir en la hoja cuesta, y
      con refrescarlo cada pocos minutos la cuenta sale igual de bien. */
@@ -3845,6 +3877,7 @@ function acciones_() {
     descargarArchivo: accDescargarArchivo_,
     borrarArchivo: accBorrarArchivo_,
     entregarProyecto: accEntregarProyecto_,
+    enviadoProyecto: accEnviadoProyecto_,
     estadoProyecto: accEstadoProyecto_,
     proyectosPendientes: accProyectosPendientes_,
 
@@ -3954,21 +3987,32 @@ function doGet(e) {
   return json_(despachar_(p));
 }
 
+/* Cada petición queda en el registro (20_Registro.gs): la abre
+   empezarPeticion_ y la cierra cerrarPeticion_, que apunta la fila si la
+   acción no lo ha hecho ya. El «ping» no, que no es nadie haciendo nada. */
 function despachar_(p) {
-  const accion = txt_(p.accion);
+  const accion = txt_(p && p.accion);
+  if (accion === 'ping') return {ok: true, version: VERSION, servidor: ahora_()};
+  empezarPeticion_(p, accion);
+  let r;
   try {
-    if (accion === 'ping') return {ok: true, version: VERSION, servidor: ahora_()};
-    if (accion === 'login') return accLogin_(p);
-    if (accion === 'loginCodigo') return accLoginCodigo_(p);
-    const fn = acciones_()[accion];
-    if (!fn) return {ok: false, error: 'Acción desconocida: ' + accion};
-
-    const u = sesion_(p.token);
-    if (!u) return {ok: false, error: 'Sesión caducada. Vuelve a entrar.', sesion: false};
-    return fn(u, p) || {ok: true};
+    r = atender_(p, accion);
   } catch (err) {
-    return {ok: false, error: String(err && err.message ? err.message : err)};
+    r = {ok: false, error: String(err && err.message ? err.message : err)};
   }
+  cerrarPeticion_(r);
+  return r;
+}
+
+function atender_(p, accion) {
+  if (accion === 'login') return accLogin_(p);
+  if (accion === 'loginCodigo') return accLoginCodigo_(p);
+  const fn = acciones_()[accion];
+  if (!fn) return {ok: false, error: 'Acción desconocida: ' + accion};
+
+  const u = sesion_(p.token);
+  if (!u) return {ok: false, error: 'Sesión caducada. Vuelve a entrar.', sesion: false};
+  return fn(u, p) || {ok: true};
 }
 
 function json_(o) {
@@ -3993,12 +4037,7 @@ function accGuardarConfig_(u, p) {
   return {ok: true, config: config_()};
 }
 
-function accRegistro_(u, p) {
-  exigir_(u, 'config');
-  const n = Math.min(num_(p.limite) || 200, 500);
-  const todo = leer_('LOG');
-  return {ok: true, registro: todo.slice(Math.max(0, todo.length - n)).reverse()};
-}
+/* accRegistro_ vive en 20_Registro.gs, con el resto del registro. */
 
 
 /* ==========================================================================
@@ -6042,7 +6081,7 @@ function accEstadoProyecto_(u, p) {
   exigir_(u, 'editarTodo');
   const v = clienteVisible_(u, p.cliente_id);
   if (v.error) return {ok: false, error: v.error};
-  const estados = ['borrador', 'pedido', 'en_curso', 'faltan_datos', 'entregado', 'cancelado'];
+  const estados = ['borrador', 'pedido', 'en_curso', 'faltan_datos', 'entregado', 'enviado', 'cancelado'];
   const estado = normal_(p.estado);
   if (estados.indexOf(estado) < 0) return {ok: false, error: 'Ese estado no existe.'};
 
@@ -6059,6 +6098,74 @@ function accEstadoProyecto_(u, p) {
   registrar_(u, 'estado_proyecto', 'PROYECTOS', proy.id, estado + (faltan ? ': ' + faltan : ''));
   if (estado === 'faltan_datos') avisarFaltanDatos_(r, v.cliente, faltan);
   return {ok: true, proyecto: r};
+}
+
+/**
+ * «Enviado al cliente»: el comercial dice que ya le ha mandado el proyecto.
+ * Esto NO manda nada a nadie; solo deja constancia de cuándo y quién, y el
+ * proyecto sale de «listos para enviar». Lo puede marcar el comercial del
+ * cliente y la dirección; nadie más (ni captadores ni otros comerciales).
+ *
+ * Con deshacer: true, la dirección lo devuelve a «entregado» (por si se
+ * pulsó sin querer). El comercial no deshace: que lo pida.
+ *
+ * Y la regla de la casa: a la semana de mandar una propuesta, se llama.
+ * Se apunta un seguimiento con ese próximo paso a 7 días, salvo que el
+ * cliente ya tenga uno pendiente antes (de hoy a 7 días): ese se respeta.
+ */
+function accEnviadoProyecto_(u, p) {
+  const v = clienteVisible_(u, p.cliente_id);
+  if (v.error) return {ok: false, error: v.error};
+  const cli = v.cliente;
+  const per = permisos_(u);
+  const suyo = String(cli.comercial_id) === String(u.id);
+  if (!per.editarTodo && !(u.rol === 'comercial' && suyo)) {
+    return {ok: false, error: 'Solo el comercial del cliente o la dirección pueden marcarlo.'};
+  }
+  const proy = proyectoDe_(cli, u);
+  const estado = normal_(proy.estado);
+
+  if (p.deshacer) {
+    if (!per.editarTodo) return {ok: false, error: 'Deshacerlo solo puede la dirección.'};
+    if (estado !== 'enviado') return {ok: false, error: 'Ese proyecto no está marcado como enviado.'};
+    const r = actualizar_('PROYECTOS', proy.id, {estado: 'entregado', enviado: '', enviado_por: '',
+      modificado: ahora_(), modificado_por: u.id});
+    registrar_(u, 'proyecto_no_enviado', 'PROYECTOS', proy.id, etiquetaCliente_(cli));
+    return {ok: true, proyecto: r};
+  }
+
+  if (estado === 'enviado') return {ok: true, proyecto: proy, ya: true};
+  if (estado !== 'entregado') {
+    return {ok: false, error: 'El proyecto todavía no está hecho: no se puede marcar como enviado.'};
+  }
+  const r = actualizar_('PROYECTOS', proy.id, {estado: 'enviado', enviado: ahora_(), enviado_por: u.id,
+    modificado: ahora_(), modificado_por: u.id});
+  registrar_(u, 'proyecto_enviado', 'PROYECTOS', proy.id, etiquetaCliente_(cli));
+
+  /* El recordatorio de llamar a la semana. */
+  let llamada = '', yaTenia = '';
+  try {
+    const dentro7 = sumarDias_(hoyISO_(), 7);
+    const hay = txt_(cli.proxima_fecha).slice(0, 10);
+    const antes = hay && hay >= hoyISO_() && hay <= dentro7;
+    if (!antes) {
+      insertar_('SEGUIMIENTO', {cliente_id: cli.id, operacion_id: '', usuario_id: u.id,
+        fecha: hoyISO_(), canal: 'email', nota: 'Proyecto enviado al cliente (marcado en el CRM).',
+        proximo_paso: 'Llamar: seguimiento de la propuesta', proxima_fecha: dentro7,
+        estado_resultante: '', origen: 'proyecto_enviado', creado: ahora_()});
+      actualizar_('CLIENTES', cli.id, {proxima_accion: 'Llamar: seguimiento de la propuesta',
+        proxima_fecha: dentro7, modificado: ahora_(), modificado_por: u.id});
+      llamada = dentro7;
+    } else {
+      yaTenia = hay;
+    }
+  } catch (e) { /* el recordatorio es un extra: el enviado queda igual */ }
+  return {ok: true, proyecto: r, llamada: llamada, proximo_ya: yaTenia};
+}
+
+/* Los clientes se nombran siempre «dirección · nombre». */
+function etiquetaCliente_(cli) {
+  return [txt_(cli.direccion), txt_(cli.nombre)].filter(String).join(' · ') || txt_(cli.id);
 }
 
 /** Aviso por correo al comercial del cliente cuando el proyecto se para. */
@@ -6105,8 +6212,12 @@ function accProyectosPendientes_(u, p) {
   leer_('USUARIOS').forEach(function (x) { usuarios[String(x.id)] = txt_(x.nombre); });
   const archivos = leer_('ARCHIVOS');
   const quiero = txt_(p.estado) ? [normal_(p.estado)] : ['pedido', 'en_curso'];
+  /* Con «dias», solo los enviados en esos últimos días (lo que mira la
+     dirección para ver quién ha mandado qué). */
+  const desdeEnvio = num_(p.dias) > 0 ? sumarDias_(hoyISO_(), -num_(p.dias)) : '';
   const lista = leer_('PROYECTOS').filter(function (x) {
     if (quiero.indexOf(normal_(x.estado)) < 0) return false;
+    if (desdeEnvio && txt_(x.enviado).slice(0, 10) < desdeEnvio) return false;
     const c = clientes[String(x.cliente_id)];
     if (!c) return false;
     return per.alcance === 'todo' || String(c.comercial_id) === String(u.id);
@@ -6122,6 +6233,7 @@ function accProyectosPendientes_(u, p) {
             comercial: usuarios[String(c.comercial_id)] || '',
             descripcion: txt_(x.descripcion), estado: txt_(x.estado), pedido: txt_(x.pedido),
             entregado: txt_(x.entregado), faltan: txt_(x.faltan),
+            enviado: txt_(x.enviado), enviado_por: usuarios[String(x.enviado_por)] || '',
             modificado: txt_(x.modificado) || txt_(x.pedido) || txt_(x.creado),
             archivo_id: pdf ? pdf.id : '', archivo_nombre: pdf ? txt_(pdf.nombre) : '',
             fotos: suyos.filter(function (a) { return normal_(a.clase) === 'foto'; }).length,
@@ -6131,6 +6243,7 @@ function accProyectosPendientes_(u, p) {
   });
   /* Los listos para enviar, el más reciente primero; la cola, el más viejo. */
   lista.sort(function (a, b) {
+    if (normal_(a.estado) === 'enviado') return txt_(b.enviado).localeCompare(txt_(a.enviado));
     return normal_(a.estado) === 'entregado'
       ? txt_(b.entregado).localeCompare(txt_(a.entregado))
       : txt_(a.pedido).localeCompare(txt_(b.pedido));
@@ -6557,4 +6670,382 @@ function ponerPuestos() {
   });
   Logger.log(hechos.length ? hechos.join('\n') : 'Ya estaban todos puestos.');
   return hechos;
+}
+
+
+/* ==========================================================================
+   20_Registro.gs
+   ========================================================================== */
+
+/**
+ * 20_Registro.gs — El registro de conexiones y actividad.
+ *
+ * Cada petición con sesión deja una fila en LOG: quién, cuándo, desde qué
+ * equipo, desde dónde y qué ha pedido o cambiado. Las entradas, las salidas,
+ * los intentos fallidos y las sesiones caducadas también.
+ *
+ * Una fila por petición, nunca dos: si la acción ya apunta lo suyo con
+ * registrar_ (que lo cuenta mejor: «alta_cliente C-000412 Ana Lara»), esa
+ * es la que se queda y la genérica no se escribe. La genérica solo sale
+ * para lo que no se apunta solo, que son sobre todo las consultas.
+ *
+ * Lo que manda el navegador (equipo, IP y lugar) no se lo cree nadie: se
+ * guarda como texto, recortado, y no decide nada. Apps Script no ve la IP
+ * de quien llama, así que la única forma de tenerla es que la diga él.
+ *
+ * Nada de esto se borra solo. Si un día la pestaña pesa demasiado, se
+ * archiva a mano.
+ */
+
+/* Lo que se sabe de la petición en curso. Apps Script arranca de cero en
+   cada petición, así que esto vive lo que dura una y no se mezcla. */
+var _peticion = null;
+
+/* La cabecera de LOG, leída una vez por petición como mucho. */
+var _cabLog = null;
+
+/* Lo más que devuelve una consulta del registro de una vez. */
+const TOPE_REGISTRO = 5000;
+const LARGO_DETALLE = 300;
+
+/* Lo que es entrar y salir, venga de donde venga. */
+const ACCIONES_CONEXION = {
+  login: 1, login_fallido: 1, login_bloqueado: 1, usuario_bloqueado: 1,
+  codigo_enviado: 1, codigo_fallido: 1, equipo_verificado: 1,
+  salir: 1, sesion_caducada: 1
+};
+
+/* Qué peticiones cambian algo. Casi todas se reconocen por cómo empiezan;
+   las que no, van en la lista de debajo. Lo que no sale ni en una cosa ni
+   en la otra es una consulta. */
+const PREFIJOS_MODIFICACION = /^(guardar|borrar|importar|entregar|subir|ajustar|aprobar|aplicar|resolver|cancelar|solicitar|generar|reset|cambiar|olvidar|limpiar|reclasificar)/;
+const OTRAS_MODIFICACIONES = {
+  estadoProyecto: 1, estadoTarea: 1, reanalizar: 1, geocodificar: 1,
+  gastoDesdeBanco: 1, copiaAhora: 1, enviadoProyecto: 1, resumenSemanalAhora: 1, avisoPuertas: 1,
+  probarResumen: 1
+};
+
+/* Nombres de parámetro que nunca se apuntan, ni sueltos ni dentro de otro. */
+const PARAM_FUERA = /^(token|accion|conexion|agente|equipo|datos|pendiente|actual|nueva|base64|contenido|miniatura)$|clave|pass|token|codigo|secret/i;
+
+/** El tipo de una petición por su nombre. */
+function tipoDePeticion_(accion) {
+  const a = txt_(accion);
+  if (ACCIONES_CONEXION[a] || a === 'loginCodigo') return 'conexion';
+  if (PREFIJOS_MODIFICACION.test(a) || OTRAS_MODIFICACIONES[a]) return 'modificacion';
+  return 'consulta';
+}
+
+/* Las filas de antes no tenían tipo. Todas venían de registrar_, que solo
+   se llamaba al cambiar algo, salvo las de entrar y salir, las que escribe
+   el propio sistema sin nadie detrás y la de mirar una nómina. */
+function tipoDeFilaVieja_(f) {
+  const a = txt_(f.accion);
+  if (ACCIONES_CONEXION[a]) return 'conexion';
+  if (a === 'ver_nomina') return 'consulta';
+  if (!txt_(f.usuario_id) && !txt_(f.usuario)) return 'sistema';
+  return 'modificacion';
+}
+
+/* ---------- la petición en curso ---------- */
+
+function empezarPeticion_(p, accion) {
+  const c = (p && typeof p.conexion === 'object' && p.conexion) || {};
+  _peticion = {
+    accion: accion,
+    p: p || {},
+    usuario: null,
+    apuntado: false,
+    caida: null,
+    huella: textoLog_(txt_(p && p.equipo) || c.equipo, 64),
+    agente: textoLog_(p && p.agente, 200),
+    ip: textoLog_(c.ip, 45),
+    lugar: textoLog_(c.lugar, 80)
+  };
+}
+
+/* Con sesión, el equipo y el navegador se toman de la sesión, que se
+   apuntaron al entrar, antes que de lo que diga esta petición. */
+function peticionConSesion_(u, s) {
+  if (!_peticion) return;
+  _peticion.usuario = u;
+  if (s) {
+    if (txt_(s.equipo)) _peticion.huella = textoLog_(s.equipo, 64);
+    if (txt_(s.agente)) _peticion.agente = textoLog_(s.agente, 200);
+  }
+}
+
+/* sesion_ avisa por aquí de que ha tirado una sesión vieja. */
+function sesionCaida_(s, motivo) {
+  if (!_peticion || !s) return;
+  _peticion.caida = {usuario_id: txt_(s.usuario_id), motivo: motivo,
+                     huella: txt_(s.equipo), agente: txt_(s.agente)};
+}
+
+function cerrarPeticion_(r) {
+  const q = _peticion;
+  _peticion = null;
+  if (!q) return;
+  try {
+    if (q.caida) {
+      const quien = leer_('USUARIOS').filter(function (x) {
+        return String(x.id) === String(q.caida.usuario_id); })[0];
+      _peticion = q;                      // para que la fila lleve equipo, IP y lugar
+      if (txt_(q.caida.huella)) q.huella = textoLog_(q.caida.huella, 64);
+      if (txt_(q.caida.agente)) q.agente = textoLog_(q.caida.agente, 200);
+      apuntarLog_({usuario: quien || {id: q.caida.usuario_id, usuario: ''},
+                   accion: 'sesion_caducada', entidad: 'USUARIOS', entidadId: q.caida.usuario_id,
+                   detalle: q.caida.motivo, tipo: 'conexion'});
+      _peticion = null;
+      return;
+    }
+    if (!q.usuario || q.apuntado) return;
+    _peticion = q;
+    const p = q.p;
+    let entidad = '', id = '';
+    if (txt_(p.cliente_id)) { entidad = 'CLIENTES'; id = txt_(p.cliente_id); }
+    else if (txt_(p.id)) id = txt_(p.id);
+    else if (txt_(p.usuario_id)) { entidad = 'USUARIOS'; id = txt_(p.usuario_id); }
+    let detalle = resumenParams_(p);
+    if (r && r.ok === false && r.error) detalle = (detalle ? detalle + ' · ' : '') + 'error: ' + txt_(r.error);
+    apuntarLog_({usuario: q.usuario, accion: q.accion, entidad: entidad, entidadId: id,
+                 detalle: detalle, tipo: tipoDePeticion_(q.accion)});
+  } catch (e) { /* el registro nunca puede tumbar una operación */ }
+  _peticion = null;
+}
+
+/* ---------- escribir una fila ---------- */
+
+/* Un texto que viene de fuera, listo para la hoja: sin caracteres de
+   control, recortado, y sin que pueda pasar por fórmula (una celda que
+   empieza por «=» la ejecuta la hoja; con el apóstrofo delante es texto). */
+function textoLog_(v, largo) {
+  let s = (typeof v === 'string' || typeof v === 'number') ? String(v) : '';
+  s = s.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim();
+  const n = largo || LARGO_DETALLE;
+  if (s.length > n) s = s.slice(0, n - 1) + '…';
+  return s;
+}
+function celdaLog_(s) { return /^[=+\-@]/.test(s) ? "'" + s : s; }
+
+function cabeceraLog_(h) {
+  if (_cabLog) return _cabLog;
+  const quiero = ESQUEMA.LOG;
+  const guardada = txt_(PROPS.getProperty('LOG_CABECERA'));
+  if (guardada) {
+    const c = guardada.split(',');
+    if (quiero.every(function (x) { return c.indexOf(x) >= 0; })) return (_cabLog = c);
+  }
+  return (_cabLog = ponerColumnasLog_(h));
+}
+
+/* Las hojas que ya existían tienen solo las siete columnas de siempre. Las
+   que faltan se añaden al final, como hace instalar(), y la primera
+   petición que escribe en el registro lo deja hecho sin que nadie toque
+   nada. La cabecera queda apuntada para no tener que leerla cada vez. */
+function ponerColumnasLog_(h) {
+  const ancho = Math.max(h.getLastColumn(), 1);
+  const actual = h.getRange(1, 1, 1, ancho).getValues()[0].map(function (x) { return txt_(x); });
+  while (actual.length && !actual[actual.length - 1]) actual.pop();
+  const faltan = ESQUEMA.LOG.filter(function (c) { return actual.indexOf(c) < 0; });
+  if (faltan.length) {
+    h.getRange(1, actual.length + 1, 1, faltan.length).setValues([faltan]);
+    faltan.forEach(function (c) { actual.push(c); });
+  }
+  PROPS.setProperty('LOG_CABECERA', actual.join(','));
+  return actual;
+}
+
+/* «Windows · Chrome», «Android · móvil · Chrome»: lo justo para reconocer
+   el aparato sin leerse la cadena entera del navegador. */
+function equipoLegible_(agente) {
+  const a = txt_(agente);
+  if (!a) return '';
+  const navegador = /Edg\//.test(a) ? 'Edge' : /OPR\//.test(a) ? 'Opera'
+    : /SamsungBrowser\//.test(a) ? 'Samsung Internet'
+    : /CriOS\/|Chrome\//.test(a) ? 'Chrome' : /FxiOS\/|Firefox\//.test(a) ? 'Firefox'
+    : /Safari\//.test(a) ? 'Safari' : 'Navegador';
+  const sistema = /Windows/.test(a) ? 'Windows' : /Android/.test(a) ? 'Android'
+    : /iPhone/.test(a) ? 'iPhone' : /iPad/.test(a) ? 'iPad' : /Mac OS X|Macintosh/.test(a) ? 'Mac'
+    : /CrOS/.test(a) ? 'Chromebook' : /Linux/.test(a) ? 'Linux' : '';
+  const movil = /Mobile|iPhone|Android(?!.*Tablet)/.test(a) && !/iPad/.test(a) ? 'móvil' : '';
+  return [sistema, movil, navegador].filter(String).join(' · ');
+}
+
+/**
+ * Escribe una fila en LOG. o: {usuario, accion, entidad, entidadId, detalle, tipo}
+ * Lo que no se diga se toma de la petición en curso.
+ */
+function apuntarLog_(o) {
+  try {
+    const h = hoja_('LOG');
+    const cab = cabeceraLog_(h);
+    const q = _peticion || {};
+    /* Lo que apunta el sistema sin nadie detrás (la copia, el resumen del
+       viernes) lleva el nombre de quien lo lanzó, si lo lanzó alguien. */
+    const u = o.usuario || q.usuario || null;
+    const accion = txt_(o.accion);
+    let detalle = o.detalle;
+    if (typeof detalle !== 'string') detalle = JSON.stringify(detalle === undefined || detalle === null ? '' : detalle);
+    if (detalle === '""') detalle = '';
+    const legible = equipoLegible_(q.agente);
+    const huella = txt_(q.huella) ? '#' + txt_(q.huella).slice(0, 6) : '';
+    const tipo = o.tipo || (ACCIONES_CONEXION[accion] ? 'conexion'
+      : (q.accion ? tipoDePeticion_(q.accion) : 'sistema'));
+    const valores = {
+      fecha: ahora_(),
+      usuario_id: u ? textoLog_(u.id, 40) : '',
+      usuario: u ? textoLog_(u.usuario, 60) : '',
+      accion: textoLog_(accion, 60),
+      entidad: textoLog_(o.entidad, 40),
+      entidad_id: textoLog_(o.entidadId, 120),
+      detalle: textoLog_(detalle, LARGO_DETALLE),
+      tipo: tipo,
+      equipo: [legible, huella].filter(String).join(' · '),
+      agente: textoLog_(q.agente, 200),
+      ip: textoLog_(q.ip, 45),
+      lugar: textoLog_(q.lugar, 80)
+    };
+    h.appendRow(cab.map(function (c) {
+      const v = valores[c];
+      return v === undefined ? '' : (c === 'fecha' ? v : celdaLog_(String(v)));
+    }));
+    if (_peticion) _peticion.apuntado = true;
+  } catch (e) { /* el registro nunca puede tumbar una operación */ }
+}
+
+/* ---------- lo que se pidió, en corto ---------- */
+
+/* Un resumen legible de los parámetros. Fuera el token, las claves, los
+   códigos y los archivos en base64; lo largo se cuenta en vez de copiarse. */
+function resumenParams_(p) {
+  const trozos = [];
+  Object.keys(p || {}).forEach(function (k) {
+    if (PARAM_FUERA.test(k)) return;
+    const v = valorCorto_(p[k], 0);
+    if (v !== '') trozos.push(k + '=' + v);
+  });
+  return textoLog_(trozos.join(' · '), LARGO_DETALLE);
+}
+
+function valorCorto_(v, nivel) {
+  if (v === null || v === undefined || v === '') return '';
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  if (typeof v === 'string') {
+    if (v.length > 200) return '(' + v.length + ' caracteres)';
+    return textoLog_(v, 60);
+  }
+  if (Array.isArray(v)) {
+    if (!v.length) return '';
+    const sencillos = v.every(function (x) { return typeof x === 'string' || typeof x === 'number'; });
+    if (sencillos && v.length <= 5) return '[' + v.map(function (x) { return textoLog_(x, 30); }).join(', ') + ']';
+    return '[' + v.length + (v.length === 1 ? ' elemento' : ' elementos') + ']';
+  }
+  if (typeof v === 'object') {
+    if (nivel > 0) return '{…}';
+    const claves = Object.keys(v).filter(function (k) { return !PARAM_FUERA.test(k); });
+    const dentro = [];
+    claves.forEach(function (k) {
+      const x = valorCorto_(v[k], nivel + 1);
+      if (x !== '') dentro.push(k + ':' + x);
+    });
+    if (!dentro.length) return '';
+    const muestra = dentro.slice(0, 8).join(', ');
+    return '{' + muestra + (dentro.length > 8 ? ', +' + (dentro.length - 8) : '') + '}';
+  }
+  return '';
+}
+
+/* ---------- leerlo ---------- */
+
+/* La celda de fecha vuelve como Date si la hoja la reconoció al escribirla. */
+function marcaLog_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, zonaHoraria_(), 'yyyy-MM-dd HH:mm:ss');
+  return txt_(v).replace('T', ' ');
+}
+
+/* «2026-10-23 08:30» → «2026-10-23 08:30:00» (o :59 si es el final). Con
+   solo el día, el día entero. */
+function marcaFiltro_(v, alFinal) {
+  const s = txt_(v).replace('T', ' ');
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})(?: (\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (!m) return '';
+  if (!m[2]) return m[1] + (alFinal ? ' 23:59:59' : ' 00:00:00');
+  return m[1] + ' ' + m[2] + ':' + m[3] + ':' + (m[4] || (alFinal ? '59' : '00'));
+}
+
+/**
+ * El registro, filtrado. Solo para el superadmin.
+ * p: {desde, hasta ('YYYY-MM-DD HH:mm' o 'YYYY-MM-DD'), usuario (id), tipo, texto, limite}
+ *
+ * Las filas se van añadiendo por orden, así que no hace falta leer la hoja
+ * entera: se lee la columna de fechas, se ve qué tramo cae dentro y solo
+ * ese tramo se lee entero, de abajo arriba y a trozos, hasta llenar el tope.
+ */
+function accRegistro_(u, p) {
+  if (normal_(u.rol) !== 'superadmin') {
+    throw new Error('El registro de conexiones solo lo ve el superadmin.');
+  }
+  const desde = marcaFiltro_(p.desde, false);
+  const hasta = marcaFiltro_(p.hasta, true);
+  const tope = Math.max(1, Math.min(num_(p.limite) || TOPE_REGISTRO, TOPE_REGISTRO));
+  const tipo = txt_(p.tipo);
+  const texto = normal_(p.texto);
+  const quien = txt_(p.usuario);
+  let quienNombre = '';
+  if (quien) {
+    const fila = leer_('USUARIOS').filter(function (x) { return String(x.id) === quien; })[0];
+    quienNombre = fila ? normal_(fila.usuario) : '';
+  }
+
+  const h = hoja_('LOG');
+  const n = h.getLastRow();
+  const vacio = {ok: true, registro: [], truncado: false, tope: tope, desde: desde, hasta: hasta};
+  if (n < 2) return vacio;
+
+  /* La cabecera de verdad, por si alguien ha tocado la hoja a mano. */
+  const cab = ponerColumnasLog_(h);
+  _cabLog = cab;
+  const colFecha = cab.indexOf('fecha');
+  if (colFecha < 0) return vacio;
+
+  const fechas = h.getRange(2, colFecha + 1, n - 1, 1).getValues()
+    .map(function (f) { return marcaLog_(f[0]); });
+  let primero = -1, ultimo = -1;
+  for (let i = 0; i < fechas.length; i++) {
+    const f = fechas[i];
+    if (!f || (desde && f < desde) || (hasta && f > hasta)) continue;
+    if (primero < 0) primero = i;
+    ultimo = i;
+  }
+  if (primero < 0) return vacio;
+
+  const fuera = [];
+  let truncado = false;
+  const TROZO = 2000;
+  for (let fin = ultimo; fin >= primero && !truncado; fin -= TROZO) {
+    const ini = Math.max(primero, fin - TROZO + 1);
+    const bloque = h.getRange(ini + 2, 1, fin - ini + 1, cab.length).getValues();
+    for (let j = bloque.length - 1; j >= 0; j--) {
+      const o = {};
+      cab.forEach(function (c, k) {
+        if (!c) return;
+        const v = bloque[j][k];
+        o[c] = k === colFecha ? marcaLog_(v) : (v instanceof Date ? fechaHoja_(v) : txt_(v));
+      });
+      if (!o.fecha || (desde && o.fecha < desde) || (hasta && o.fecha > hasta)) continue;
+      if (!o.tipo) o.tipo = tipoDeFilaVieja_(o);
+      if (tipo && o.tipo !== tipo) continue;
+      if (quien && String(o.usuario_id) !== quien &&
+          !(quienNombre && normal_(o.usuario) === quienNombre)) continue;
+      if (texto) {
+        const donde = normal_([o.usuario, o.accion, o.entidad, o.entidad_id, o.detalle,
+                               o.equipo, o.ip, o.lugar].join(' '));
+        if (donde.indexOf(texto) < 0) continue;
+      }
+      if (fuera.length >= tope) { truncado = true; break; }
+      fuera.push(o);
+    }
+  }
+  return {ok: true, registro: fuera, truncado: truncado, tope: tope, desde: desde, hasta: hasta};
 }
