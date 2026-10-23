@@ -1,12 +1,14 @@
 /* vistas/clientes.js — listado de clientes y ficha completa. */
 
 import {h, poner, txt, num, eur, eur2, miles, pct, fechaCorta, fechaLarga, haceDias,
-        normal, telHref, waHref, mapsHref, comoLlegarHref, destinoDe, suma, hoyISO} from '../util.js';
+        normal, telHref, waHref, mapsHref, comoLlegarHref, destinoDe, suma, hoyISO,
+        etiquetaCliente, recortar} from '../util.js';
 import * as api from '../api.js';
 import {tarjeta, tabla, kpi, kpis, etiquetaEstado, marca, ventanaFormulario, ventana,
         aviso, avisoError, confirmar, filtros} from '../ui.js';
 import {editorOperacion, tarjetaOperacion} from './operaciones.js';
 import {panelProyecto} from './proyecto.js';
+import {panelFicha} from './ficha.js';
 
 /* ---------- campos del formulario de cliente ---------- */
 export const camposCliente = () => [
@@ -84,20 +86,138 @@ export function gastoAnual(c) {
   return Math.round(luz + anual);
 }
 
+/* ---------- lo que se mira de la última instalación ---------- */
+
+/* La operación que manda es la más reciente: firma, propuesta o alta. */
+export function ultimaOperacion(c) {
+  const fecha = o => txt(o.fecha_firma) || txt(o.fecha_propuesta) || txt(o.creado);
+  return api.operacionesDe(c.id).slice()
+    .sort((a, b) => fecha(b).localeCompare(fecha(a)))[0] || null;
+}
+
+const GRUPO_TIPO = {fv: 'fv', aero: 'aero', fv_aero: 'fv_aero'};
+export const tipoInstalacion = c => {
+  const o = ultimaOperacion(c);
+  return o ? (GRUPO_TIPO[normal(o.tipo)] || 'otro') : '';
+};
+
+/* Firmada en adelante, la financiera ya ha dicho que sí; antes (propuesta
+   o financiación en estudio) está pendiente de su respuesta. */
+const ESTADOS_APROBADA = ['firmada', 'tramite', 'material', 'instalacion', 'instalada', 'legalizada', 'cerrada'];
+export const PAGOS = [
+  ['aprobada', 'Financiación aprobada', 'bien'],
+  ['pendiente', 'Financiación pendiente', 'aviso'],
+  ['contado', 'Contado', 'info'],
+  ['sin_definir', 'Forma de pago sin definir', ''],
+  ['sin', 'Sin operación', '']
+];
+export function pagoDe(c) {
+  const o = ultimaOperacion(c);
+  if (!o) return {clave: 'sin', texto: 'Sin operación', clase: ''};
+  const forma = normal(o.forma_pago);
+  const financiada = forma === 'financiado' || (!!txt(o.financiera) && forma !== 'contado');
+  if (!financiada) return forma === 'contado'
+    ? {clave: 'contado', texto: 'Contado', clase: 'info'}
+    : {clave: 'sin_definir', texto: 'Sin definir', clase: ''};
+  const fin = txt(o.financiera);
+  const estado = normal(o.estado);
+  if (estado === 'cancelada') return {clave: 'cancelada', texto: 'Financiación cancelada', clase: 'mal', financiera: fin};
+  if (ESTADOS_APROBADA.includes(estado)) return {clave: 'aprobada', texto: 'Financiación aprobada', clase: 'bien', financiera: fin};
+  return {clave: 'pendiente', texto: 'Financiación pendiente', clase: 'aviso', financiera: fin};
+}
+
+/* Una visita (cita de captación) de hoy en adelante que nadie ha confirmado. */
+export const visitaSinConfirmar = c => api.estado.captaciones.some(k =>
+  String(k.cliente_id) === String(c.id) && txt(k.fecha) >= hoyISO() &&
+  normal(k.estado_cita) !== 'confirmada');
+
+/* ---------- comentarios propios ---------- */
+/* Cada comercial deja su comentario sobre el cliente y sale en el listado.
+   Se guarda como un apunte de seguimiento con origen «comentario»: así no
+   hace falta tocar el servidor, no pisa ningún campo del cliente y queda
+   quién lo escribió y cuándo. Cada uno edita el suyo. */
+export const comentariosDe = c => api.estado.seguimiento
+  .filter(s => String(s.cliente_id) === String(c.id) && txt(s.origen) === 'comentario')
+  .sort((a, b) => txt(b.fecha).localeCompare(txt(a.fecha)) ||
+                  txt(b.creado).localeCompare(txt(a.creado)));
+export const ultimoComentario = c => comentariosDe(c)[0] || null;
+const miComentario = c => comentariosDe(c)
+  .find(s => String(s.usuario_id) === String((api.estado.usuario || {}).id)) || null;
+
+export function editarComentario(c, alTerminar) {
+  const mio = miComentario(c);
+  return ventanaFormulario({
+    titulo: 'Tu comentario · ' + etiquetaCliente(c),
+    campos: [{id: 'nota', et: 'Comentario', tipo: 'area', ancho: 3, requerido: true, filas: 4,
+      pista: 'Lo que el equipo tiene que saber de este cliente, en dos líneas.',
+      ayuda: 'Sale en el listado de clientes. Cada comercial tiene el suyo y lo puede cambiar cuando quiera.'}],
+    valores: {nota: mio ? txt(mio.nota) : ''},
+    textoBoton: mio ? 'Guardar cambios' : 'Guardar comentario',
+    alGuardar: async datos => {
+      const r = await api.guardarSeguimiento(mio
+        ? {id: mio.id, cliente_id: c.id, nota: datos.nota, fecha: hoyISO()}
+        : {cliente_id: c.id, canal: 'otro', origen: 'comentario', fecha: hoyISO(), nota: datos.nota});
+      /* Se apunta en local para no recargar todo y perder los filtros. */
+      const fila = Object.assign({}, mio || {}, r.seguimiento || {},
+        {origen: 'comentario', nota: datos.nota, fecha: hoyISO()});
+      const lista = api.estado.seguimiento;
+      const i = lista.findIndex(s => String(s.id) === String(fila.id));
+      if (i >= 0) lista[i] = fila; else lista.push(fila);
+      aviso('Comentario guardado.');
+      if (alTerminar) await alTerminar(fila);
+    }
+  });
+}
+
+/* En el listado sale el último comentario de cada persona (como mucho
+   tres), el tuyo primero: así nadie tapa lo que ha escrito otro. */
+export function comentariosPorPersona(c) {
+  const yo = String((api.estado.usuario || {}).id);
+  const vistos = new Set();
+  return comentariosDe(c).filter(s => {
+    const k = String(s.usuario_id);
+    if (vistos.has(k)) return false;
+    vistos.add(k);
+    return true;
+  }).sort((a, b) => (String(b.usuario_id) === yo) - (String(a.usuario_id) === yo));
+}
+
+const celdaComentario = (c, alCambiar) => {
+  const lista = comentariosPorPersona(c);
+  return h('div', {estilo: {minWidth: '170px', maxWidth: '280px'}},
+    lista.length ? lista.slice(0, 3).map(u => h('div', {title: txt(u.nota), estilo: {marginBottom: '3px'}},
+      h('span', recortar(u.nota, 90)),
+      h('div.nota', api.nombrePersona(u.usuario_id) + ' · ' + fechaCorta(u.fecha))))
+      : h('span.nota', 'Sin comentario'),
+    lista.length > 3 ? h('div.nota', '+' + (lista.length - 3) + ' más en la ficha') : null,
+    h('button.btn.mini.plano', {estilo: {padding: '2px 6px', marginTop: '2px'},
+      onclick: e => { e.stopPropagation(); editarComentario(c, alCambiar); }}, '✎ Comentario'));
+};
+
 /* ================= listado ================= */
 export async function vistaClientes({ir, refrescar}) {
   const caja = h('div');
-  const estado = {texto: '', estado: '', municipio: '', persona: '', orden: 'reciente'};
+  const estado = {texto: '', estado: '', municipio: '', persona: '', tipo: '', pago: '', estado_op: '',
+                  visita: '', orden: 'reciente'};
 
   const municipios = [...new Set(api.estado.clientes.map(c => txt(c.municipio)).filter(Boolean))]
     .sort((a, b) => a.localeCompare(b, 'es'));
 
   const f = filtros([
-    {id: 'texto', et: 'Buscar por nombre, dirección, teléfono…'},
+    {id: 'texto', et: 'Buscar por nombre, dirección, teléfono, comentario…'},
     {id: 'estado', tipo: 'select', opciones: [['', 'Todos los estados']].concat(api.opciones('estadosCliente'))},
     {id: 'municipio', tipo: 'select', opciones: [['', 'Todos los municipios']].concat(municipios)},
     ...(api.esDireccion() ? [{id: 'persona', tipo: 'select',
-      opciones: [['', 'Todo el equipo']].concat(api.estado.usuarios.map(u => [u.id, u.nombre]))}] : []),
+      opciones: [['', 'Todos los comerciales']].concat(api.estado.usuarios.map(u => [u.id, u.nombre]))}] : []),
+    {id: 'tipo', tipo: 'select', opciones: [['', 'Cualquier instalación'], ['fv', 'Fotovoltaica'],
+      ['aero', 'Aerotermia'], ['fv_aero', 'FV + aerotermia'], ['otro', 'Otra instalación'],
+      ['ninguna', 'Sin instalación']]},
+    {id: 'pago', tipo: 'select', opciones: [['', 'Cualquier forma de pago']]
+      .concat(PAGOS.map(([v, e]) => [v, e]))},
+    {id: 'estado_op', tipo: 'select', opciones: [['', 'Cualquier estado de operación']]
+      .concat(api.opciones('estadosOperacion'))},
+    {id: 'visita', tipo: 'select', opciones: [['', 'Todas las visitas'],
+      ['sin_confirmar', 'Con visita sin confirmar']]},
     {tipo: 'boton', et: '+ Nuevo cliente', clase: 'primario',
      accion: () => editorCliente(null, async c => { await refrescar(); ir('cliente/' + c.id); })}
   ], v => { Object.assign(estado, v); pinta(); });
@@ -110,8 +230,19 @@ export async function vistaClientes({ir, refrescar}) {
       if (estado.estado && txt(c.estado) !== estado.estado) return false;
       if (estado.municipio && txt(c.municipio) !== estado.municipio) return false;
       if (estado.persona && txt(c.comercial_id) !== estado.persona && txt(c.captador_id) !== estado.persona) return false;
+      if (estado.tipo) {
+        const t = tipoInstalacion(c);
+        if (estado.tipo === 'ninguna' ? t !== '' : t !== estado.tipo) return false;
+      }
+      if (estado.pago && pagoDe(c).clave !== estado.pago) return false;
+      if (estado.estado_op) {
+        const o = ultimaOperacion(c);
+        if (!o || normal(o.estado) !== estado.estado_op) return false;
+      }
+      if (estado.visita === 'sin_confirmar' && !visitaSinConfirmar(c)) return false;
       if (!q) return true;
-      return [c.nombre, c.direccion, c.municipio, c.telefono, c.email, c.id, c.perfil]
+      return [c.nombre, c.direccion, c.municipio, c.telefono, c.email, c.id, c.perfil,
+              ...comentariosDe(c).map(s => s.nota)]
         .some(x => normal(x).includes(q));
     }).sort((a, b) => txt(b.modificado || b.creado).localeCompare(txt(a.modificado || a.creado)));
   }
@@ -122,9 +253,10 @@ export async function vistaClientes({ir, refrescar}) {
     lista.forEach(c => { porEstado[txt(c.estado)] = (porEstado[txt(c.estado)] || 0) + 1; });
 
     const t = tabla([
-      {clave: 'nombre', et: 'Cliente', pinta: c => h('div',
-        h('b', c.nombre),
-        h('div.nota', txt(c.direccion) ? c.direccion + (c.municipio ? ' · ' + c.municipio : '') : (c.municipio || '—')))},
+      {clave: 'nombre', et: 'Cliente', valor: c => etiquetaCliente(c), pinta: c => h('div',
+        h('b', etiquetaCliente(c)),
+        h('div.nota', [txt(c.municipio), txt(c.telefono)].filter(Boolean).join(' · ') || '—'),
+        visitaSinConfirmar(c) ? h('div', {estilo: {marginTop: '3px'}}, marca('VISITA NO CONFIRMADA', 'mal')) : null)},
       {clave: 'estado', et: 'Estado', pinta: c => etiquetaEstado(c.estado,
         api.etiquetaCatalogo('estadosCliente', c.estado))},
       {clave: 'interes', et: 'Interés', num: true, valor: c => num(c.interes),
@@ -132,14 +264,18 @@ export async function vistaClientes({ir, refrescar}) {
       {clave: 'gasto', et: 'Gasto anual', num: true, valor: c => gastoAnual(c),
        pinta: c => gastoAnual(c) ? eur(gastoAnual(c)) : '—'},
       {clave: 'operacion', et: 'Instalación', valor: c => {
-        const ops = api.operacionesDe(c.id);
-        return ops.length ? api.etiquetaCatalogo('tiposOperacion', ops[0].tipo) : '';
+        const o = ultimaOperacion(c);
+        return o ? api.etiquetaCatalogo('tiposOperacion', o.tipo) : '';
       }, pinta: c => {
-        const ops = api.operacionesDe(c.id);
-        if (!ops.length) return '—';
-        const o = ops[0];
+        const o = ultimaOperacion(c);
+        if (!o) return '—';
         return h('div', h('span', api.etiquetaCatalogo('tiposOperacion', o.tipo)),
-          h('div.nota', eur(o.total)));
+          h('div.nota', eur(o.total) + ' · ' + api.etiquetaCatalogo('estadosOperacion', o.estado)));
+      }},
+      {clave: 'pago', et: 'Pago', valor: c => pagoDe(c).texto, pinta: c => {
+        const p = pagoDe(c);
+        if (p.clave === 'sin') return '—';
+        return h('div', marca(p.texto, p.clase), p.financiera ? h('div.nota', p.financiera) : null);
       }},
       ...(api.esDireccion() ? [{clave: 'comercial', et: 'Comercial',
         valor: c => api.nombrePersona(c.comercial_id)}] : []),
@@ -148,6 +284,8 @@ export async function vistaClientes({ir, refrescar}) {
          ? h('div', h('span', {estilo: txt(c.proxima_fecha) < hoyISO() ? {color: 'var(--mal)', fontWeight: '600'} : null},
              fechaCorta(c.proxima_fecha)), h('div.nota', txt(c.proxima_accion)))
          : '—'},
+      {clave: 'comentario', et: 'Comentario', valor: c => comentariosPorPersona(c).map(s => txt(s.nota)).join(' | '),
+       pinta: c => celdaComentario(c, () => pinta())},
       {clave: 'modificado', et: 'Actividad', valor: c => txt(c.modificado || c.creado),
        pinta: c => h('span.nota', haceDias(txt(c.modificado || c.creado).slice(0, 10)))}
     ], lista, {
@@ -183,11 +321,15 @@ export async function vistaCliente({id, ir, refrescar}) {
 
   const ops = api.operacionesDe(c.id);
   const seg = api.seguimientoDe(c.id);
+  const contactos = seg.filter(s => txt(s.origen) !== 'comentario');
   const cap = api.captacionDe(c.id);
   const total = suma(ops, 'total');
 
   const cabecera = h('.cabecera-ficha',
     h('.quien',
+      /* Primero la calle y debajo el nombre, como se nombra a los clientes en todo el CRM. */
+      txt(c.direccion) ? h('div.senas', {estilo: {fontSize: '14px'}},
+        [txt(c.direccion), txt(c.municipio)].filter(Boolean).join(', ')) : null,
       h('h1', c.nombre),
       h('div.acciones', {estilo: {marginTop: '6px'}},
         etiquetaEstado(c.estado, api.etiquetaCatalogo('estadosCliente', c.estado)),
@@ -207,6 +349,8 @@ export async function vistaCliente({id, ir, refrescar}) {
             '🚗 Ir en coche')
         : null,
       h('button.btn', {onclick: () => editorCliente(c, async () => { await refrescar(); })}, 'Editar'),
+      h('button.btn', {onclick: () => editarComentario(c, async () => { await refrescar(); })},
+        '✎ Comentario'),
       h('button.btn.lima', {onclick: () => nuevoSeguimiento(c, refrescar)}, '+ Apuntar contacto'),
       h('button.btn.primario', {onclick: () => editorOperacion(null, c, async () => { await refrescar(); })},
         '+ Instalación')));
@@ -214,10 +358,11 @@ export async function vistaCliente({id, ir, refrescar}) {
   const pestanas = h('.pestanas');
   const panel = h('div');
   const tabs = [
-    ['Resumen', () => panelResumen(c, ops, seg)],
+    ['Resumen', () => panelResumen(c, ops, seg, refrescar)],
     ['Instalaciones (' + ops.length + ')', () => panelOperaciones(c, ops, refrescar)],
     ['Seguimiento (' + seg.length + ')', () => panelSeguimiento(c, seg, refrescar)],
     ['Vivienda y consumo', () => panelVivienda(c)],
+    ['Ficha de dimensionado', () => panelFicha(c)],
     ['Proyecto', () => panelProyecto(c)],
     ...(cap ? [['Captación', () => panelCaptacion(cap)]] : [])
   ];
@@ -238,8 +383,8 @@ export async function vistaCliente({id, ir, refrescar}) {
       kpi('Instalaciones', miles(ops.length), ops.length ? api.etiquetaCatalogo('tiposOperacion', ops[0].tipo) : 'ninguna'),
       kpi('Importe', eur(total), 'IVA incluido'),
       kpi('Gasto energético', eur(gastoAnual(c)), 'al año, antes de instalar'),
-      kpi('Último contacto', seg.length ? haceDias(seg[0].fecha) : '—',
-        seg.length ? api.etiquetaCatalogo('canales', seg[0].canal) : 'sin apuntes'),
+      kpi('Último contacto', contactos.length ? haceDias(contactos[0].fecha) : '—',
+        contactos.length ? api.etiquetaCatalogo('canales', contactos[0].canal) : 'sin apuntes'),
       kpi('Próximo paso', txt(c.proxima_fecha) ? fechaCorta(c.proxima_fecha) : '—',
         txt(c.proxima_accion) || 'sin definir',
         {estado: txt(c.proxima_fecha) && txt(c.proxima_fecha) < hoyISO() ? 'mal' : null})
@@ -249,7 +394,7 @@ export async function vistaCliente({id, ir, refrescar}) {
 
 const dato = (et, v) => h('.dato', h('.et', et), h('.v', v === '' || v === null || v === undefined ? '—' : v));
 
-function panelResumen(c, ops, seg) {
+function panelResumen(c, ops, seg, refrescar) {
   return h('.doble',
     tarjeta('Datos de contacto', h('div',
       dato('Nombre', c.nombre),
@@ -270,6 +415,7 @@ function panelResumen(c, ops, seg) {
       dato('Comercial', api.nombrePersona(c.comercial_id)),
       dato('Captador', txt(c.captador_id) ? api.nombrePersona(c.captador_id) : ''))),
     h('div',
+      tarjetaComentarios(c, refrescar),
       tarjeta('Perfil y notas', h('div',
         h('p', txt(c.perfil) || h('span.nota', 'Sin perfil apuntado.')),
         txt(c.otros) ? h('p.nota', c.otros) : null)),
@@ -281,6 +427,17 @@ function panelResumen(c, ops, seg) {
             txt(s.proximo_paso) ? h('.nota', '→ ' + s.proximo_paso +
               (txt(s.proxima_fecha) ? ' (' + fechaCorta(s.proxima_fecha) + ')' : '')) : null)))
           : h('.vacio', 'Todavía no hay contactos apuntados.'))));
+}
+
+function tarjetaComentarios(c, refrescar) {
+  const lista = comentariosDe(c);
+  return tarjeta('Comentarios del equipo',
+    lista.length ? h('ul.linea-tiempo', lista.map(s => h('li',
+      h('.cuando', api.nombrePersona(s.usuario_id) + ' · ' + fechaCorta(s.fecha)),
+      h('.que', s.nota))))
+      : h('.vacio', 'Nadie ha dejado todavía un comentario.'),
+    {acciones: [h('button.btn.mini', {onclick: () => editarComentario(c, async () => { await refrescar(); })},
+      '✎ Tu comentario')]});
 }
 
 function panelVivienda(c) {
@@ -349,7 +506,8 @@ function panelSeguimiento(c, seg, refrescar) {
     seg.length ? h('ul.linea-tiempo', seg.map(s =>
       h('li',
         h('.cuando', fechaCorta(s.fecha) + ' · ' + api.etiquetaCatalogo('canales', s.canal) +
-          ' · ' + api.nombrePersona(s.usuario_id) + (txt(s.origen) === 'parte' ? ' · desde el parte diario' : '')),
+          ' · ' + api.nombrePersona(s.usuario_id) + (txt(s.origen) === 'parte' ? ' · desde el parte diario' : '') +
+          (txt(s.origen) === 'comentario' ? ' · comentario' : '')),
         h('.que', s.nota),
         txt(s.proximo_paso) ? h('.nota', '→ ' + s.proximo_paso +
           (txt(s.proxima_fecha) ? ' · ' + fechaCorta(s.proxima_fecha) : '')) : null,
