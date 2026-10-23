@@ -1,10 +1,11 @@
 /* vistas/captaciones.js — fichas de captación: lo que traen Sandra y Abraham. */
 
-import {h, poner, txt, num, eur, miles, pct, fechaCorta, normal, suma, hoyISO} from '../util.js';
+import {h, poner, txt, num, eur, miles, pct, fechaCorta, normal, suma, hoyISO, etiquetaCliente} from '../util.js';
 import * as api from '../api.js';
 import {tarjeta, tabla, kpi, kpis, etiquetaEstado, marca, ventanaFormulario, aviso,
         filtros} from '../ui.js';
 import {gastoAnual} from './clientes.js';
+import {estadoLead} from './leads.js';
 
 function nuevaCaptacion(refrescar, ir) {
   const comerciales = api.estado.usuarios
@@ -245,13 +246,15 @@ function rendimiento(lista) {
 export async function vistaCaptaciones({ir, refrescar}) {
   const caja = h('div');
   const contenedor = h('div');
-  const est = {texto: '', resultado: '', captador: '', desde: ''};
+  const est = {texto: '', resultado: '', captador: '', desde: '', perdidos: ''};
   const puedeAdjudicar = api.estado.usuario.rol === 'captador' || api.esDireccion();
 
   const f = filtros([
     {id: 'texto', et: 'Buscar por cliente o municipio…'},
     {id: 'resultado', tipo: 'select',
      opciones: [['', 'Todos los resultados']].concat(api.opciones('resultadosCaptacion'))},
+    {id: 'perdidos', tipo: 'select', opciones: [['', 'Todos los leads'], ['ambos', 'Caídos / desaparecidos'],
+      ['caido', 'Solo caídos'], ['desaparecido', 'Solo desaparecidos']]},
     ...(api.esDireccion() ? [{id: 'captador', tipo: 'select',
       opciones: [['', 'Todos los captadores']].concat(api.estado.usuarios
         .filter(u => u.rol === 'captador').map(u => [u.id, u.nombre]))}] : []),
@@ -268,6 +271,10 @@ export async function vistaCaptaciones({ir, refrescar}) {
       if (est.resultado && txt(c.resultado) !== est.resultado) return false;
       if (est.captador && txt(c.captador_id) !== est.captador) return false;
       if (est.desde && txt(c.fecha) < est.desde) return false;
+      if (est.perdidos) {
+        const e = estadoLead(c);
+        if (!e || (est.perdidos !== 'ambos' && e.tipo !== est.perdidos)) return false;
+      }
       if (!q) return true;
       return [cli.nombre, cli.municipio, cli.direccion, c.notas].some(x => normal(x).includes(q));
     }).sort((a, b) => txt(b.fecha).localeCompare(txt(a.fecha)));
@@ -278,15 +285,17 @@ export async function vistaCaptaciones({ir, refrescar}) {
     const t = tabla([
       {clave: 'fecha', et: 'Visita', pinta: c => h('div', h('b', fechaCorta(c.fecha)),
         h('div.nota', txt(c.hora_cita)))},
-      {clave: 'cliente', et: 'Cliente', valor: c => (api.cliente(c.cliente_id) || {}).nombre || '—',
+      {clave: 'cliente', et: 'Cliente', valor: c => etiquetaCliente(api.cliente(c.cliente_id)),
        pinta: c => { const cli = api.cliente(c.cliente_id) || {};
-         return h('div', h('b', cli.nombre || '—'),
-           h('div.nota', [cli.direccion, cli.municipio].filter(Boolean).join(' · '))); }},
+         return h('div', h('b', etiquetaCliente(cli)), txt(cli.municipio) ? h('div.nota', cli.municipio) : null); }},
       {clave: 'tecnologia', et: 'Tecnología'},
       {clave: 'estado_cita', et: 'Cita', pinta: c => etiquetaEstado(c.estado_cita,
         api.etiquetaCatalogo('estadosCita', c.estado_cita))},
-      {clave: 'resultado', et: 'Resultado', pinta: c => etiquetaEstado(c.resultado,
-        api.etiquetaCatalogo('resultadosCaptacion', c.resultado))},
+      {clave: 'resultado', et: 'Resultado', pinta: c => {
+        const e = estadoLead(c);
+        return h('div', etiquetaEstado(c.resultado, api.etiquetaCatalogo('resultadosCaptacion', c.resultado)),
+          e ? h('div', {estilo: {marginTop: '3px'}}, marca(e.et, e.tipo === 'caido' ? 'mal' : 'aviso')) : null);
+      }},
       {clave: 'interes', et: 'Interés', num: true, valor: c => num(c.interes),
        pinta: c => num(c.interes) ? num(c.interes) + '/10' : '—'},
       {clave: 'gasto', et: 'Gasto anual', num: true,
