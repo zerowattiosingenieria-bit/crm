@@ -13,6 +13,7 @@ const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', '
 
 export const COLOR_EVENTO = {
   cita: 'var(--bien)',
+  sin_confirmar: 'var(--mal)',
   seguimiento: 'var(--info)',
   obra: 'var(--lima-osc)',
   vacaciones: 'var(--aviso)'
