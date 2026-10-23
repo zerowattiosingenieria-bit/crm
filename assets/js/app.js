@@ -17,7 +17,8 @@ import {vistaEquipo, vistaResumen, vistaPartes} from './vistas/equipo.js';
 import {vistaParte} from './vistas/parte.js';
 import {vistaNomina} from './vistas/nominas.js';
 import {vistaVacaciones} from './vistas/vacaciones.js';
-import {vistaUsuarios, vistaAjustes, vistaPerfil, vistaRegistro} from './vistas/ajustes.js';
+import {vistaUsuarios, vistaAjustes, vistaPerfil} from './vistas/ajustes.js';
+import {vistaRegistro} from './vistas/registro.js';
 import {vistaDashboard} from './vistas/dashboard.js?v=2';
 import {vistaTablero, tituloTablero} from './vistas/tablero.js';
 
@@ -47,7 +48,9 @@ const VISTAS = {
   vacaciones:   {titulo: 'Vacaciones',         pinta: vistaVacaciones},
   usuarios:     {titulo: 'Usuarios',           pinta: vistaUsuarios,      permiso: 'usuarios'},
   ajustes:      {titulo: 'Ajustes',            pinta: vistaAjustes,       permiso: 'config'},
-  registro:     {titulo: 'Registro de actividad', pinta: vistaRegistro,   permiso: 'config'},
+  /* El registro de conexiones es solo del superadmin: «usuarios» es el
+     permiso que tiene él y nadie más, y el servidor lo vuelve a mirar. */
+  registro:     {titulo: 'Registro de conexiones', pinta: vistaRegistro,  permiso: 'usuarios'},
   dashboard:    {titulo: 'Dashboard interactivo', pinta: vistaDashboard, permiso: 'usuarios'},
   perfil:       {titulo: 'Mi perfil',          pinta: vistaPerfil}
 };
@@ -120,7 +123,7 @@ function menuDe(rol) {
     {id: 'dashboard', et: 'Dashboard interactivo', ico: '◈', soloSuper: true},
     {id: 'usuarios', et: 'Usuarios', ico: '◉', soloSuper: true},
     {id: 'ajustes', et: 'Ajustes', ico: '⚙'},
-    {id: 'registro', et: 'Registro', ico: '⟲'},
+    {id: 'registro', et: 'Registro de conexiones', ico: '⟲', soloSuper: true},
     {id: 'perfil', et: 'Mi perfil', ico: '◉'}
   ];
 }

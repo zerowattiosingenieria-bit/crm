@@ -53,7 +53,7 @@ export const cuandoCaduque = fn => { alCaducar = fn; };
 export async function pedir(accion, params = {}) {
   const url = endpoint();
   if (!url) throw new Error('Falta la dirección del servidor. Configúrala en la pantalla de entrada.');
-  const cuerpo = Object.assign({accion, token: token()}, params);
+  const cuerpo = Object.assign({accion, token: token(), conexion: conexion()}, params);
 
   let r;
   try {
@@ -102,6 +102,75 @@ export function equipo() {
   return e;
 }
 
+/* ---------- desde dónde se conecta cada uno ---------- */
+
+/* El registro de conexiones quiere saber la IP y el lugar, y el servidor
+   de Google no ve la IP de quien llama. Así que la pregunta el navegador
+   a un servicio gratuito, sin clave y que admite llamadas desde otra web
+   (GeoJS; si no contesta, ipapi.co). Es una pregunta por hora como mucho:
+   la respuesta se guarda en la pestaña. Si está bloqueado, se manda vacío
+   y no pasa nada. No se usa la ubicación del aparato: no sale ningún
+   permiso que aceptar, y lo que se sabe es la ciudad de la conexión. */
+const K_CONEXION = 'zw.crm.conexion';
+const HORA = 3600000;
+const SERVICIOS_IP = [
+  {url: 'https://get.geojs.io/v1/ip/geo.json',
+   leer: d => ({ip: d.ip, lugar: [d.city, d.region, d.country]})},
+  {url: 'https://ipapi.co/json/',
+   leer: d => ({ip: d.ip, lugar: [d.city, d.region, d.country_name]})}
+];
+let red = null;               // {ip, lugar} ya sabido
+let preguntando = null;       // la pregunta en marcha, para no lanzar dos
+
+function redGuardada() {
+  if (red) return red;
+  try {
+    const g = JSON.parse(sessionStorage.getItem(K_CONEXION) || 'null');
+    if (g && Date.now() - g.t < HORA) red = {ip: g.ip || '', lugar: g.lugar || ''};
+  } catch (e) { /* sin almacenamiento: se preguntará otra vez */ }
+  return red;
+}
+
+const limpio = (v, n) => String(v ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, n);
+
+async function preguntarRed() {
+  for (const s of SERVICIOS_IP) {
+    try {
+      const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const t = ctl ? setTimeout(() => ctl.abort(), 3500) : null;
+      const r = await fetch(s.url, {signal: ctl ? ctl.signal : undefined, cache: 'no-store'});
+      if (t) clearTimeout(t);
+      if (!r.ok) continue;
+      const x = s.leer(await r.json());
+      const lugar = [...new Set((x.lugar || []).map(v => limpio(v, 40)).filter(Boolean))].join(', ');
+      const ip = limpio(x.ip, 45);
+      if (!ip) continue;
+      red = {ip, lugar};
+      try { sessionStorage.setItem(K_CONEXION, JSON.stringify(Object.assign({t: Date.now()}, red))); }
+      catch (e) { /* da igual */ }
+      return red;
+    } catch (e) { /* bloqueado o sin red: se prueba el siguiente */ }
+  }
+  red = {ip: '', lugar: ''};   // no se vuelve a preguntar en esta pestaña hasta recargar
+  return red;
+}
+
+/** Lo que viaja con cada petición. Nunca espera: si la IP aún no se sabe,
+    va vacía y se pregunta por detrás para las siguientes. */
+function conexion() {
+  const c = redGuardada();
+  if (!c && !preguntando) preguntando = preguntarRed().finally(() => { preguntando = null; });
+  return {equipo: equipo(), ip: c ? c.ip : '', lugar: c ? c.lugar : ''};
+}
+
+/* Al entrar sí se espera un momento, que la entrada es la fila que más
+   interesa que diga desde dónde. Como mucho segundo y medio. */
+async function esperarRed() {
+  if (redGuardada()) return;
+  conexion();
+  if (preguntando) await Promise.race([preguntando, new Promise(r => setTimeout(r, 1500))]);
+}
+
 function guardarEntrada(d) {
   guardarSesion(d.token, d.usuario);
   estado.usuario = d.usuario;
@@ -118,6 +187,7 @@ function guardarEntrada(d) {
  */
 export async function entrar(usuario, clave) {
   let d;
+  await esperarRed();
   try {
     d = await pedir('login', {usuario, clave, agente: navigator.userAgent, equipo: equipo()});
   } catch (e) {
@@ -207,6 +277,10 @@ export const entregarProyecto = datos => pedir('entregarProyecto', datos);
 export const estadoProyecto = (cliente_id, estado, faltan) =>
   pedir('estadoProyecto', {cliente_id, estado, faltan});
 export const proyectosPendientes = estado => pedir('proyectosPendientes', {estado});
+/* «Enviado al cliente»: solo apunta que el comercial ya lo mandó; no manda nada. */
+export const enviadoProyecto = (cliente_id, deshacer) =>
+  pedir('enviadoProyecto', deshacer ? {cliente_id, deshacer: true} : {cliente_id});
+export const proyectosEnviados = dias => pedir('proyectosPendientes', {estado: 'enviado', dias});
 export const guardarCobro = cobro => pedir('guardarCobro', {cobro});
 export const guardarFactura = factura => pedir('guardarFactura', {factura});
 export const guardarGasto = gasto => pedir('guardarGasto', {gasto});

@@ -124,6 +124,11 @@ const esNumero = v => typeof v === 'number' && isFinite(v);
 function hojaXml(hoja) {
   const cabeceras = hoja.cabeceras || [];
   const filas = hoja.filas || [];
+  /* Unas líneas opcionales encima de la tabla (título, filtro aplicado…),
+     con una en blanco de separación. La cabecera y los datos bajan otro
+     tanto y el autofiltro se pone donde empieza la tabla. */
+  const antes = (hoja.antes || []).map(function (f) { return Array.isArray(f) ? f : [f]; });
+  const salto = antes.length ? antes.length + 1 : 0;
   const anchos = cabeceras.map(function (c, i) {
     const largos = filas.slice(0, 400).map(function (f) { return String(f[i] === undefined || f[i] === null ? '' : f[i]).length; });
     return Math.min(52, Math.max(10, String(c).length + 2, Math.max.apply(null, largos.concat([0])) + 2));
@@ -140,8 +145,13 @@ function hojaXml(hoja) {
   };
 
   const cuerpo = filas.map(function (f, i) {
-    return '<row r="' + (i + 2) + '">' +
-      cabeceras.map(function (_, c) { return celda(f[c], i + 2, c); }).join('') + '</row>';
+    const r = i + 2 + salto;
+    return '<row r="' + r + '">' +
+      cabeceras.map(function (_, c) { return celda(f[c], r, c); }).join('') + '</row>';
+  }).join('');
+  const arriba = antes.map(function (f, i) {
+    return '<row r="' + (i + 1) + '">' +
+      f.map(function (v, c) { return celda(v, i + 1, c, i === 0 ? 2 : 0); }).join('') + '</row>';
   }).join('');
 
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
@@ -150,16 +160,18 @@ function hojaXml(hoja) {
     '<cols>' + anchos.map(function (a, i) {
       return '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + a + '" customWidth="1"/>';
     }).join('') + '</cols>' +
-    '<sheetData>' +
-    '<row r="1">' + cabeceras.map(function (c, i) { return celda(String(c), 1, i, 1); }).join('') + '</row>' +
+    '<sheetData>' + arriba +
+    '<row r="' + (1 + salto) + '">' + cabeceras.map(function (c, i) { return celda(String(c), 1 + salto, i, 1); }).join('') + '</row>' +
     cuerpo + '</sheetData>' +
-    '<autoFilter ref="A1:' + letraColumna(Math.max(0, cabeceras.length - 1)) + (filas.length + 1) + '"/>' +
+    '<autoFilter ref="A' + (1 + salto) + ':' + letraColumna(Math.max(0, cabeceras.length - 1)) +
+      (filas.length + 1 + salto) + '"/>' +
     '</worksheet>';
 }
 
 /**
  * Arma y descarga un .xlsx.
- * hojas: [{nombre, cabeceras:[...], filas:[[...], ...]}]
+ * hojas: [{nombre, cabeceras:[...], filas:[[...], ...], antes:[[...], ...]}]
+ * («antes» es opcional: líneas sueltas encima de la tabla; la primera, en negrita.)
  */
 export function descargarExcel(nombre, hojas) {
   const lista = (Array.isArray(hojas) ? hojas : [hojas]).filter(Boolean);
@@ -202,12 +214,14 @@ export function descargarExcel(nombre, hojas) {
         'Target="worksheets/sheet' + (i + 1) + '.xml"/>';
     }).join('') + '</Relationships>';
 
-  /* Dos estilos y para de contar: el normal y el de la fila de cabecera. */
+  /* Tres estilos y para de contar: el normal, el de la fila de cabecera y
+     el del título que puede ir encima. */
   const estilos = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-    '<fonts count="2">' +
+    '<fonts count="3">' +
     '<font><sz val="11"/><name val="Calibri"/></font>' +
     '<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font>' +
+    '<font><b/><sz val="13"/><name val="Calibri"/></font>' +
     '</fonts>' +
     '<fills count="3">' +
     '<fill><patternFill patternType="none"/></fill>' +
@@ -216,9 +230,10 @@ export function descargarExcel(nombre, hojas) {
     '</fills>' +
     '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
     '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-    '<cellXfs count="2">' +
+    '<cellXfs count="3">' +
     '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
     '<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/>' +
+    '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
     '</cellXfs>' +
     '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
     '</styleSheet>';
