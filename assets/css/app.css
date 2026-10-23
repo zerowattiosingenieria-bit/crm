@@ -469,3 +469,30 @@ ul.zw-faltan li::before{content:'!'; position:absolute; left:0; top:6px; width:1
   .ficha-barra .btn{flex:1 1 40%}
   .ficha-barra .ficha-estado{flex-basis:100%}
 }
+
+/* ---------- registro de conexiones ---------- */
+/* Día y hora van juntos en cada extremo del rango; los atajos (Hoy, Ayer,
+   7 días) se quedan al lado. En el móvil cada cosa ocupa su línea. */
+.registro-fechas{align-items:flex-end}
+.registro-fecha{margin:0}
+.registro-fecha > div{display:flex; gap:6px}
+.registro-fecha input[type=date]{min-width:140px}
+.registro-rapidos{display:flex; gap:6px; flex-wrap:wrap}
+.registro-detalle{display:block; min-width:180px; max-width:360px; font-size:12.5px; word-break:break-word}
+.registro-corto{display:block; min-width:150px; max-width:280px}
+@media (max-width:640px){
+  .registro-fecha{flex:1 1 100%}
+  .registro-fecha > div input{flex:1 1 0; min-width:0}
+  .registro-rapidos{flex:1 1 100%}
+  .registro-rapidos .btn{flex:1 1 auto}
+  .registro-sacar .btn{flex:1 1 40%}
+  .registro-sacar .nota{flex-basis:100%}
+}
+
+/* ---------- «Enviado al cliente» en el panel ---------- */
+.zw-listos-botones{display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end}
+.zw-enviado{display:inline-flex; gap:6px; align-items:center; flex-wrap:wrap}
+@media (max-width:640px){
+  ul.zw-listos li{flex-wrap:wrap}
+  .zw-listos-botones{flex:1 1 100%; justify-content:flex-start}
+}
