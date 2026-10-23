@@ -436,3 +436,14 @@ ul.zw-faltan li::before{content:'!'; position:absolute; left:0; top:6px; width:1
 /* Señas del cliente en las listas de la agenda: calle y municipio, que es
    lo que se mira antes de salir de casa. */
 .senas{font-size:12.5px; color:var(--tx-2); font-weight:600; margin-top:1px}
+
+/* ---------- ficha de dimensionado dentro del cliente ---------- */
+/* El resumen en vivo se queda a la vista mientras se rellena la ficha; en
+   el móvil va arriba, que es lo que se enseña al cliente. */
+.ficha-dim{align-items:start}
+.ficha-dim > div:last-child{position:sticky; top:12px}
+.ficha-seccion .rejilla{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+@media (max-width:900px){
+  .ficha-dim > div:last-child{position:static; order:-1}
+  .ficha-botones .btn{flex:1 1 auto}
+}
