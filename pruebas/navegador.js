@@ -11,8 +11,8 @@ fs.mkdirSync(SALIDA, {recursive: true});
 
 const RECORRIDOS = {
   fernando: ['panel', 'tablero', 'agenda', 'clientes', 'operaciones', 'captaciones', 'mapa', 'contabilidad',
-             'facturas', 'cobros', 'gastos', 'equipo', 'partes', 'nomina', 'vacaciones', 'ajustes', 'registro', 'perfil'],
-  superadmin: ['panel', 'tablero', 'usuarios', 'mapa', 'contabilidad'],
+             'facturas', 'cobros', 'gastos', 'equipo', 'partes', 'nomina', 'vacaciones', 'ajustes', 'perfil'],
+  superadmin: ['panel', 'tablero', 'usuarios', 'mapa', 'contabilidad', 'registro'],
   nando: ['panel', 'tablero', 'agenda', 'clientes', 'operaciones', 'captaciones', 'parte', 'resumen', 'nomina', 'vacaciones', 'perfil'],
   sandra: ['panel', 'tablero', 'agenda', 'captaciones', 'clientes', 'parte', 'resumen', 'nomina', 'vacaciones', 'perfil']
 };

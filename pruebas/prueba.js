@@ -1,6 +1,7 @@
 /* Prueba de humo del backend: instala, carga datos, entra con cada rol y
    comprueba que cada uno ve exactamente lo que le toca. */
-require('./mock.js');
+const MOCK = require('./mock.js');
+function PROPIEDADES_LOG_BORRAR() { delete MOCK.PROPIEDADES.LOG_CABECERA; global._cabLog = null; }
 
 let fallos = 0, pruebas = 0;
 function comprobar(nombre, condicion, extra) {
@@ -1384,6 +1385,265 @@ comprobar('un comercial no borra tareas',
 comprobar('dirección sí',
   despachar_({accion: 'borrarTarea', token: tkDir, id: tDireccion.tarea.id}).ok === true &&
   leer_('TAREAS').length === 2);
+}
+
+{   /* el registro de conexiones, en su propio bloque */
+console.log('\n== Registro de conexiones y actividad ==');
+const tkSuper = sesiones.superadmin.token;
+const conexion = {equipo: 'equipo-de-nando', ip: '83.45.120.7', lugar: 'Tres Cantos, Madrid, España'};
+const logAhora = () => leer_('LOG');
+const ultimaDe = (filtro) => logAhora().filter(filtro).slice(-1)[0];
+
+/* Una consulta: no la apunta ninguna acción, así que sale la genérica. */
+let antes = logAhora().length;
+despachar_({accion: 'datos', token: sesiones.nando.token, conexion});
+let nuevas = logAhora().slice(antes);
+comprobar('una consulta deja una fila y solo una', nuevas.length === 1, nuevas.length);
+comprobar('con quién, qué y tipo consulta',
+  nuevas[0].usuario === 'nando' && nuevas[0].accion === 'datos' && nuevas[0].tipo === 'consulta', nuevas[0]);
+comprobar('con la IP y el lugar que manda el navegador',
+  nuevas[0].ip === '83.45.120.7' && /Tres Cantos/.test(nuevas[0].lugar), nuevas[0]);
+comprobar('y el equipo legible sacado de la sesión',
+  /Windows · Chrome · #equipo/.test(nuevas[0].equipo) && /Mozilla/.test(nuevas[0].agente), nuevas[0].equipo);
+
+/* Una modificación que ya se apunta sola: no se duplica. */
+antes = logAhora().length;
+const altaLog = despachar_({accion: 'guardarCliente', token: sesiones.nando.token, conexion,
+  cliente: {nombre: 'Cliente del registro', direccion: 'Calle Log 1', municipio: 'Madrid'}});
+nuevas = logAhora().slice(antes);
+comprobar('un cambio deja una sola fila, la que cuenta más', altaLog.ok && nuevas.length === 1 &&
+  nuevas[0].accion === 'alta_cliente' && nuevas[0].entidad_id === altaLog.cliente.id, nuevas);
+comprobar('y va como modificación con su IP', nuevas[0].tipo === 'modificacion' &&
+  nuevas[0].ip === '83.45.120.7', nuevas[0]);
+
+/* Una modificación que no se apunta sola sale con sus parámetros. */
+antes = logAhora().length;
+despachar_({accion: 'reanalizar', token: sesiones.nando.token, id: 'P-999999', conexion});
+nuevas = logAhora().slice(antes);
+comprobar('una acción que falla queda apuntada con el error', nuevas.length === 1 &&
+  nuevas[0].tipo === 'modificacion' && /error: No existe ese parte/.test(nuevas[0].detalle), nuevas);
+
+/* Lo que no debe salir nunca en el detalle. */
+antes = logAhora().length;
+despachar_({accion: 'subirArchivo', token: sesiones.nando.token, conexion,
+  cliente_id: altaLog.cliente.id, nombre: 'foto.jpg', mime: 'image/jpeg',
+  datos: 'QUJD'.repeat(500), clave: 'secreto123', codigo: '123456',
+  extra: {nueva: 'otraclave', nombre: 'x', password: 'zzz'}});
+despachar_({accion: 'buscar', token: sesiones.nando.token, q: 'x'.repeat(900), conexion});
+nuevas = logAhora().slice(antes);
+const textoNuevas = JSON.stringify(nuevas);
+comprobar('ni token, ni claves, ni códigos, ni el archivo en base64',
+  !textoNuevas.includes(sesiones.nando.token) && !textoNuevas.includes('secreto123') &&
+  !textoNuevas.includes('123456') && !textoNuevas.includes('QUJDQUJD') &&
+  !textoNuevas.includes('otraclave') && !textoNuevas.includes('zzz'), textoNuevas.slice(0, 400));
+comprobar('y el detalle nunca pasa de 300 caracteres',
+  logAhora().every(l => txt_(l.detalle).length <= 300));
+comprobar('lo largo se cuenta en vez de copiarse',
+  nuevas.some(l => /q=\(900 caracteres\)/.test(l.detalle)), nuevas.map(l => l.detalle));
+
+/* Texto de fuera que podría pasar por fórmula en la hoja. */
+antes = logAhora().length;
+despachar_({accion: 'datos', token: sesiones.nando.token,
+  conexion: {ip: '=IMPORTXML("http://malo")', lugar: '+34<script>'}});
+const formula = logAhora().slice(antes)[0];
+comprobar('lo que llega del navegador no entra como fórmula',
+  /^'=/.test(formula.ip) && /^'\+/.test(formula.lugar), formula);
+
+/* Entradas, buenas y malas. */
+antes = logAhora().length;
+despachar_({accion: 'login', usuario: 'rober', clave: 'malamala1', equipo: equipos.rober,
+  agente: 'Mozilla/5.0 (Linux; Android 14) Mobile Chrome/130', conexion});
+despachar_({accion: 'login', usuario: 'nadie', clave: 'loquesea', conexion});
+const entraRober = despachar_({accion: 'login', usuario: 'rober', clave: claves.rober,
+  equipo: equipos.rober, agente: 'Mozilla/5.0 (Linux; Android 14) Mobile Chrome/130', conexion});
+nuevas = logAhora().slice(antes);
+const fallida = nuevas.filter(l => l.accion === 'login_fallido');
+comprobar('los intentos fallidos se apuntan con el usuario que se tecleó',
+  fallida.length === 2 && fallida[0].usuario === 'rober' && fallida[1].usuario === 'nadie' &&
+  fallida.every(l => l.tipo === 'conexion'), fallida);
+comprobar('sin rastro de la clave probada', !JSON.stringify(nuevas).includes('malamala1') &&
+  !JSON.stringify(nuevas).includes('loquesea'));
+const entrada = nuevas.filter(l => l.accion === 'login')[0];
+comprobar('la entrada buena también, con equipo, IP y lugar', entraRober.ok && entrada &&
+  entrada.tipo === 'conexion' && /Android · móvil · Chrome/.test(entrada.equipo) &&
+  entrada.ip === '83.45.120.7', entrada);
+sesiones.rober = entraRober;
+
+/* Salir y que la sesión se caiga por no usarla. */
+const otraRober = despachar_({accion: 'login', usuario: 'rober', clave: claves.rober, equipo: equipos.rober});
+antes = logAhora().length;
+despachar_({accion: 'salir', token: otraRober.token});
+nuevas = logAhora().slice(antes);
+comprobar('salir deja una fila de conexión', nuevas.length === 1 && nuevas[0].accion === 'salir' &&
+  nuevas[0].tipo === 'conexion', nuevas);
+const hSes = SpreadsheetApp.openById().getSheetByName('SESIONES');
+const cabSes = hSes.datos[0];
+const filaSes = hSes.datos.findIndex(f => f[0] === entraRober.token);
+hSes.datos[filaSes][cabSes.indexOf('ultimo_uso')] = dentroDe_(-(MINUTOS_INACTIVIDAD + 5));
+antes = logAhora().length;
+const caida = despachar_({accion: 'datos', token: entraRober.token, conexion});
+despachar_({accion: 'datos', token: entraRober.token, conexion});
+nuevas = logAhora().slice(antes);
+comprobar('una sesión caducada se apunta una vez, a nombre de quien era',
+  caida.sesion === false && nuevas.length === 1 && nuevas[0].accion === 'sesion_caducada' &&
+  nuevas[0].usuario === 'rober' && nuevas[0].tipo === 'conexion', nuevas);
+sesiones.rober = entrar('rober');
+
+/* El ping no ensucia. */
+antes = logAhora().length;
+despachar_({accion: 'ping'});
+comprobar('el ping no se apunta', logAhora().length === antes);
+
+/* Cada acción tiene su tipo: si mañana aparece una nueva que lee, hay que
+   decidir aquí qué es. */
+const lecturas = ['misEquipos','datos','buscar','proyecto','descargarArchivo','proyectosPendientes',
+  'cifras','tareas','finanzas','partes','resumen','equipo','analitica','alertas','nominas','nominaDias',
+  'descargarNomina','vacaciones','mapa','usuarios','registro','directorio','directorioFicha','puertas',
+  'banco','copias','descargarCopia'];
+const malClasificadas = Object.keys(acciones_()).filter(a => a !== 'salir' &&
+  (tipoDePeticion_(a) === 'consulta') !== lecturas.includes(a));
+comprobar('cada acción está clasificada como consulta o modificación', malClasificadas.length === 0,
+  malClasificadas);
+comprobar('y salir cuenta como conexión', tipoDePeticion_('salir') === 'conexion');
+
+/* Solo el superadmin. */
+comprobar('un administrador no ve el registro',
+  despachar_({accion: 'registro', token: sesiones.fernando.token}).ok === false);
+comprobar('un comercial tampoco',
+  despachar_({accion: 'registro', token: sesiones.nando.token}).ok === false);
+comprobar('ni un captador',
+  despachar_({accion: 'registro', token: sesiones.sandra.token}).ok === false);
+const todoLog = despachar_({accion: 'registro', token: tkSuper});
+comprobar('el superadmin sí', todoLog.ok === true && todoLog.registro.length > 0, todoLog.error);
+comprobar('y lo más nuevo sale primero',
+  todoLog.registro.every((r, i, a) => !i || a[i - 1].fecha >= r.fecha));
+
+/* Filas de otros días, metidas por delante como si fueran antiguas, y una
+   del formato viejo (siete columnas, sin tipo). */
+const hLog = SpreadsheetApp.openById().getSheetByName('LOG');
+const cabLog = hLog.datos[0];
+const fila = o => cabLog.map(c => o[c] === undefined ? '' : o[c]);
+hLog.datos.splice(1, 0,
+  ['2026-01-10 07:59:59', sesiones.nando.usuario.id, 'nando', 'editar_cliente', 'CLIENTES', 'C-1', 'vieja'],
+  fila({fecha: '2026-01-10 08:15:00', usuario_id: sesiones.nando.usuario.id, usuario: 'nando',
+        accion: 'datos', tipo: 'consulta', ip: '1.1.1.1'}),
+  fila({fecha: '2026-01-10 12:30:00', usuario_id: sesiones.rober.usuario.id, usuario: 'rober',
+        accion: 'guardarCliente', tipo: 'modificacion', detalle: 'cliente={nombre:Pozuelo}'}),
+  fila({fecha: '2026-01-10 14:00:00', usuario_id: '', usuario: 'rober',
+        accion: 'login_fallido', tipo: 'conexion'}),
+  fila({fecha: '2026-01-11 09:00:00', usuario_id: sesiones.nando.usuario.id, usuario: 'nando',
+        accion: 'login', tipo: 'conexion'}));
+const reg = o => despachar_(Object.assign({accion: 'registro', token: tkSuper}, o));
+const tramo = reg({desde: '2026-01-10 08:00', hasta: '2026-01-10 13:00'});
+comprobar('filtrar de tal hora a tal hora', tramo.ok &&
+  tramo.registro.map(r => r.fecha).join('|') === '2026-01-10 12:30:00|2026-01-10 08:15:00',
+  tramo.registro.map(r => r.fecha));
+const diaEntero = reg({desde: '2026-01-10', hasta: '2026-01-10'});
+comprobar('con solo el día, el día entero', diaEntero.registro.length === 4, diaEntero.registro.length);
+comprobar('las filas viejas sin tipo salen clasificadas',
+  diaEntero.registro.some(r => r.accion === 'editar_cliente' && r.tipo === 'modificacion'));
+const hastaHora = reg({hasta: '2026-01-10 12:30'});
+comprobar('el «hasta» con hora incluye ese minuto', hastaHora.registro.length === 3 &&
+  hastaHora.registro[0].fecha === '2026-01-10 12:30:00', hastaHora.registro.map(r => r.fecha));
+const deRober = reg({desde: '2026-01-10', hasta: '2026-01-11', usuario: sesiones.rober.usuario.id});
+comprobar('por persona, incluidos sus intentos fallidos (que no llevan id)',
+  deRober.registro.length === 2 && deRober.registro.every(r => r.usuario === 'rober'), deRober.registro);
+const conexiones = reg({desde: '2026-01-10', hasta: '2026-01-11', tipo: 'conexion'});
+comprobar('por tipo', conexiones.registro.length === 2 &&
+  conexiones.registro.every(r => r.tipo === 'conexion'), conexiones.registro);
+const porTexto = reg({desde: '2026-01-10', hasta: '2026-01-11', texto: 'pozuelo'});
+comprobar('por texto, sin mirar acentos ni mayúsculas', porTexto.registro.length === 1, porTexto.registro);
+const corto = reg({desde: '2026-01-10', hasta: '2026-01-11', limite: 2});
+comprobar('con tope, avisa de que hay más', corto.registro.length === 2 && corto.truncado === true);
+comprobar('sin tope alcanzado, no avisa', diaEntero.truncado === false);
+comprobar('un rango vacío no rompe', reg({desde: '2020-01-01 10:00', hasta: '2020-01-01 11:00'})
+  .registro.length === 0);
+
+/* Una hoja LOG de antes, con sus siete columnas: la primera petición que
+   escribe le añade las que faltan, sin tocar las filas. */
+const filasAntes = hLog.datos.length;
+hLog.datos[0] = ['fecha','usuario_id','usuario','accion','entidad','entidad_id','detalle'];
+PROPIEDADES_LOG_BORRAR();
+despachar_({accion: 'datos', token: sesiones.nando.token, conexion});
+comprobar('una hoja LOG vieja recibe sola las columnas nuevas',
+  hLog.datos[0].join(',') === ESQUEMA.LOG.join(','), hLog.datos[0]);
+const ultimaFila = hLog.datos[hLog.datos.length - 1];
+comprobar('y la fila nueva cae en su sitio', hLog.datos.length === filasAntes + 1 &&
+  ultimaFila[hLog.datos[0].indexOf('ip')] === '83.45.120.7' &&
+  ultimaFila[hLog.datos[0].indexOf('tipo')] === 'consulta', ultimaFila);
+}
+
+{   /* «Enviado al cliente», en su propio bloque */
+console.log('\n== Proyecto enviado al cliente ==');
+const tkAdm = sesiones.fernando.token;
+const idNando = sesiones.nando.usuario.id;
+const idSandra = sesiones.sandra.usuario.id;
+/* Un cliente de Nando captado por Sandra, para probar a los tres. */
+const cli = leer_('CLIENTES').filter(c => String(c.comercial_id) === String(idNando) &&
+  String(c.captador_id) === String(idSandra))[0];
+comprobar('hay un cliente de Nando captado por Sandra', !!cli);
+actualizar_('CLIENTES', cli.id, {proxima_accion: '', proxima_fecha: ''});
+const enviar = (tk, extra) => despachar_(Object.assign({accion: 'enviadoProyecto', token: tk,
+  cliente_id: cli.id}, extra || {}));
+
+comprobar('sin proyecto hecho no se puede marcar', enviar(sesiones.nando.token).ok === false);
+despachar_({accion: 'guardarProyecto', token: sesiones.nando.token, cliente_id: cli.id,
+  descripcion: 'Chalet para probar el enviado'});
+const entrega = despachar_({accion: 'entregarProyecto', token: tkAdm, cliente_id: cli.id,
+  nombre: 'Proyecto_enviado.pdf', mime: 'application/pdf', datos: Utilities.base64Encode([37, 80, 68, 70])});
+comprobar('el proyecto queda entregado', entrega.ok && entrega.proyecto.estado === 'entregado', entrega.error);
+const listos = tk => despachar_({accion: 'proyectosPendientes', token: tk, estado: 'entregado'}).proyectos;
+comprobar('y sale en los listos para enviar de Nando', listos(sesiones.nando.token).some(x => x.cliente_id === cli.id));
+
+const deRober = enviar(sesiones.rober.token);
+comprobar('otro comercial no puede marcarlo', deRober.ok === false, deRober);
+const deSandra = enviar(sesiones.sandra.token);
+comprobar('la captadora tampoco, aunque vea al cliente', deSandra.ok === false &&
+  /comercial del cliente/.test(deSandra.error), deSandra);
+
+const antes = leer_('LOG').length;
+const deNando = enviar(sesiones.nando.token);
+comprobar('su comercial sí', deNando.ok === true && deNando.proyecto.estado === 'enviado', deNando.error);
+const proy = leer_('PROYECTOS').filter(x => x.cliente_id === cli.id)[0];
+comprobar('con fecha y quién', /^\d{4}-\d{2}-\d{2} /.test(txt_(proy.enviado)) &&
+  String(proy.enviado_por) === String(idNando), proy);
+const fila = leer_('LOG').slice(antes).filter(l => l.accion === 'proyecto_enviado')[0];
+comprobar('queda en el registro como modificación, con «dirección · nombre»', fila &&
+  fila.tipo === 'modificacion' && fila.detalle === [cli.direccion, cli.nombre].join(' · '), fila);
+comprobar('y ya no está en los listos para enviar',
+  !listos(sesiones.nando.token).some(x => x.cliente_id === cli.id) &&
+  !listos(tkAdm).some(x => x.cliente_id === cli.id));
+const enviados = despachar_({accion: 'proyectosPendientes', token: tkAdm, estado: 'enviado', dias: 14});
+comprobar('la dirección lo ve en los enviados de los últimos 14 días', enviados.proyectos.some(x =>
+  x.cliente_id === cli.id && x.enviado_por === 'Nando' && x.comercial === 'Nando'), enviados.proyectos);
+const cliTras = leer_('CLIENTES').filter(c => c.id === cli.id)[0];
+comprobar('y se apunta llamarle a la semana', cliTras.proxima_accion === 'Llamar: seguimiento de la propuesta' &&
+  cliTras.proxima_fecha === sumarDias_(hoyISO_(), 7) && deNando.llamada === sumarDias_(hoyISO_(), 7), cliTras);
+comprobar('con su seguimiento', leer_('SEGUIMIENTO').some(x => x.cliente_id === cli.id &&
+  x.origen === 'proyecto_enviado' && x.proxima_fecha === sumarDias_(hoyISO_(), 7)));
+comprobar('marcarlo otra vez no hace nada', enviar(sesiones.nando.token).ya === true);
+
+comprobar('el comercial no puede deshacerlo', enviar(sesiones.nando.token, {deshacer: true}).ok === false);
+const deshecho = enviar(tkAdm, {deshacer: true});
+comprobar('la dirección sí: vuelve a entregado', deshecho.ok && deshecho.proyecto.estado === 'entregado' &&
+  !txt_(deshecho.proyecto.enviado), deshecho);
+comprobar('y vuelve a los listos para enviar', listos(sesiones.nando.token).some(x => x.cliente_id === cli.id));
+
+/* Si ya tiene un próximo paso antes de la semana, se respeta. */
+actualizar_('CLIENTES', cli.id, {proxima_accion: 'Visita técnica', proxima_fecha: sumarDias_(hoyISO_(), 2)});
+const otraVez = enviar(tkAdm);
+const cliRespeta = leer_('CLIENTES').filter(c => c.id === cli.id)[0];
+comprobar('la dirección también puede marcarlo', otraVez.ok === true);
+comprobar('y un próximo paso anterior no se pisa', cliRespeta.proxima_accion === 'Visita técnica' &&
+  !otraVez.llamada && otraVez.proximo_ya === sumarDias_(hoyISO_(), 2), cliRespeta);
+
+/* Una hoja PROYECTOS de antes, sin las columnas nuevas: se añaden solas. */
+const hP = SpreadsheetApp.openById().getSheetByName('PROYECTOS');
+hP.datos[0] = hP.datos[0].slice(0, hP.datos[0].indexOf('enviado'));
+hP.datos.forEach((f, i) => { if (i) f.length = Math.min(f.length, hP.datos[0].length); });
+asegurarProyectos_();
+comprobar('una hoja PROYECTOS vieja recibe enviado y enviado_por',
+  hP.datos[0].slice(-2).join(',') === 'enviado,enviado_por', hP.datos[0].slice(-3));
 }
 
 console.log('\n' + (fallos ? 'FALLAN ' + fallos + ' de ' + pruebas : 'Todo correcto: ' + pruebas + ' comprobaciones'));
