@@ -57,8 +57,22 @@ function pinta(d, est, puedeOtras, recargar, ir) {
   const t = tabla([
     {clave: 'periodo', et: 'Mes', pinta: n => h('div', h('b', mesLargoCompleto(n.periodo)),
       txt(n.subida_fecha) ? h('div.nota', 'subida ' + fechaCorta(txt(n.subida_fecha).slice(0, 10))) : null)},
+    {clave: 'bruto_total', et: 'Devengado', num: true, valor: n => num(n.bruto_total),
+     pinta: n => num(n.bruto_total) ? h('div', eur2(n.bruto_total),
+       desglose(n) ? h('div.nota', desglose(n)) : null) : '—'},
+    {clave: 'irpf', et: 'IRPF', num: true, valor: n => num(n.irpf),
+     pinta: n => num(n.bruto_total) ? h('div', eur2(n.irpf),
+       num(n.irpf_pct) ? h('div.nota', pct(num(n.irpf_pct))) : null) : '—'},
+    {clave: 'ss', et: 'Seg. Social', num: true, valor: n => num(n.ss),
+     pinta: n => num(n.bruto_total) ? eur2(n.ss) : '—'},
+    {clave: 'otras', et: 'Otras deducc.', num: true, valor: n => otrasDeducciones(n),
+     pinta: n => otrasDeducciones(n) ? h('div', eur2(otrasDeducciones(n)),
+       h('div.nota', textoOtras(n))) : '—'},
     {clave: 'neto', et: 'Neto', num: true, valor: n => num(n.neto),
      pinta: n => num(n.neto) ? h('b', eur2(n.neto)) : '—'},
+    puedeOtras ? {clave: 'coste', et: 'Coste empresa', num: true, valor: n => num(detalle(n).coste_empresa),
+     pinta: n => num(detalle(n).coste_empresa) ? h('div', eur2(detalle(n).coste_empresa),
+       h('div.nota', 'SS empresa ' + eur2(detalle(n).ss_empresa || 0))) : '—'} : null,
     {clave: 'estado', et: 'Estado', pinta: n => etiquetaEstado(
       txt(n.estado) === 'pagada' ? 'ganado' : 'pendiente', capital(txt(n.estado) || 'pendiente'))},
     {clave: 'fecha_pago', et: 'Pagada el', pinta: n => txt(n.fecha_pago) ? fechaCorta(n.fecha_pago) : '—'},
@@ -74,11 +88,13 @@ function pinta(d, est, puedeOtras, recargar, ir) {
         try { await api.pedir('borrarNomina', {id: n.id}); aviso('Nómina borrada.'); await recargar(); }
         catch (e) { avisoError(e); }
       }}, 'Borrar') : null)}
-  ], lista, {vacio: puedeOtras
+  ].filter(Boolean), lista, {csv: 'nominas.csv', vacio: puedeOtras
     ? 'Todavía no hay nóminas subidas para esta persona.'
     : 'Todavía no te han subido ninguna nómina. En cuanto lo hagan, aparecerá aquí.'});
 
   const ultima = lista[0];
+  const suma = c => lista.reduce((a, n) => a + num(n[c]), 0);
+  const costeAnio = lista.reduce((a, n) => a + num(detalle(n).coste_empresa), 0);
 
   return h('div',
     h('div', {estilo: {marginBottom: '14px'}},
@@ -92,6 +108,10 @@ function pinta(d, est, puedeOtras, recargar, ir) {
       kpi('Última', ultima ? mesLargoCompleto(ultima.periodo) : '—',
         ultima && num(ultima.neto) ? eur2(ultima.neto) + ' netos' : 'sin importe apuntado'),
       kpi('Pagadas', miles(cobradas.length), 'marcadas como pagadas'),
+      suma('bruto_total') ? kpi('Devengado', eur(suma('bruto_total')),
+        eur(suma('neto')) + ' netos · ' + eur(suma('irpf')) + ' de IRPF') : null,
+      puedeOtras && costeAnio ? kpi('Coste para la empresa', eur(costeAnio),
+        'devengado + Seguridad Social de la empresa') : null,
       p.salario_bruto !== undefined
         ? kpi('Sueldo bruto', eur(p.salario_bruto), eur(p.dietas_mes) + ' de dietas')
         : null
@@ -109,6 +129,33 @@ function pinta(d, est, puedeOtras, recargar, ir) {
         'Ver el devengo día a día que calcula el CRM'),
       h('div', {estilo: {paddingTop: '8px'}}, devengo(p, ir)))
   );
+}
+
+/* Lo que la gestoría pone en la nómina y no tiene columna propia. */
+function detalle(n) {
+  if (n._det) return n._det;
+  let d = {};
+  try { d = JSON.parse(txt(n.detalle) || '{}') || {}; } catch (e) { d = {}; }
+  n._det = d;
+  return d;
+}
+function desglose(n) {
+  const partes = [];
+  if (num(n.comisiones)) partes.push('comisiones ' + eur2(n.comisiones));
+  if (num(n.dietas)) partes.push('dietas ' + eur2(n.dietas));
+  return partes.join(' · ');
+}
+function otrasDeducciones(n) {
+  const d = detalle(n);
+  return num(d.especie) + num(d.embargo) + num(d.otras);
+}
+function textoOtras(n) {
+  const d = detalle(n);
+  const partes = [];
+  if (num(d.especie)) partes.push('especie ' + eur2(d.especie));
+  if (num(d.embargo)) partes.push('embargo ' + eur2(d.embargo));
+  if (num(d.otras)) partes.push('otras ' + eur2(d.otras));
+  return partes.join(' · ');
 }
 
 function mesLargoCompleto(periodo) {
