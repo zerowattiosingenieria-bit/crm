@@ -1,11 +1,12 @@
 /* vistas/agenda.js — qué toca hoy: citas, seguimientos y cosas vencidas. */
 
 import {h, poner, txt, num, eur, miles, fechaCorta, fechaLarga, haceDias, normal,
-        hoyISO, sumarDias, dias, comoLlegarHref, destinoDe} from '../util.js';
+        hoyISO, sumarDias, dias, comoLlegarHref, destinoDe, etiquetaCliente} from '../util.js';
 import * as api from '../api.js';
 import {tarjeta, tabla, kpi, kpis, etiquetaEstado, marca, filtros, aviso} from '../ui.js';
 import {nuevoSeguimiento} from './clientes.js';
 import {calendarioMes, COLOR_EVENTO} from '../calendario.js';
+import {citaSinConfirmar} from './panel.js';
 
 export async function vistaAgenda({ir, refrescar}) {
   const caja = h('div');
@@ -40,7 +41,8 @@ export async function vistaAgenda({ir, refrescar}) {
              normal(c.resultado) === 'pendiente';
     }).map(c => ({
       tipo: 'cita', fecha: txt(c.fecha), hora: txt(c.hora_cita), cliente: api.cliente(c.cliente_id),
-      texto: 'Sentada · ' + txt(c.tecnologia), captacion: c
+      texto: 'Sentada · ' + txt(c.tecnologia), captacion: c,
+      sinConfirmar: citaSinConfirmar(c)
     }));
 
     /* Instalaciones con fecha prevista */
@@ -69,7 +71,11 @@ export async function vistaAgenda({ir, refrescar}) {
       h('span.nivel.' + (x.fecha < hoy ? 'alto' : (x.fecha === hoy ? 'medio' : 'bajo'))),
       h('div', {estilo: {flex: '1', cursor: 'pointer'},
         onclick: () => ir('cliente/' + x.cliente.id)},
-        h('b', icono[x.tipo] + ' ' + x.cliente.nombre),
+        h('b', icono[x.tipo] + ' ' + etiquetaCliente(x.cliente)),
+        x.sinConfirmar ? h('div', {estilo: {margin: '3px 0 2px'}},
+          marca('NO CONFIRMADA', 'mal'),
+          h('span', {estilo: {marginLeft: '6px', fontSize: '12px', color: 'var(--mal)'}},
+            'Llama antes de ir: la cita no está confirmada')) : null,
         senas(x.cliente) ? h('div.senas', senas(x.cliente)) : null,
         h('div.nota', x.texto + ' · ' + fechaCorta(x.fecha) +
           (x.hora ? ' a las ' + x.hora : ''))),
@@ -88,9 +94,9 @@ export async function vistaAgenda({ir, refrescar}) {
     const delDia = h('div');
     const calendario = calendarioMes({
       titulo: 'Visitas',
-      eventos: todo.map(x => ({fecha: x.fecha, tipo: x.tipo,
-        texto: x.cliente.nombre + (senas(x.cliente) ? ' · ' + senas(x.cliente) : '') +
-               ' · ' + x.texto})),
+      eventos: todo.map(x => ({fecha: x.fecha, tipo: x.sinConfirmar ? 'sin_confirmar' : x.tipo,
+        texto: (x.sinConfirmar ? '[NO CONFIRMADA] ' : '') + etiquetaCliente(x.cliente) +
+               (txt(x.cliente.municipio) ? ', ' + txt(x.cliente.municipio) : '') + ' · ' + x.texto})),
       alPulsarDia: fecha => {
         const dia = todo.filter(x => x.fecha === fecha);
         poner(delDia, fecha
@@ -114,7 +120,8 @@ export async function vistaAgenda({ir, refrescar}) {
           tarjeta('Calendario de visitas',
             h('div', calendario,
               h('.leyenda-visitas',
-                h('span', h('i', {estilo: {background: COLOR_EVENTO.cita}}), 'Sentadas concertadas'),
+                h('span', h('i', {estilo: {background: COLOR_EVENTO.cita}}), 'Sentadas confirmadas'),
+                h('span', h('i', {estilo: {background: COLOR_EVENTO.sin_confirmar}}), 'Sentadas sin confirmar'),
                 h('span', h('i', {estilo: {background: COLOR_EVENTO.seguimiento}}), 'Seguimientos'),
                 h('span', h('i', {estilo: {background: COLOR_EVENTO.obra}}), 'Instalaciones'))),
             {subtitulo: 'Pulsa un día para ver lo que hay'}),
