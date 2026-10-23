@@ -6,6 +6,7 @@ import * as api from '../api.js';
 import {kpi, kpis, tarjeta, etiquetaEstado, tabla, marca} from '../ui.js';
 import {lineas, barras, embudo, progreso, anillo} from '../graficos.js';
 import {abrirArchivo} from './proyecto.js';
+import {bloqueLeadsCaptador, tarjetaLeadsDireccion} from './leads.js';
 import {avisoError} from '../ui.js';
 
 export async function vistaPanel({ir}) {
@@ -221,6 +222,8 @@ function panelDireccion({cabecera, r, al, an, fin, listos, esperando, solicitado
 
     tarjetaProyectosSolicitados(solicitados, ir, true),
 
+    tarjetaLeadsDireccion(ir),
+
     h('.doble',
       tarjeta('Ingresos y costes por mes',
         ev.length ? lineas({
@@ -352,6 +355,8 @@ function panelCaptador({cabecera, r, al, ir}) {
       kpi('Puertas', miles(r.puertas), 'según tus partes'),
       kpi('Comisiones', eur(r.comisiones.total), 'por captaciones vendidas')
     ),
+
+    bloqueLeadsCaptador(ir),
 
     h('.doble',
       tarjeta('Objetivo del periodo',
