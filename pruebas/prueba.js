@@ -287,6 +287,21 @@ comprobar('la nómina aparece en su lista',
   listaNom.nominas.some(n => n.periodo === '2026-09' && String(n.neto) !== ''), listaNom.nominas.length);
 const borrada = despachar_({accion: 'borrarNomina', token: sesiones.nando.token, id: subida.nomina.id});
 comprobar('un comercial no borra nóminas', borrada.ok === false);
+const exacta = despachar_({accion: 'guardarNomina', token: sesiones.fernando.token, nomina: {
+  id: subida.nomina.id, exacto: true, bruto: 1641.67, dietas: 250, comisiones: 0, bruto_total: 1891.67,
+  irpf_pct: 1.22, irpf: 20.03, ss: 106.71, neto: 1764.93,
+  detalle: {ss_empresa: 517.94, coste_empresa: 2409.61, especie: 0, embargo: 0}}});
+comprobar('las cifras de la gestoría se guardan tal cual', exacta.ok === true &&
+  Number(exacta.nomina.neto) === 1764.93 && Number(exacta.nomina.irpf) === 20.03 &&
+  Number(exacta.nomina.bruto_total) === 1891.67, exacta.error || exacta.nomina);
+comprobar('el detalle guarda el coste para la empresa',
+  JSON.parse(exacta.nomina.detalle).coste_empresa === 2409.61);
+const exactaComercial = despachar_({accion: 'guardarNomina', token: sesiones.nando.token,
+  nomina: {id: subida.nomina.id, exacto: true, neto: 1}});
+comprobar('un comercial no toca las cifras', exactaComercial.ok === false);
+/* La hoja de verdad convierte «2026-09» en fecha: el mes sale siempre aaaa-mm. */
+comprobar('el mes se normaliza aunque la hoja lo guarde como fecha',
+  periodoNomina_(new Date(2026, 3, 1, 12)) === '2026-04' && periodoNomina_('2026-04-01') === '2026-04');
 
 console.log('\n== Vacaciones ==');
 const anio = hoyISO_().slice(0, 4);

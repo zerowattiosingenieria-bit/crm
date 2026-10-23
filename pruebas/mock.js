@@ -175,6 +175,7 @@ global.Utilities = {
     const p = n => String(n).padStart(2, '0');
     const s = {'yyyy-MM-dd': `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`,
       'yyyy-MM-dd HH:mm:ss': `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`,
+      'yyyy-MM': `${d.getFullYear()}-${p(d.getMonth() + 1)}`,
       'HH:mm': `${p(d.getHours())}:${p(d.getMinutes())}`};
     return s[f] || d.toISOString();
   }
