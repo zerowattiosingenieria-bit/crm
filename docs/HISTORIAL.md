@@ -10,6 +10,80 @@ luego no hay manera de reconstruir.
 
 ## 23/10/2026
 
+### «✓ Enviado al cliente» en el panel
+
+En «Proyectos listos para enviar» cada proyecto tiene ahora el botón
+«✓ Enviado al cliente». Se confirma en la misma línea («¿Ya se lo has
+mandado? Sí, enviado / No») y el proyecto sale de la lista. No manda nada
+a nadie: solo apunta cuándo y quién lo marcó (estado nuevo `enviado`,
+después de `entregado`, con las columnas `enviado` y `enviado_por` en
+PROYECTOS, que se añaden solas a la hoja de antes) y queda en el registro.
+Lo puede marcar el comercial del cliente y la dirección; ni los
+captadores ni otro comercial. La pestaña Proyecto de la ficha dice
+«Enviado al cliente» con la fecha.
+
+La dirección tiene debajo de los listos la tarjeta «Enviados al cliente,
+últimos 14 días», con «dirección · nombre», comercial y fecha y hora, y
+un «deshacer» que lo devuelve a «listos para enviar» (por si se pulsó sin
+querer; el comercial no puede deshacer).
+
+La regla de llamar a la semana: al marcarlo, se apunta un seguimiento
+(canal email, origen `proyecto_enviado`) con el próximo paso «Llamar:
+seguimiento de la propuesta» a 7 días, que sale en la agenda como los
+demás. Si el cliente ya tiene un próximo paso entre hoy y esos 7 días, se
+respeta y el aviso lo dice; uno vencido de antes sí se sustituye.
+
+### Registro de conexiones para el superadmin
+
+El superadmin tiene en Sistema una pantalla nueva, «Registro de
+conexiones», que sustituye al antiguo «Registro» (las últimas 300 líneas).
+Ahí sale quién ha entrado, cuándo (con segundos), desde qué equipo
+(«Windows · Chrome · #a1b2c3», el número es la marca del navegador),
+desde qué IP y ciudad, y qué ha mirado o cambiado. Se filtra por día y
+hora de inicio y de fin, con atajos Hoy, Ayer y Últimos 7 días, por
+persona, por tipo (conexiones, modificaciones, consultas) y por texto.
+Arriba, por persona: entradas, entradas fallidas, acciones, cambios,
+primera y última hora, equipos y sitios. Se descarga en Excel (con el
+filtro escrito encima y una pestaña por persona) y en PDF apaisado (con
+el filtro y la hora en que se sacó). Solo el superadmin: ni el menú ni
+el servidor se lo dan a nadie más, administradores incluidos.
+
+Qué se apunta: cada petición con sesión, una fila. Si la acción ya se
+apuntaba sola («alta_cliente C-000412 Ana Lara»), se queda esa, que dice
+más, y no se escribe otra; si no (sobre todo las consultas), sale una
+fila con la acción y un resumen corto de lo pedido, sin token, claves,
+códigos ni archivos, y como mucho 300 caracteres. Si la acción falla, el
+error va al final del detalle. También las entradas buenas y fallidas
+(con el usuario que se tecleó, aunque no exista; la clave nunca), los
+bloqueos, el código del correo, las salidas y las sesiones que caducan
+(una vez, y la sesión se borra). El «ping» no se apunta.
+
+La IP no la ve Google: la pregunta el navegador a GeoJS (y si no
+contesta, a ipapi.co), gratis y sin clave, una vez por hora y pestaña, y
+la manda con cada petición. Si está bloqueado va vacío y no pasa nada. No
+se usa la ubicación del aparato, así que no sale ningún permiso: el lugar
+es la ciudad de la conexión, aproximada (con datos del móvil puede salir
+otra ciudad). Lo que manda el navegador se guarda como texto recortado y
+sin poder colarse como fórmula en la hoja.
+
+La pestaña LOG gana cinco columnas al final (tipo, equipo, agente, ip,
+lugar). En la hoja de verdad se añaden solas con la primera petición que
+escriba en el registro, igual que haría instalar(); las filas viejas no se
+tocan y salen clasificadas por su acción. Para que vaya rápido, la
+consulta solo lee la columna de fechas y luego el tramo que cae dentro,
+de abajo arriba, hasta 5.000 filas (si hay más, lo dice). Nada se borra
+solo: cuando pese, se archiva a mano. Además el documento se abre una
+sola vez por petición, que antes se abría en cada lectura.
+
+Ojo: avisar a la plantilla por escrito de que el CRM registra conexiones,
+equipo, IP y ubicación aproximada (RGPD y art. 87 LOPDGDD), y añadirlo al
+registro de actividades de tratamiento. Además, la IP de cada uno sale a
+un servicio externo para saber la ciudad.
+
+Pruebas: 36 comprobaciones nuevas en `pruebas/prueba.js` y
+`pruebas/registro-navegador.js` (con navegador: comercial, administrador,
+superadmin, Excel, PDF y móvil).
+
 ### Leads caídos y desaparecidos, por captador
 
 Hasta ahora una ficha de captación que no llegaba a nada se perdía de
