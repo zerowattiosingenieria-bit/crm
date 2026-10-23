@@ -26,6 +26,9 @@ export async function vistaPanel({ir}) {
   const cola = e => api.proyectosPendientes(e).then(x => x.proyectos || []).catch(() => []);
   const [listos, esperando] = u.rol === 'captador' ? [[], []]
     : await Promise.all([cola('entregado'), cola('faltan_datos')]);
+  /* Los proyectos que el comercial ya ha pedido y están en la cola o
+     montándose. El servidor solo devuelve los de sus clientes. */
+  const solicitados = (esDir || u.rol === 'captador') ? [] : await cola('');
 
   const saludo = (() => {
     const hora = new Date().getHours();
@@ -41,7 +44,7 @@ export async function vistaPanel({ir}) {
 
   return esDir ? panelDireccion({cabecera, r, al, an, fin, listos, esperando, cif, ir})
                : (u.rol === 'captador' ? panelCaptador({cabecera, r, al, ir})
-                                       : panelComercial({cabecera, r, al, listos, esperando, ir}));
+                                       : panelComercial({cabecera, r, al, listos, esperando, solicitados, ir}));
 }
 
 /* Lo que dice el Centro de Mando, al lado de lo que calcula el CRM. Es el
@@ -264,7 +267,7 @@ function panelDireccion({cabecera, r, al, an, fin, listos, esperando, cif, ir}) 
 }
 
 /* ================= comercial ================= */
-function panelComercial({cabecera, r, al, listos, esperando, ir}) {
+function panelComercial({cabecera, r, al, listos, esperando, solicitados, ir}) {
   const ev = r.evolucion.slice(-6);
   const proximas = r.proximas.slice(0, 8);
 
@@ -284,6 +287,8 @@ function panelComercial({cabecera, r, al, listos, esperando, ir}) {
     tarjetaProyectosListos(listos, ir),
 
     tarjetaProyectosEsperando(esperando, ir),
+
+    tarjetaProyectosSolicitados(solicitados, ir),
 
     h('.doble',
       tarjeta('Objetivo del periodo',
@@ -383,6 +388,28 @@ function panelCaptador({cabecera, r, al, ir}) {
     al.alertas.length ? tarjeta('Avisos', h('ul.lista-avisos', al.alertas.map(a =>
       h('li', h('span.nivel.' + a.nivel), h('span', a.texto))))) : null
   );
+}
+
+/* ---------- proyectos pedidos por el comercial, en cola o montándose ---------- */
+function tarjetaProyectosSolicitados(solicitados, ir) {
+  if (!solicitados || !solicitados.length) return null;
+  const estadoTxt = e => normal(e) === 'en_curso' ? 'Montándose' : 'En cola';
+  return tarjeta('Tus proyectos solicitados (' + solicitados.length + ')',
+    h('ul.zw-listos', solicitados.map(p => {
+      const desde = txt(p.pedido) ? haceDias(txt(p.pedido).slice(0, 10)) : '';
+      return h('li',
+        h('span.nivel.' + (normal(p.estado) === 'en_curso' ? 'medio' : 'bajo'), {estilo: {marginTop: '7px'}}),
+        h('div', {estilo: {flex: '1', minWidth: '0', cursor: 'pointer'},
+                  onclick: () => ir('cliente/' + p.cliente_id)},
+          h('b', [txt(p.direccion), txt(p.cliente)].filter(Boolean).join(' · ') || '(sin nombre)'),
+          h('.nota', [estadoTxt(p.estado),
+                      txt(p.pedido) ? 'pedido el ' + fechaCorta(txt(p.pedido).slice(0, 10)) +
+                        (desde ? ' (' + desde + ')' : '') : '',
+                      txt(p.municipio),
+                      (num(p.fotos) || 0) + ' foto(s)'].filter(Boolean).join(' · '))),
+        h('button.btn', {onclick: () => ir('cliente/' + p.cliente_id)}, 'Ver'));
+    })),
+    {subtitulo: 'Pedidos al ingeniero; cuando esté hecho pasará a «listos para enviar»'});
 }
 
 /* ---------- proyectos con el PDF hecho, pendientes de enviar ---------- */
