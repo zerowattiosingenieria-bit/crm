@@ -184,3 +184,10 @@ export const destinoDe = cliente => {
   return [txt(cliente && cliente.direccion), txt(cliente && cliente.municipio),
           txt(cliente && cliente.cp), 'España'].filter(Boolean).join(', ');
 };
+
+/** Cómo se nombra a un cliente en listas y agendas: primero la calle,
+    que es como lo recuerda el comercial, y luego el nombre. */
+export const etiquetaCliente = c => {
+  if (!c) return '—';
+  return [txt(c.direccion), txt(c.nombre)].filter(Boolean).join(' · ') || '(sin nombre)';
+};
