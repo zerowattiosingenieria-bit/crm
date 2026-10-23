@@ -10,6 +10,109 @@ luego no hay manera de reconstruir.
 
 ## 23/10/2026
 
+### Leads caídos y desaparecidos, por captador
+
+Hasta ahora una ficha de captación que no llegaba a nada se perdía de
+vista. Ahora se cuentan dos cosas. Caído: la cita se canceló, no llegó a
+sentada o el cliente dijo que no le interesa. Desaparecido: sigue
+pendiente y la visita pasó hace más de un día sin sentada ni venta, la
+nota dice que ya no está en Trello, o quedó como potencial sacada de la
+agenda («sin día»).
+
+Cada captador ve en su panel sus fichas, caídos, desaparecidos y % de
+caída del mes (con los últimos 90 días debajo) y la lista de sus leads
+perdidos con «dirección · nombre», fecha, motivo y comercial. Solo los
+suyos: se filtra por el captador de la ficha, además de que el servidor
+ya solo le manda sus clientes. La dirección tiene en su panel la tabla
+por captador (fichas, sentadas, caídos, desaparecidos, % caída y %
+desaparición, este mes o 90 días, con total) y debajo la lista, con
+filtros por captador y motivo y exportación a CSV. En Captaciones hay un
+filtro «Caídos / desaparecidos» y el motivo sale junto al resultado. El
+periodo se mide por el día en que se metió la ficha, como el resto de la
+captación.
+
+### La ficha de dimensionado, siempre al día con el cliente y su instalación
+
+Una ficha guardada ya no enseña datos viejos. Al abrirla, lo que viene
+del cliente (nombre, dirección, municipio, CP, teléfono, correo, CUPS, m²,
+personas, año, calefacción, gastos de luz y combustible, potencia) y de
+su última instalación (importes con IVA por partida, placas, inversor,
+batería, cargador, depósitos, plazo, reserva) se lee del CRM, y si algo
+había cambiado lo dice: «Actualizado desde el CRM: m², importe FV…». Lo
+que solo existe en la ficha (altura, zona, emisor, distancias,
+observaciones…) se queda como se guardó.
+
+Va en los dos sentidos con el cliente: si el comercial cambia en la ficha
+los m², la calefacción, un gasto o el CUPS, al guardar se guarda también
+en el cliente (solo esos campos, con `guardarCliente`, que acepta cambios
+parciales). Lo de la instalación no se toca desde aquí: sale bloqueado,
+con la pista «se cambia en Instalaciones», y arriba una tarjeta lo resume
+(tipo, estado, importe, pago, financiera, depósitos). Con el año de
+construcción, el aislamiento sale solo.
+
+### La ficha le llega al ingeniero en cada guardado
+
+Cada «Guardar ficha» escribe el bloque completo en la descripción del
+proyecto (secciones 1 a 8, resultado con equipo, kW, depósitos, placas y
+kWp, inversor, batería, inversión con IVA, cuota a 10 años y ahorro, la
+instalación del CRM, los avisos y «Versión vN · fecha · comercial»),
+cambiando solo lo que hay entre las marcas. «Pasar al proyecto» pasa a
+llamarse «Enviar al ingeniero»: guarda y, si el proyecto todavía no tiene
+ninguna foto, avisa de que sin una foto no entra en la cola (es la regla
+del servidor) y lleva a la pestaña Proyecto para subirla. Arriba de la
+ficha se ve en qué estado está el proyecto.
+
+### IRPF siempre al 60 %, por tecnología
+
+La deducción ya no tiene desplegable: el 60 % de un máximo de 15.000 €,
+7.500 € de aerotermia y 7.500 € de fotovoltaica (batería y cargador van en
+la parte de FV), es decir, como mucho 4.500 € + 4.500 € = 9.000 €. Cada
+parte se redondea por separado y el resumen lo desglosa: «Deducción IRPF
+60 %: aerotermia X € + fotovoltaica Y € = Z €». Entra en el coste real,
+la amortización, el esfuerzo neto, los avisos y el bloque del ingeniero.
+
+### Auditoría de los cálculos contra la ficha del móvil
+
+Se han comparado 600 casos al azar (y los límites de cada tramo) con la
+ficha original cargada en un navegador. Salieron y se corrigieron: la
+cuota se calculaba sobre el total y no partida a partida con la reserva
+repartida (diferencias de un céntimo); no se aplicaban los topes de cada
+número; faltaban avisos y otros tenían el texto cambiado, y las notas de
+IBI estaban recortadas; faltaban el depósito de inercia BT/BTS, las
+unidades en cascada, el texto completo del acumulador fuera de catálogo
+y las garantías; y los valores por defecto de una ficha en blanco no
+eran los de la original. Ahora todo coincide con la original salvo la
+regla del IRPF, que es la de la casa.
+
+### Versiones de la ficha
+
+Cada guardado con cambios crea una versión (v1, v2…) que se guarda con el
+cliente, en las mismas notas del proyecto: la ficha actual completa y,
+por cada versión, solo lo que cambió ({campo: [antes, después]}), quién,
+cuándo y si vino del comercial o de los datos del CRM. Si no cambia nada,
+no hay versión. El historial se ve en la ficha, de la más nueva a la más
+vieja; cada versión se despliega para ver qué cambió, se puede ver
+entera (se reconstruye deshaciendo las posteriores) y restaurar en el
+formulario. Para no pasar del tope de una celda de Google Sheets
+(50.000 caracteres) se podan las más viejas si hace falta, pero nunca la
+v1 (como resumen), ni las 20 últimas, ni la ficha actual. Las fichas
+guardadas con el formato anterior se abren igual y pasan a ser la v1 al
+guardarlas.
+
+### Guardar la ficha, sin sustos
+
+Un botón «Guardar ficha» claro, en una barra que se queda abajo a la
+vista también en el móvil, y otro al final del formulario. Mientras
+guarda se bloquea (un doble clic no guarda dos veces) y luego dice
+«Guardado · vN · hh:mm» en verde o el error en rojo con «Reintentar».
+Después de guardar se vuelve a leer del servidor y se comprueba que ha
+quedado igual; si no, se dice. Si lo que falla es solo actualizar el
+cliente, se dice exactamente eso. Lo escrito se va guardando como
+borrador en el propio equipo: si algo falla o se cierra la página, al
+volver sale «Tienes cambios sin guardar de las hh:mm · Recuperar /
+Descartar». Salir a otra pestaña o pantalla con cambios sin guardar
+avisa, y Ctrl/Cmd+S guarda.
+
 ### El panel de dirección, con IVA y con lo que dice el banco
 
 Las seis tarjetas de arriba enseñaban la base sin IVA y un margen sacado
