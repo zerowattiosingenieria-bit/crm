@@ -447,3 +447,25 @@ ul.zw-faltan li::before{content:'!'; position:absolute; left:0; top:6px; width:1
   .ficha-dim > div:last-child{position:static; order:-1}
   .ficha-botones .btn{flex:1 1 auto}
 }
+.ficha-origen{display:block; margin-top:2px; font-size:11.5px}
+.ficha-versiones,.ficha-cambios{list-style:none; margin:0; padding:0}
+.ficha-versiones > li{border-bottom:1px solid var(--linea); padding:4px 0}
+.ficha-versiones > li:last-child{border-bottom:0}
+.ficha-version-cab{text-align:left; width:100%; white-space:normal; font-size:13px; padding:6px 0}
+.ficha-cambios li{font-size:12.5px; padding:2px 0; word-break:break-word}
+.ficha-pre{white-space:pre-wrap; word-break:break-word; font-size:12.5px; line-height:1.45; margin:0}
+/* La barra de guardar de la ficha: siempre a la vista, abajo. */
+.ficha-barra{position:sticky; bottom:0; z-index:20; background:var(--papel); border:1px solid var(--linea);
+  border-radius:var(--r-s); padding:10px 12px; box-shadow:var(--sombra-alta); margin-top:12px;
+  flex-wrap:wrap; align-items:center}
+.ficha-fin{margin:4px 0 16px; flex-wrap:wrap; align-items:center}
+.ficha-estado{font-size:12.5px; color:var(--tx-2)}
+.ficha-estado.sucio{color:var(--aviso); font-weight:600}
+.ficha-estado.ok{color:var(--bien); font-weight:600}
+.ficha-estado.error{color:var(--mal); font-weight:600}
+.ficha-borrador{border-color:var(--aviso)}
+@media (max-width:640px){
+  .ficha-barra{border-radius:0; margin-left:-14px; margin-right:-14px; padding:8px 14px}
+  .ficha-barra .btn{flex:1 1 40%}
+  .ficha-barra .ficha-estado{flex-basis:100%}
+}
