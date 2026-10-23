@@ -10,6 +10,25 @@ luego no hay manera de reconstruir.
 
 ## 23/10/2026
 
+### Nóminas con todas las cifras de la gestoría
+
+La lista de nóminas solo enseñaba el neto. Ahora cada mes lleva devengado
+(con comisiones y dietas), IRPF con su tipo, Seguridad Social del
+trabajador, otras deducciones (retribución en especie, embargo), neto y,
+para dirección, el coste para la empresa (devengado más la Seguridad Social
+que paga la empresa). Arriba, los totales del año.
+
+Las cifras se guardan tal cual vienen en el PDF de Cygnus (`guardarNomina`
+con `exacto`): recalcularlas con el tipo de IRPF da otro neto, porque la
+base de IRPF no es el devengado y la especie se descuenta aparte. Lo que no
+tiene columna propia va en `detalle` (JSON).
+
+Arreglo de paso: la hoja convierte «2026-04» en la fecha 1/4/2026, así que
+al subir el PDF de un mes que ya existía no lo encontraba y duplicaba la
+fila, y la lista enseñaba «2026-04-01». El mes se normaliza siempre a
+aaaa-mm al leer y al casar.
+
+
 ### «✓ Enviado al cliente» en el panel
 
 En «Proyectos listos para enviar» cada proyecto tiene ahora el botón
