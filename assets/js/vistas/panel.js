@@ -1,6 +1,7 @@
 /* vistas/panel.js — la primera pantalla, distinta según quién entre. */
 
-import {h, eur, eurCorto, miles, pct, num, txt, fechaCorta, haceDias, mesLargo, suma, hoyISO} from '../util.js';
+import {h, poner, eur, eurCorto, miles, pct, num, txt, normal, fechaCorta, haceDias, mesLargo, suma, hoyISO,
+        etiquetaCliente} from '../util.js';
 import * as api from '../api.js';
 import {kpi, kpis, tarjeta, etiquetaEstado, tabla, marca} from '../ui.js';
 import {lineas, barras, embudo, progreso, anillo} from '../graficos.js';
@@ -86,7 +87,7 @@ function tarjetaProyectosEsperando(esperando, ir) {
         h('span.nivel.alto', {estilo: {marginTop: '7px'}}),
         h('div', {estilo: {flex: '1', minWidth: '0', cursor: 'pointer'},
                   onclick: () => ir('cliente/' + p.cliente_id)},
-          h('b', txt(p.cliente) || '(sin nombre)'),
+          h('b', [txt(p.direccion), txt(p.cliente)].filter(Boolean).join(' · ') || '(sin nombre)'),
           h('.nota', {estilo: {color: 'var(--mal)'}}, txt(p.faltan) || 'Falta información'),
           h('.nota', [[txt(p.direccion), txt(p.municipio)].filter(Boolean).join(', '),
                       dias ? 'parado ' + dias : '',
@@ -94,6 +95,77 @@ function tarjetaProyectosEsperando(esperando, ir) {
         h('button.btn', {onclick: () => ir('cliente/' + p.cliente_id)}, 'Subirlo'));
     })),
     {subtitulo: 'En cuanto se suba lo que falta, el proyecto vuelve solo a la cola'});
+}
+
+/* Una cita de captación todavía por celebrar que nadie ha confirmado: el
+   comercial tiene que saberlo antes de coger el coche. */
+export const citaSinConfirmar = c => normal(c.estado_cita) !== 'confirmada' &&
+  normal(c.resultado || 'pendiente') === 'pendiente';
+
+/* ---------- cifras del año, con IVA ---------- */
+/* La facturación sale del total con IVA de cada instalación vendida este
+   año; lo cobrado, de los cobros con fecha de este año; la cartera, de las
+   propuestas y financiaciones vivas; el ticket, por cliente y no por
+   instalación, que un cliente con FV y aerotermia en dos fichas es una
+   sola venta. */
+function cifrasDelAnio(fin) {
+  const anio = hoyISO().slice(0, 4);
+  const ops = (fin.operaciones || []).filter(o => txt(o.fecha).slice(0, 4) === anio);
+  const facturacion = suma(ops, 'ingreso');
+  const cobros = (api.estado.cobros || []).filter(c => txt(c.fecha_cobro).slice(0, 4) === anio);
+  const cobrado = cobros.length ? suma(cobros, 'importe') : num((fin.resumen || {}).cobrado);
+  const clientes = new Set(ops.map(o => String(o.cliente_id))).size;
+  const vivas = api.estado.operaciones.filter(o =>
+    ['propuesta', 'financiacion'].includes(normal(o.estado)));
+  return {facturacion, cobrado, instalaciones: ops.length,
+          ticket: clientes ? facturacion / clientes : 0,
+          cartera: suma(vivas, 'total'), propuestas: vivas.length};
+}
+
+/* Lo que de verdad ha entrado y salido por el banco este año. Se pide
+   aparte y sin esperar, para que el panel se pinte ya y estas dos tarjetas
+   se rellenen en cuanto llegue. Los traspasos entre cuentas no cuentan y
+   los impuestos tampoco, que no son coste. */
+const CAT_DIRECTOS = ['proveedor', 'montaje'];
+const CAT_ESTRUCTURA = ['nominas', 'seguridad_social', 'servicios', 'seguros', 'banco', 'financiacion',
+  'transporte', 'dietas', 'telefonia', 'ropa_epi', 'marketing', 'administracion', 'otros_gastos'];
+
+export function cuentasDelBanco(movimientos, anio) {
+  const delAnio = (movimientos || []).filter(m =>
+    txt(m.fecha).slice(0, 4) === anio && normal(m.categoria) !== 'traspaso');
+  const salidas = cats => delAnio.filter(m => num(m.importe) < 0 && cats.includes(txt(m.categoria)))
+    .reduce((a, m) => a + Math.abs(num(m.importe)), 0);
+  const cobrado = delAnio.filter(m => num(m.importe) > 0 && txt(m.categoria) === 'cobro_cliente')
+    .reduce((a, m) => a + num(m.importe), 0);
+  const directos = salidas(CAT_DIRECTOS);
+  const estructura = salidas(CAT_ESTRUCTURA);
+  const margen = cobrado - directos;
+  return {movimientos: delAnio.length, cobrado, directos, estructura, margen,
+          margen_pct: cobrado ? margen / cobrado * 100 : 0, neto: margen - estructura};
+}
+
+async function rellenarConBanco(t) {
+  const pon = (tarjeta, valor, pie, estado) => {
+    const v = tarjeta.querySelector('.val'), p = tarjeta.querySelector('.pie');
+    if (v) { v.textContent = valor; v.style.color = estado ? `var(--${estado})` : ''; }
+    if (p) p.textContent = pie;
+  };
+  const anio = hoyISO().slice(0, 4);
+  let b = null;
+  try {
+    const d = await api.pedir('banco', {desde: anio + '-01-01', hasta: hoyISO()});
+    b = cuentasDelBanco(d.movimientos, anio);
+  } catch (e) { b = null; }
+  if (!b || !b.movimientos) {
+    pon(t.margen, '—', 'sin movimientos del banco este año');
+    pon(t.neto, '—', 'sin movimientos del banco este año');
+    return;
+  }
+  pon(t.margen, b.cobrado ? pct(Math.round(b.margen_pct)) : '—',
+    eurCorto(b.margen) + ' de ' + eurCorto(b.cobrado) + ' cobrado',
+    b.cobrado ? (b.margen_pct >= 30 ? 'bien' : 'aviso') : null);
+  pon(t.neto, eurCorto(b.neto), 'tras estructura (banco) · ' + eurCorto(b.estructura),
+    b.neto > 0 ? 'bien' : 'mal');
 }
 
 /* ================= dirección ================= */
@@ -115,19 +187,28 @@ function panelDireccion({cabecera, r, al, an, fin, listos, esperando, cif, ir}) 
     .sort((a, b) => txt(a.fecha_prevista_instalacion).localeCompare(txt(b.fecha_prevista_instalacion)))
     .slice(0, 8);
 
+  const cifrasAnio = cifrasDelAnio(fin);
+  const tarjetasBanco = {
+    margen: kpi('Margen bruto', '…', 'cobrado en banco − material y montaje'),
+    neto: kpi('Beneficio neto', '…', 'tras estructura (banco)')
+  };
+  rellenarConBanco(tarjetasBanco);
+
   return h('div', cabecera,
     kpis(
-      kpi('Facturación del año', eurCorto(f.ingresos), f.operaciones + ' instalaciones', {destacado: true}),
-      kpi('Margen bruto', pct(f.margen_pct), eurCorto(f.margen_bruto),
-        {estado: f.margen_pct >= 30 ? 'bien' : 'aviso'}),
-      kpi('Beneficio neto', eurCorto(f.beneficio_neto), 'tras estructura',
-        {estado: f.beneficio_neto > 0 ? 'bien' : 'mal'}),
+      kpi('Facturación del año', eurCorto(cifrasAnio.facturacion),
+        cifrasAnio.instalaciones + ' instalaciones · cobrado ' + eurCorto(cifrasAnio.cobrado),
+        {destacado: true}),
+      tarjetasBanco.margen,
+      tarjetasBanco.neto,
       kpi('Pendiente de cobro', eurCorto(f.pendiente_cobro),
         f.vencido_cobro > 0 ? eurCorto(f.vencido_cobro) + ' vencido' : 'todo en fecha',
         {estado: f.vencido_cobro > 0 ? 'mal' : 'bien'}),
-      kpi('Cartera abierta', eurCorto(an.prevision_ponderada), an.cartera_abierta + ' propuestas vivas'),
-      kpi('Ticket medio', eurCorto(f.ticket_medio), 'por instalación')
+      kpi('Cartera abierta', eurCorto(cifrasAnio.cartera), cifrasAnio.propuestas + ' propuestas vivas'),
+      kpi('Ticket medio', eurCorto(cifrasAnio.ticket), 'por cliente')
     ),
+    h('p.nota', {estilo: {marginTop: '-6px'}},
+      'Importes con IVA incluido. Margen y beneficio salen de los movimientos del banco de este año.'),
 
     tarjetaCentroDeMando(cif, ir),
 
@@ -170,7 +251,7 @@ function panelDireccion({cabecera, r, al, an, fin, listos, esperando, cif, ir}) 
       proximasObras.length ? tabla([
         {clave: 'fecha_prevista_instalacion', et: 'Prevista', valor: o => txt(o.fecha_prevista_instalacion),
          pinta: o => fechaCorta(o.fecha_prevista_instalacion)},
-        {clave: 'cliente', et: 'Cliente', valor: o => (api.cliente(o.cliente_id) || {}).nombre || '—'},
+        {clave: 'cliente', et: 'Cliente', valor: o => etiquetaCliente(api.cliente(o.cliente_id))},
         {clave: 'municipio', et: 'Municipio', valor: o => (api.cliente(o.cliente_id) || {}).municipio || '—'},
         {clave: 'tipo', et: 'Tipo', valor: o => api.etiquetaCatalogo('tiposOperacion', o.tipo)},
         {clave: 'estado', et: 'Estado', pinta: o => etiquetaEstado(o.estado,
@@ -219,7 +300,7 @@ function panelComercial({cabecera, r, al, listos, esperando, ir}) {
         proximas.length ? h('ul.lista-avisos', proximas.map(p =>
           h('li', {estilo: {cursor: 'pointer'}, onclick: () => ir('cliente/' + p.id)},
             h('span.nivel.' + (p.vencida ? 'alto' : 'bajo')),
-            h('div', h('b', p.nombre), h('div.nota', (p.accion || 'Seguimiento') + ' · ' +
+            h('div', h('b', api.cliente(p.id) ? etiquetaCliente(api.cliente(p.id)) : p.nombre), h('div.nota', (p.accion || 'Seguimiento') + ' · ' +
               (p.vencida ? 'vencía el ' : 'para el ') + fechaCorta(p.fecha))))))
           : h('.vacio', 'No tienes acciones pendientes con fecha.'))
     ),
@@ -237,7 +318,7 @@ function panelComercial({cabecera, r, al, listos, esperando, ir}) {
         r.frios.length ? h('ul.lista-avisos', r.frios.slice(0, 8).map(c =>
           h('li', {estilo: {cursor: 'pointer'}, onclick: () => ir('cliente/' + c.id)},
             h('span.nivel.' + (c.dias > 30 ? 'alto' : 'medio')),
-            h('div', h('b', c.nombre),
+            h('div', h('b', api.cliente(c.id) ? etiquetaCliente(api.cliente(c.id)) : c.nombre),
               h('div.nota', c.municipio + ' · ' + api.etiquetaCatalogo('estadosCliente', c.estado) +
                 ' · sin contacto ' + c.dias + ' días')))))
           : h('.vacio', 'Ninguno: llevas la cartera al día.'),
@@ -286,10 +367,11 @@ function panelCaptador({cabecera, r, al, ir}) {
           .sort((a, b) => txt(b.fecha).localeCompare(txt(a.fecha))).slice(0, 12);
         return filas.length ? tabla([
           {clave: 'fecha', et: 'Fecha', pinta: c => fechaCorta(c.fecha)},
-          {clave: 'cliente', et: 'Cliente', valor: c => (api.cliente(c.cliente_id) || {}).nombre || '—'},
+          {clave: 'cliente', et: 'Cliente', valor: c => etiquetaCliente(api.cliente(c.cliente_id))},
           {clave: 'municipio', et: 'Municipio', valor: c => (api.cliente(c.cliente_id) || {}).municipio || '—'},
-          {clave: 'estado_cita', et: 'Cita', pinta: c => etiquetaEstado(c.estado_cita,
-            api.etiquetaCatalogo('estadosCita', c.estado_cita))},
+          {clave: 'estado_cita', et: 'Cita', pinta: c => h('div.acciones',
+            etiquetaEstado(c.estado_cita, api.etiquetaCatalogo('estadosCita', c.estado_cita)),
+            citaSinConfirmar(c) ? marca('NO CONFIRMADA', 'mal') : null)},
           {clave: 'resultado', et: 'Resultado', pinta: c => etiquetaEstado(c.resultado,
             api.etiquetaCatalogo('resultadosCaptacion', c.resultado))},
           {clave: 'interes', et: 'Interés', num: true, valor: c => num(c.interes),
@@ -317,7 +399,7 @@ function tarjetaProyectosListos(listos, ir) {
     h('ul.zw-listos', listos.map(p => h('li',
       h('div', {estilo: {flex: '1', minWidth: '0', cursor: 'pointer'},
                 onclick: () => ir('cliente/' + p.cliente_id)},
-        h('b', txt(p.cliente) || '(sin nombre)'),
+        h('b', [txt(p.direccion), txt(p.cliente)].filter(Boolean).join(' · ') || '(sin nombre)'),
         h('.nota', [[txt(p.direccion), txt(p.municipio)].filter(Boolean).join(', '),
                     txt(p.entregado) ? 'listo el ' + fechaCorta(p.entregado) : '',
                     txt(p.comercial)].filter(Boolean).join(' · '))),
