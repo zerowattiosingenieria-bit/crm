@@ -3371,6 +3371,15 @@ function cuadreFacturacion_() {
  * y se abona a final de mes.
  */
 
+/* La hoja convierte «2026-04» en una fecha (1/4/2026). Aquí el mes vuelve
+   siempre a «aaaa-mm», venga como venga. */
+function periodoNomina_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, zonaHoraria_(), 'yyyy-MM');
+  const t = txt_(v);
+  const m = t.match(/^(\d{4})-(\d{2})/);
+  return m ? m[1] + '-' + m[2] : t;
+}
+
 function accNominas_(u, p) {
   const per = permisos_(u);
   const objetivoId = txt_(p.usuario_id) || u.id;
@@ -3378,6 +3387,7 @@ function accNominas_(u, p) {
     return {ok: false, error: 'Solo puedes ver tu propia nómina.'};
   }
   const nominas = leer_('NOMINAS').filter(function (n) { return String(n.usuario_id) === String(objetivoId); })
+    .map(function (n) { n.periodo = periodoNomina_(n.periodo); return n; })
     .sort(function (a, b) { return txt_(b.periodo).localeCompare(txt_(a.periodo)); });
   const persona = leer_('USUARIOS').filter(function (x) { return String(x.id) === String(objetivoId); })[0];
   return {ok: true, nominas: nominas, persona: persona ? publicoConNomina_(persona) : null};
@@ -3561,6 +3571,7 @@ function accGenerarNomina_(u, p) {
 function accGuardarNomina_(u, p) {
   exigir_(u, 'nominasAjenas');
   const d = p.nomina || {};
+  if (d.exacto) return guardarNominaExacta_(u, d);
   const campos = ['estado','fecha_pago','url','notas','otros','bruto','dietas','comisiones',
                   'irpf_pct','ss_pct'];
   const cambios = {};
@@ -3579,6 +3590,28 @@ function accGuardarNomina_(u, p) {
   }
   const r = actualizar_('NOMINAS', d.id, cambios);
   registrar_(u, 'editar_nomina', 'NOMINAS', d.id, cambios.estado || '');
+  return {ok: true, nomina: r};
+}
+
+/*
+ * Las cifras tal cual vienen en la nómina de la gestoría: no se recalcula
+ * nada. «detalle» guarda en JSON lo que no tiene columna propia (días,
+ * base de IRPF, especie, embargo, Seguridad Social de la empresa y coste
+ * para la empresa).
+ */
+function guardarNominaExacta_(u, d) {
+  const n = leer_('NOMINAS').filter(function (x) { return String(x.id) === String(d.id); })[0];
+  if (!n) return {ok: false, error: 'No existe esa nómina.'};
+  const cambios = {};
+  ['bruto','dietas','comisiones','otros','bruto_total','irpf_pct','irpf','ss_pct','ss','neto']
+    .forEach(function (c) { if (d[c] !== undefined && txt_(d[c]) !== '') cambios[c] = redondear_(num_(d[c]), 2); });
+  ['estado','fecha_pago','notas'].forEach(function (c) { if (d[c] !== undefined) cambios[c] = txt_(d[c]).slice(0, 300); });
+  if (d.detalle !== undefined) {
+    cambios.detalle = (typeof d.detalle === 'string' ? d.detalle : JSON.stringify(d.detalle)).slice(0, 3000);
+  }
+  const r = actualizar_('NOMINAS', n.id, cambios);
+  registrar_(u, 'editar_nomina', 'NOMINAS', n.id, 'cifras de la nómina ' + periodoNomina_(n.periodo));
+  r.periodo = periodoNomina_(r.periodo);
   return {ok: true, nomina: r};
 }
 
@@ -3636,7 +3669,7 @@ function accSubirNomina_(u, p) {
   const archivo = carpetaNominas_().createFile(blob);
 
   const existente = leer_('NOMINAS').filter(function (n) {
-    return String(n.usuario_id) === String(objetivoId) && txt_(n.periodo) === periodo; })[0];
+    return String(n.usuario_id) === String(objetivoId) && periodoNomina_(n.periodo) === periodo; })[0];
 
   /* Si ya había un PDF para ese mes, el viejo se manda a la papelera. */
   if (existente && txt_(existente.archivo_id)) {
