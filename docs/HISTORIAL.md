@@ -8,6 +8,76 @@ Esto no sustituye al manual: el manual cuenta cómo se usa el CRM hoy
 luego no hay manera de reconstruir.
 
 
+## 23/10/2026
+
+### El panel de dirección, con IVA y con lo que dice el banco
+
+Las seis tarjetas de arriba enseñaban la base sin IVA y un margen sacado
+de los gastos apuntados por instalación, que casi nunca están completos.
+Ahora la facturación del año es la suma del total con IVA de las
+instalaciones vendidas este año, con lo cobrado en el año debajo; la
+cartera abierta, el total con IVA de las propuestas y financiaciones
+vivas; y el ticket medio se calcula por cliente, no por instalación.
+
+Margen bruto y beneficio neto salen de los movimientos del banco del año
+(acción `banco`, que ya existía): cobros de clientes menos proveedores y
+montaje da el margen, y restando la estructura (nóminas, Seguridad Social,
+servicios, seguros, comisiones, préstamos, transporte, dietas, teléfono,
+EPI, marketing, gestoría y otros gastos) queda el beneficio. Los traspasos
+entre cuentas y los impuestos no cuentan. Esa petición va aparte y sin
+esperar: el panel se pinta al momento con «…» y esas dos tarjetas se
+rellenan al llegar; si el banco falla o no hay movimientos, dicen «—».
+
+### Citas sin confirmar, en rojo
+
+Una sentada que nadie ha confirmado lleva ahora la marca «NO CONFIRMADA»
+en la agenda, en el calendario (punto rojo, con su leyenda), en el listado
+de captaciones del panel y en el de clientes. El comercial tiene que
+saberlo antes de coger el coche.
+
+### Clientes por calle y nombre, y más filtros
+
+En el listado, la agenda y el panel los clientes se nombran «dirección ·
+nombre», que es como los recuerda el equipo. El listado de clientes suma
+filtros por tipo de instalación, forma de pago (financiación aprobada o
+pendiente, contado, sin definir, sin operación), estado de la operación y
+visita sin confirmar, y dos columnas nuevas: Pago (con la financiera) y
+Comentario. Todo sale de la última operación del cliente: con la
+financiera, de firmada en adelante cuenta como aprobada y antes como
+pendiente.
+
+### Comentarios propios de cada comercial
+
+Cada uno puede dejar su comentario sobre un cliente desde el listado o
+desde la ficha («✎ Comentario»), y se ve en el listado. No hay campo nuevo
+en el servidor: se guarda como un apunte de seguimiento con origen
+`comentario`. Se descartó usar un campo del cliente porque `etiquetas` lo
+usa la importación como referencia y `otros` o `perfil` ya tienen texto
+que se perdería. Así queda quién lo escribió y cuándo, y cada uno edita el
+suyo sin crear otro. En el listado sale el último de cada persona, el
+tuyo primero. El apunte cuenta como actividad del cliente, igual que una
+llamada; el «Último contacto» de la ficha no lo tiene en cuenta.
+
+### La ficha de dimensionado, dentro del cliente
+
+La ficha de visita que se usaba suelta en el móvil vive ahora en una
+pestaña de la ficha del cliente: comercial y cliente, vivienda,
+instalación actual, gastos, ACS, fotovoltaica, oferta y financiación y
+cierre, con el resumen en vivo (equipo, ahorro, ayudas, coste real, cuota
+a 10 años) y los avisos. Sale rellena con lo que ya hay del cliente y de
+su última instalación. Sin fotos ni conexión con el motor, que aquí ya
+están en la pestaña Proyecto.
+
+Se guarda en el campo `notas` del proyecto, como `FICHA_DIM_V1:` seguido
+del JSON. Si en notas ya había texto, se conserva dentro del mismo JSON.
+Como el servidor reescribe siempre la descripción al guardar el proyecto,
+antes de guardar se vuelve a leer y se manda tal cual, para no borrarla.
+«Pasar al proyecto» escribe, tras confirmarlo, un resumen legible al final
+de la descripción (entre marcas, para que la segunda vez lo sustituya en
+vez de duplicarlo). Guardar puede devolver a la cola un proyecto que
+estaba parado esperando datos, igual que si se hubiera escrito en la
+descripción.
+
 ## 07/10/2026
 
 ### La entrada al CRM, bastante más dura de forzar
