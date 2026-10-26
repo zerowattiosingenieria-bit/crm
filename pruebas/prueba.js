@@ -121,6 +121,18 @@ const cliTrasFirma = leer_('CLIENTES').filter(c => c.id === alta.cliente.id)[0];
 comprobar('al firmar, el cliente pasa a ganado', cliTrasFirma.estado === 'ganado', cliTrasFirma.estado);
 
 console.log('\n== Parte diario y lectura del resumen ==');
+/* Un cliente con paréntesis en el nombre rompía el análisis del parte
+   («Invalid regular expression … Unterminated group»). */
+{
+  const raro = despachar_({accion: 'guardarCliente', token: sesiones.nando.token,
+    cliente: {nombre: 'C. Rio Lega 2 (pendiente de nombre)', municipio: 'Madrid', estado: 'cita'}});
+  const conRaro = despachar_({accion: 'guardarParte', token: sesiones.nando.token,
+    parte: {fecha: hoyISO_(), puertas: 30, visitas: 4,
+            resumen: 'Hoy 3 sentadas y una reagendada (jueves 5 a las 10h). Rio Lega pendiente de nombre.'}});
+  comprobar('un parte se guarda aunque haya clientes con paréntesis en el nombre',
+    raro.ok === true && conRaro.ok === true, conRaro.error);
+}
+
 const noGanados = dNando.clientes.filter(c => c.estado !== 'ganado' && c.estado !== 'perdido');
 const nombreCli = noGanados[0].nombre;
 const otroCli = noGanados[1].nombre;
