@@ -2725,10 +2725,17 @@ function mencionado_(fraseNormal, cliente) {
   const nombre = normal_(cliente.nombre);
   if (!nombre) return false;
   if (fraseNormal.indexOf(nombre) >= 0) return true;
-  const partes = nombre.split(' ').filter(function (x) { return x.length >= 4; });
+  /* Los nombres pueden traer paréntesis, puntos o barras («Rio Lega 2 (pendiente
+     de nombre)»): se quitan los signos antes de buscar, y cada trozo se escapa
+     para que nunca rompa la expresión regular. */
+  const partes = nombre.split(/\s+/)
+    .map(function (x) { return x.replace(/[^a-z0-9ñ]/g, ''); })
+    .filter(function (x) { return x.length >= 4; });
   /* Con el nombre de pila basta si es razonablemente distintivo. */
   const aciertos = partes.filter(function (x) {
-    return new RegExp('(^|[^a-z0-9])' + x + '([^a-z0-9]|$)').test(fraseNormal);
+    const seguro = x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    try { return new RegExp('(^|[^a-z0-9])' + seguro + '([^a-z0-9]|$)').test(fraseNormal); }
+    catch (e) { return fraseNormal.indexOf(x) >= 0; }
   }).length;
   if (aciertos >= 1 && partes.length === 1) return true;
   if (aciertos >= 1 && fraseNormal.indexOf(partes[0]) >= 0) return true;
