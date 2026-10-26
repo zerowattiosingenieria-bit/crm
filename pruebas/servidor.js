@@ -17,6 +17,24 @@ cargarDemo();
 /* El puesto de cada uno y unas cuantas cifras y tareas de muestra, para
    poder ver «Mi tablero» con contenido sin tener que meterlo a mano. */
 ponerPuestos();
+/* Leads de hoy de los dos captadores, y uno de Abraham sobre un cliente
+   de Sandra, para comprobar que cada uno ve solo lo suyo en la agenda. */
+(() => {
+  const us = leer_('USUARIOS');
+  const sandra = us.filter(x => normal_(x.nombre) === 'sandra')[0];
+  const abraham = us.filter(x => normal_(x.nombre) === 'abraham')[0];
+  if (!sandra || !abraham) return;
+  const clis = leer_('CLIENTES');
+  const deS = clis.filter(c => String(c.captador_id) === String(sandra.id));
+  const deA = clis.filter(c => String(c.captador_id) === String(abraham.id));
+  const poner = (cli, cap, hora) => cli && insertar_('CAPTACIONES', {cliente_id: cli.id, captador_id: cap.id,
+    fecha: hoyISO_(), hora_cita: hora, estado_cita: 'confirmada', tecnologia: 'fotovoltaica',
+    resultado: 'pendiente', creado: ahora_()});
+  poner(deS[0], sandra, '10:00'); poner(deS[1], sandra, '12:30');
+  poner(deA[0], abraham, '11:00');
+  poner(deS[2], abraham, '17:00');
+})();
+
 (() => {
   const dir = leer_('USUARIOS').filter(x => x.rol === 'superadmin')[0];
   const nando = leer_('USUARIOS').filter(x => normal_(x.nombre) === 'nando')[0] ||

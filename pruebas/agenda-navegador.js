@@ -31,7 +31,16 @@ function comprobar(nombre, condicion, extra) {
     await pag.fill('#usuario', usuario);
     await pag.fill('#clave', CLAVES[usuario]);
     await pag.click('#btn-entrar');
-    await pag.waitForSelector('.app.visible', {timeout: 15000});
+    await Promise.race([
+      pag.waitForSelector('.app.visible', {timeout: 15000}),
+      pag.waitForSelector('#paso-codigo:visible', {timeout: 15000})
+    ]);
+    if (await pag.locator('#paso-codigo').isVisible()) {
+      const correo = await (await fetch(BASE + '/ultimo-correo')).json();
+      await pag.fill('#codigo', (String(correo.subject || '').match(/(\d{6})/) || [])[1] || '');
+      await pag.click('#btn-entrar');
+      await pag.waitForSelector('.app.visible', {timeout: 15000});
+    }
     await pag.evaluate(() => { location.hash = '#agenda'; });
     await pag.waitForTimeout(1500);
     await pag.screenshot({path: path.join(SALIDA, 'agenda_' + usuario + '.png'), fullPage: true});
@@ -76,7 +85,51 @@ function comprobar(nombre, condicion, extra) {
     await ctx.close();
   }
 
-  comprobar('ningún error de consola', errores.length === 0, errores.slice(0, 5));
+  /* Los captadores solo ven sus propios leads, cada uno en su día. */
+  for (const quien of ['sandra', 'abraham']) {
+    const {ctx, pag} = await agendaDe(quien);
+    const r = await pag.evaluate(async () => {
+      const api = await import('/assets/js/api.js');
+      const yo = api.estado.usuario;
+      const d = new Date(); const hoy = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      const deHoy = api.estado.captaciones.filter(c => String(c.captador_id) === String(yo.id) && String(c.fecha).slice(0, 10) === hoy && api.cliente(c.cliente_id));
+      const titulos = [...document.querySelectorAll('#vista .tarjeta header h2')].map(e => e.textContent);
+      const lineas = [...document.querySelectorAll('#vista ul.lista-avisos li b')].map(e => e.textContent);
+      const ajenos = api.estado.captaciones.filter(c => String(c.captador_id) !== String(yo.id) && api.cliente(c.cliente_id));
+      return {yo: yo.id, esperadas: deHoy.length, titulos, lineas,
+              hoy: (titulos.find(t => /^Hoy \(/.test(t)) || ''), ajenos: ajenos.length,
+              seguimientos: lineas.filter(l => l.includes('☎') || l.includes('⚡')).length};
+    });
+    comprobar(quien + ': el bloque Hoy cuenta sus leads de hoy', r.hoy === 'Hoy (' + r.esperadas + ')', r);
+    comprobar(quien + ': sin seguimientos ni instalaciones de los comerciales', r.seguimientos === 0, r.lineas.slice(0, 5));
+    await ctx.close();
+  }
+
+  /* En Captaciones, dirección ve el rendimiento por captador en tres cortes. */
+  {
+    const {ctx, pag} = await agendaDe('fernando');
+    await pag.evaluate(() => { location.hash = '#captaciones'; });
+    await pag.waitForTimeout(1500);
+    const r = await pag.evaluate(async () => {
+      const titulos = [...document.querySelectorAll('#vista .tarjeta header h2')].map(e => e.textContent);
+      const m = await import('/assets/js/vistas/captaciones.js');
+      const api = await import('/assets/js/api.js');
+      const per = m.periodosRendimiento();
+      const cuenta = per.map(p => api.estado.captaciones.filter(c => { const f = m.fechaAlta(c); return f && f >= p.desde && f <= p.hasta; }).length);
+      return {titulos: titulos.filter(t => /Rendimiento por captador/.test(t)), cuenta};
+    });
+    await pag.screenshot({path: path.join(SALIDA, 'rendimiento_captador.png'), fullPage: true});
+    comprobar('rendimiento por captador: anual, mensual y semanal',
+      r.titulos.length === 3 && /anual/.test(r.titulos[0]) && /mensual/.test(r.titulos[1]) && /semanal/.test(r.titulos[2]), r);
+    comprobar('cada corte cuenta las fichas de su periodo',
+      r.titulos.every((t, i) => t.endsWith('(' + r.cuenta[i] + ')')), r);
+    comprobar('el año tiene al menos las del mes y el mes las de la semana',
+      r.cuenta[0] >= r.cuenta[1] && r.cuenta[1] >= r.cuenta[2], r.cuenta);
+    await ctx.close();
+  }
+
+  const propios = errores.filter(e => !/ERR_TUNNEL_CONNECTION_FAILED/.test(e));
+  comprobar('ningún error de consola', propios.length === 0, propios.slice(0, 5));
   await navegador.close();
   console.log('\n' + (fallos ? 'FALLAN ' + fallos + ' de ' + hechas : 'Todo correcto: ' + hechas + ' comprobaciones'));
   process.exit(fallos ? 1 : 0);
