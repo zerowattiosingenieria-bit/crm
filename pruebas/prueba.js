@@ -120,6 +120,36 @@ comprobar('los cobros suman el total',
 const cliTrasFirma = leer_('CLIENTES').filter(c => c.id === alta.cliente.id)[0];
 comprobar('al firmar, el cliente pasa a ganado', cliTrasFirma.estado === 'ganado', cliTrasFirma.estado);
 
+console.log('\n== DNI y email a medias para comerciales y captadores ==');
+{
+  const unoNando = dNando.clientes[0];
+  const conDatos = despachar_({accion: 'guardarCliente', token: sesiones.fernando.token,
+    cliente: {id: unoNando.id, dni: '00398384R', email: 'laurapeinado63@gmail.com', cotitular: 'Pedro Delgado 50801584N'}});
+  comprobar('dirección guarda DNI y email', conDatos.ok === true, conDatos.error);
+  const verDir = datos('fernando').clientes.filter(c => c.id === unoNando.id)[0];
+  comprobar('dirección ve el DNI y el email completos',
+    verDir.dni === '00398384R' && verDir.email === 'laurapeinado63@gmail.com', [verDir.dni, verDir.email]);
+  const verCom = datos('nando').clientes.filter(c => c.id === unoNando.id)[0];
+  comprobar('el comercial ve el DNI tapado', verCom.dni === '*****384R', verCom.dni);
+  comprobar('y el email tapado', /^la\*{3,}@gmail\.com$/.test(verCom.email), verCom.email);
+  comprobar('y el DNI del cotitular tapado', !/50801584N/.test(verCom.cotitular) && /584N/.test(verCom.cotitular), verCom.cotitular);
+  const pisa = despachar_({accion: 'guardarCliente', token: sesiones.nando.token,
+    cliente: {id: unoNando.id, dni: verCom.dni, email: verCom.email, cotitular: verCom.cotitular, notas: 'x'}});
+  const tras = datos('fernando').clientes.filter(c => c.id === unoNando.id)[0];
+  comprobar('guardar la ficha con los datos tapados no pisa los buenos', pisa.ok === true &&
+    tras.dni === '00398384R' && tras.email === 'laurapeinado63@gmail.com' && /50801584N/.test(tras.cotitular),
+    [tras.dni, tras.email, tras.cotitular]);
+  comprobar('lo que devuelve el guardado también va tapado', pisa.cliente && pisa.cliente.dni === '*****384R', pisa.cliente && pisa.cliente.dni);
+  const nuevo = despachar_({accion: 'guardarCliente', token: sesiones.nando.token,
+    cliente: {id: unoNando.id, email: 'nuevo@correo.es'}});
+  const tras2 = datos('fernando').clientes.filter(c => c.id === unoNando.id)[0];
+  comprobar('un email nuevo escrito por el comercial sí se guarda', nuevo.ok && tras2.email === 'nuevo@correo.es', tras2.email);
+  const unoSandra = dSandra.clientes[0];
+  despachar_({accion: 'guardarCliente', token: sesiones.fernando.token, cliente: {id: unoSandra.id, dni: 'X1234567L'}});
+  const verSan = datos('sandra').clientes.filter(c => c.id === unoSandra.id)[0];
+  comprobar('el captador también lo ve tapado', verSan.dni === '*****567L', verSan.dni);
+}
+
 console.log('\n== Parte diario y lectura del resumen ==');
 /* Un cliente con paréntesis en el nombre rompía el análisis del parte
    («Invalid regular expression … Unterminated group»). */

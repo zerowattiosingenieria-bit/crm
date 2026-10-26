@@ -25,7 +25,7 @@ function comprobar(nombre, condicion, extra) {
     const ctx = await navegador.newContext({viewport: {width: 1440, height: 1100}});
     await ctx.addInitScript(url => localStorage.setItem('zw.crm.endpoint', url), BASE + '/exec');
     const pag = await ctx.newPage();
-    pag.on('console', m => { if (m.type() === 'error') errores.push(usuario + ' · ' + m.text()); });
+    pag.on('console', m => { if (m.type() === 'error' && !/ERR_TUNNEL_CONNECTION_FAILED/.test(m.text())) errores.push(usuario + ' · ' + m.text()); });
     pag.on('pageerror', e => errores.push(usuario + ' · ' + e.message));
     await pag.goto(BASE, {waitUntil: 'networkidle'});
     await pag.fill('#usuario', usuario);
@@ -125,6 +125,26 @@ function comprobar(nombre, condicion, extra) {
       r.titulos.every((t, i) => t.endsWith('(' + r.cuenta[i] + ')')), r);
     comprobar('el año tiene al menos las del mes y el mes las de la semana',
       r.cuenta[0] >= r.cuenta[1] && r.cuenta[1] >= r.cuenta[2], r.cuenta);
+    await ctx.close();
+  }
+
+  /* Los captadores no pueden sacar nada a Excel, CSV ni PDF. */
+  for (const quien of ['sandra', 'nando']) {
+    const {ctx, pag} = await agendaDe(quien);
+    const vistos = [];
+    for (const r of ['captaciones', 'clientes', 'operaciones', 'tablero', 'nomina', 'resumen']) {
+      await pag.evaluate(x => { location.hash = '#' + x; }, r);
+      await pag.waitForTimeout(1300);
+      vistos.push(...await pag.$$eval('button, a.btn', bs => bs.map(b => b.textContent.trim())
+        .filter(t => /^(⤓\s*)?(exportar|descargar)\b|excel|\bcsv\b|\bpdf\b|imprimir/i.test(t) && !/^ver pdf$/i.test(t))));
+    }
+    const bloqueado = await pag.evaluate(() => document.documentElement.dataset.sinExportar);
+    if (quien === 'sandra') {
+      comprobar('al captador no le sale ningún botón de exportar', vistos.length === 0, vistos);
+      comprobar('y las descargas están bloqueadas', bloqueado === '1', bloqueado);
+    } else {
+      comprobar('al comercial sí le salen los de exportar', vistos.length > 0, vistos);
+    }
     await ctx.close();
   }
 

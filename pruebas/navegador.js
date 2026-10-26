@@ -26,13 +26,22 @@ const RECORRIDOS = {
     const ctx = await navegador.newContext({viewport: {width: 1440, height: 950}});
     await ctx.addInitScript(url => localStorage.setItem('zw.crm.endpoint', url), BASE + '/exec');
     const pag = await ctx.newPage();
-    pag.on('console', m => { if (m.type() === 'error') errores.push(usuario + ' · consola: ' + m.text()); });
+    pag.on('console', m => { if (m.type() === 'error' && !/ERR_TUNNEL_CONNECTION_FAILED/.test(m.text())) errores.push(usuario + ' · consola: ' + m.text()); });
     pag.on('pageerror', e => errores.push(usuario + ' · página: ' + e.message));
 
     await pag.goto(BASE, {waitUntil: 'networkidle'});
     await pag.fill('#usuario', usuario);
     await pag.fill('#clave', CLAVES[usuario]);
     await pag.click('#btn-entrar');
+    await Promise.race([
+      pag.waitForSelector('.app.visible', {timeout: 15000}),
+      pag.waitForSelector('#paso-codigo:visible', {timeout: 15000})
+    ]).catch(() => {});
+    if (await pag.locator('#paso-codigo').isVisible()) {
+      const correo = await (await fetch(BASE + '/ultimo-correo')).json();
+      await pag.fill('#codigo', (String(correo.subject || '').match(/(\d{6})/) || [])[1] || '');
+      await pag.click('#btn-entrar');
+    }
     try {
       await pag.waitForSelector('.app.visible', {timeout: 10000});
     } catch (e) {
