@@ -1555,6 +1555,47 @@ function veOperacion_(u, op) {
   return false;
 }
 
+/* ---------- datos personales a medias (orden de Nando, 26/10/2026) ----------
+   El DNI y el email del cliente los ve completos la dirección (superadmin y
+   admin). Comerciales y captadores los ven con parte tapada con asteriscos:
+   «*****384R» y «la**********@gmail.com». Al guardar, un valor que todavía
+   lleva los asteriscos no pisa el dato bueno. */
+function veDatosCompletos_(u) { return !!permisos_(u).editarTodo; }
+
+function tapaDni_(v) {
+  const t = txt_(v);
+  if (!t) return '';
+  if (t.length <= 4) return '****';
+  return '*'.repeat(t.length - 4) + t.slice(-4);
+}
+
+function tapaEmail_(v) {
+  const t = txt_(v);
+  if (!t) return '';
+  const i = t.indexOf('@');
+  if (i < 1) return tapaDni_(t);
+  const local = t.slice(0, i);
+  return local.slice(0, 2) + '*'.repeat(Math.max(3, local.length - 2)) + t.slice(i);
+}
+
+/* En «cotitular» a veces va el DNI del otro titular: se tapan los números largos. */
+function tapaDocumentos_(v) {
+  return txt_(v).replace(/\b[XYZxyz]?\d{6,8}[A-Za-z]?\b/g, function (m) { return tapaDni_(m); });
+}
+
+function clienteParaVer_(u, c) {
+  if (!c || veDatosCompletos_(u)) return c;
+  const o = {};
+  Object.keys(c).forEach(function (k) { o[k] = c[k]; });
+  o.dni = tapaDni_(c.dni);
+  o.email = tapaEmail_(c.email);
+  o.cotitular = tapaDocumentos_(c.cotitular);
+  return o;
+}
+
+/** ¿Este valor es uno de los tapados con asteriscos que mandamos al navegador? */
+function esTapado_(v) { return /\*{3,}/.test(txt_(v)); }
+
 /** Lista de clientes ya filtrada. */
 function misClientes_(u) {
   return leer_('CLIENTES').filter(function (c) { return veCliente_(u, c); });
@@ -1724,7 +1765,7 @@ function accDatos_(u, p) {
     catalogo: CATALOGO,
     config: configVisible_(u),
     usuarios: leer_('USUARIOS').map(publico_),
-    clientes: clientes,
+    clientes: clientes.map(function (c) { return clienteParaVer_(u, c); }),
     operaciones: operaciones,
     seguimiento: seguimiento,
     captaciones: captaciones,
@@ -1773,10 +1814,14 @@ function accGuardarCliente_(u, p) {
     campos.forEach(function (c) { if (d[c] !== undefined) cambios[c] = d[c]; });
     /* Nadie que no sea jefe puede regalarse o quitarse un cliente. */
     if (!per.editarTodo) { delete cambios.comercial_id; delete cambios.captador_id; }
+    /* Lo que llega todavía tapado con asteriscos no pisa el DNI ni el email buenos. */
+    ['dni', 'email', 'cotitular'].forEach(function (k) {
+      if (cambios[k] !== undefined && esTapado_(cambios[k])) delete cambios[k];
+    });
     if (cambios.estado && cambios.estado !== actual.estado) cambios.fecha_estado = hoyISO_();
     const r = actualizar_('CLIENTES', d.id, cambios);
     registrar_(u, 'editar_cliente', 'CLIENTES', d.id, cambios.estado || '');
-    return {ok: true, cliente: r};
+    return {ok: true, cliente: clienteParaVer_(u, r)};
   }
 
   const nuevo = {creado: hoyISO_(), creado_por: u.id, modificado: ahora_(), modificado_por: u.id};
@@ -1789,7 +1834,7 @@ function accGuardarCliente_(u, p) {
   nuevo.fecha_estado = hoyISO_();
   const r = insertar_('CLIENTES', nuevo);
   registrar_(u, 'alta_cliente', 'CLIENTES', r.id, r.nombre);
-  return {ok: true, cliente: r};
+  return {ok: true, cliente: clienteParaVer_(u, r)};
 }
 
 function accBorrarCliente_(u, p) {
@@ -6269,7 +6314,7 @@ function accProyectosPendientes_(u, p) {
     const suyos = archivos.filter(function (a) { return String(a.cliente_id) === String(x.cliente_id); });
     return {id: x.id, cliente_id: x.cliente_id, cliente: txt_(c.nombre),
             direccion: txt_(c.direccion), municipio: txt_(c.municipio),
-            telefono: txt_(c.telefono), email: txt_(c.email),
+            telefono: txt_(c.telefono), email: veDatosCompletos_(u) ? txt_(c.email) : tapaEmail_(c.email),
             comercial: usuarios[String(c.comercial_id)] || '',
             descripcion: txt_(x.descripcion), estado: txt_(x.estado), pedido: txt_(x.pedido),
             entregado: txt_(x.entregado), faltan: txt_(x.faltan),

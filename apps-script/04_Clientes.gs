@@ -30,7 +30,7 @@ function accDatos_(u, p) {
     catalogo: CATALOGO,
     config: configVisible_(u),
     usuarios: leer_('USUARIOS').map(publico_),
-    clientes: clientes,
+    clientes: clientes.map(function (c) { return clienteParaVer_(u, c); }),
     operaciones: operaciones,
     seguimiento: seguimiento,
     captaciones: captaciones,
@@ -79,10 +79,14 @@ function accGuardarCliente_(u, p) {
     campos.forEach(function (c) { if (d[c] !== undefined) cambios[c] = d[c]; });
     /* Nadie que no sea jefe puede regalarse o quitarse un cliente. */
     if (!per.editarTodo) { delete cambios.comercial_id; delete cambios.captador_id; }
+    /* Lo que llega todavía tapado con asteriscos no pisa el DNI ni el email buenos. */
+    ['dni', 'email', 'cotitular'].forEach(function (k) {
+      if (cambios[k] !== undefined && esTapado_(cambios[k])) delete cambios[k];
+    });
     if (cambios.estado && cambios.estado !== actual.estado) cambios.fecha_estado = hoyISO_();
     const r = actualizar_('CLIENTES', d.id, cambios);
     registrar_(u, 'editar_cliente', 'CLIENTES', d.id, cambios.estado || '');
-    return {ok: true, cliente: r};
+    return {ok: true, cliente: clienteParaVer_(u, r)};
   }
 
   const nuevo = {creado: hoyISO_(), creado_por: u.id, modificado: ahora_(), modificado_por: u.id};
@@ -95,7 +99,7 @@ function accGuardarCliente_(u, p) {
   nuevo.fecha_estado = hoyISO_();
   const r = insertar_('CLIENTES', nuevo);
   registrar_(u, 'alta_cliente', 'CLIENTES', r.id, r.nombre);
-  return {ok: true, cliente: r};
+  return {ok: true, cliente: clienteParaVer_(u, r)};
 }
 
 function accBorrarCliente_(u, p) {

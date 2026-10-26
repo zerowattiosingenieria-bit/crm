@@ -427,6 +427,47 @@ function veOperacion_(u, op) {
   return false;
 }
 
+/* ---------- datos personales a medias (orden de Nando, 26/10/2026) ----------
+   El DNI y el email del cliente los ve completos la dirección (superadmin y
+   admin). Comerciales y captadores los ven con parte tapada con asteriscos:
+   «*****384R» y «la**********@gmail.com». Al guardar, un valor que todavía
+   lleva los asteriscos no pisa el dato bueno. */
+function veDatosCompletos_(u) { return !!permisos_(u).editarTodo; }
+
+function tapaDni_(v) {
+  const t = txt_(v);
+  if (!t) return '';
+  if (t.length <= 4) return '****';
+  return '*'.repeat(t.length - 4) + t.slice(-4);
+}
+
+function tapaEmail_(v) {
+  const t = txt_(v);
+  if (!t) return '';
+  const i = t.indexOf('@');
+  if (i < 1) return tapaDni_(t);
+  const local = t.slice(0, i);
+  return local.slice(0, 2) + '*'.repeat(Math.max(3, local.length - 2)) + t.slice(i);
+}
+
+/* En «cotitular» a veces va el DNI del otro titular: se tapan los números largos. */
+function tapaDocumentos_(v) {
+  return txt_(v).replace(/\b[XYZxyz]?\d{6,8}[A-Za-z]?\b/g, function (m) { return tapaDni_(m); });
+}
+
+function clienteParaVer_(u, c) {
+  if (!c || veDatosCompletos_(u)) return c;
+  const o = {};
+  Object.keys(c).forEach(function (k) { o[k] = c[k]; });
+  o.dni = tapaDni_(c.dni);
+  o.email = tapaEmail_(c.email);
+  o.cotitular = tapaDocumentos_(c.cotitular);
+  return o;
+}
+
+/** ¿Este valor es uno de los tapados con asteriscos que mandamos al navegador? */
+function esTapado_(v) { return /\*{3,}/.test(txt_(v)); }
+
 /** Lista de clientes ya filtrada. */
 function misClientes_(u) {
   return leer_('CLIENTES').filter(function (c) { return veCliente_(u, c); });
