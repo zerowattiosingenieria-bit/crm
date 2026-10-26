@@ -212,6 +212,37 @@ function tablaEmbudo(filas, etiquetaPersona) {
 }
 
 /* El panel entero: lo de arriba son los números de toda la lista filtrada. */
+/* Rendimiento por captador en tres cortes: el año, el mes y la semana en
+   curso, contando cada ficha por el día en que se metió. */
+export function periodosRendimiento(hoy = hoyISO()) {
+  const d = new Date(hoy + 'T12:00:00');
+  const lunes = new Date(d); lunes.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  const iso = x => x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' +
+    String(x.getDate()).padStart(2, '0');
+  const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto',
+    'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  return [
+    {clave: 'anual', titulo: 'Rendimiento por captador · anual',
+     subtitulo: 'Año ' + d.getFullYear() + ', fichas metidas desde el 1 de enero',
+     desde: d.getFullYear() + '-01-01', hasta: hoy},
+    {clave: 'mensual', titulo: 'Rendimiento por captador · mensual',
+     subtitulo: 'Mes de ' + MESES[d.getMonth()] + ', fichas metidas desde el día 1',
+     desde: hoy.slice(0, 8) + '01', hasta: hoy},
+    {clave: 'semanal', titulo: 'Rendimiento por captador · semanal',
+     subtitulo: 'Semana del ' + fechaCorta(iso(lunes)) + ' al ' + fechaCorta(hoy),
+     desde: iso(lunes), hasta: hoy}
+  ];
+}
+
+function rendimientoCaptadorPorPeriodo(lista) {
+  return periodosRendimiento().map(p => {
+    const deEse = lista.filter(c => { const f = fechaAlta(c); return f && f >= p.desde && f <= p.hasta; });
+    return tarjeta(p.titulo + ' (' + miles(deEse.length) + ')',
+      tablaEmbudo(embudoPor(deEse, 'captador_id'), 'Captador'),
+      {sinRelleno: true, subtitulo: p.subtitulo});
+  });
+}
+
 function rendimiento(lista) {
   const leads = lista.length;
   const sentadas = lista.filter(captacionEsSentada).length;
@@ -233,8 +264,7 @@ function rendimiento(lista) {
       kpi('Leads por venta', ventas ? (leads / ventas).toFixed(1) : '—',
         ventas ? 'hacen falta de media' : 'aún sin ventas', {estado: ventas ? 'bien' : 'aviso'})
     ),
-    tarjeta('Rendimiento por captador', tablaEmbudo(embudoPor(lista, 'captador_id'), 'Captador'),
-      {sinRelleno: true}),
+    ...rendimientoCaptadorPorPeriodo(lista),
     tarjeta('Rendimiento por comercial', tablaEmbudo(embudoPor(lista, 'comercial_id'), 'Comercial'),
       {sinRelleno: true}),
     h('p.nota', 'Cuenta como sentada la ficha marcada como sentada o venta y también la cita ' +

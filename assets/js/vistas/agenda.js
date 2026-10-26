@@ -26,8 +26,16 @@ export async function vistaAgenda({ir, refrescar}) {
     const mios = c => !est.persona ||
       txt(c.comercial_id) === est.persona || txt(c.captador_id) === est.persona;
 
+    /* Un captador solo ve sus propios leads: las citas que ha metido él,
+       cada una en su día, aunque ya tengan resultado. Los seguimientos y
+       las instalaciones son cosa del comercial y no le salen. */
+    const yo = api.estado.usuario || {};
+    const idCaptador = yo.rol === 'captador' ? txt(yo.id)
+      : (est.persona && (api.estado.usuarios.find(x => txt(x.id) === est.persona) || {}).rol === 'captador'
+          ? est.persona : '');
+
     /* Seguimientos con fecha */
-    const acciones = api.estado.clientes.filter(c =>
+    const acciones = idCaptador ? [] : api.estado.clientes.filter(c =>
       txt(c.proxima_fecha) && !['ganado', 'perdido'].includes(normal(c.estado)) && mios(c)
     ).map(c => ({
       tipo: 'seguimiento', fecha: txt(c.proxima_fecha), cliente: c,
@@ -37,16 +45,25 @@ export async function vistaAgenda({ir, refrescar}) {
     /* Citas de captación aún por celebrar */
     const citas = api.estado.captaciones.filter(c => {
       const cli = api.cliente(c.cliente_id);
-      return cli && mios(cli) && txt(c.fecha) >= sumarDias(hoy, -1) &&
+      if (!cli || !txt(c.fecha)) return false;
+      if (idCaptador) {
+        if (txt(c.captador_id) !== idCaptador) return false;
+        /* Pasados: solo los que siguen pendientes (vencidos); hoy y en adelante, todos. */
+        return txt(c.fecha) >= hoy || normal(c.resultado) === 'pendiente';
+      }
+      return mios(cli) && txt(c.fecha) >= sumarDias(hoy, -1) &&
              normal(c.resultado) === 'pendiente';
     }).map(c => ({
       tipo: 'cita', fecha: txt(c.fecha), hora: txt(c.hora_cita), cliente: api.cliente(c.cliente_id),
-      texto: 'Sentada · ' + txt(c.tecnologia), captacion: c,
+      texto: 'Sentada · ' + txt(c.tecnologia) +
+        (idCaptador && normal(c.resultado) !== 'pendiente'
+          ? ' · ' + api.etiquetaCatalogo('resultadosCaptacion', c.resultado) : ''),
+      captacion: c,
       sinConfirmar: citaSinConfirmar(c)
     }));
 
     /* Instalaciones con fecha prevista */
-    const obras = api.estado.operaciones.filter(o => {
+    const obras = idCaptador ? [] : api.estado.operaciones.filter(o => {
       const cli = api.cliente(o.cliente_id);
       return cli && mios(cli) && txt(o.fecha_prevista_instalacion) &&
              !txt(o.fecha_instalacion) && normal(o.estado) !== 'cancelada';
@@ -56,7 +73,8 @@ export async function vistaAgenda({ir, refrescar}) {
       operacion: o
     }));
 
-    const todo = acciones.concat(citas, obras).sort((a, b) => a.fecha.localeCompare(b.fecha));
+    const todo = acciones.concat(citas, obras).sort((a, b) =>
+      a.fecha.localeCompare(b.fecha) || txt(a.hora).localeCompare(txt(b.hora)));
     const vencidas = todo.filter(x => x.fecha < hoy);
     const deHoy = todo.filter(x => x.fecha === hoy);
     const semana = todo.filter(x => x.fecha > hoy && x.fecha <= finSemana);
