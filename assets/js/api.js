@@ -264,6 +264,7 @@ export const esDireccion = () => (estado.permisos || {}).alcance === 'todo';
 export const guardarCliente = cliente => pedir('guardarCliente', {cliente});
 export const guardarOperacion = operacion => pedir('guardarOperacion', {operacion});
 export const guardarSeguimiento = seguimiento => pedir('guardarSeguimiento', {seguimiento});
+export const guardarParte = parte => pedir('guardarParte', {parte});
 export const guardarCaptacion = captacion => pedir('guardarCaptacion', {captacion});
 export const borrarCaptacion = ids => pedir('borrarCaptacion', Array.isArray(ids) ? {ids} : {id: ids});
 
