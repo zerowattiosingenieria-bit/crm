@@ -165,8 +165,32 @@ function pintaYo() {
    una tarda en cargar, la que llegue tarde ya no escribe en la vista. */
 let turno = 0;
 
+/* Los captadores no sacan nada del CRM a Excel, CSV ni PDF (orden de Nando,
+   26/10/2026): se quitan esos botones en cuanto aparecen y las funciones de
+   descarga se niegan (util.js y exportar.js miran data-sin-exportar). Su propia
+   nómina («Ver PDF») sí la pueden abrir. */
+const BOTON_EXPORTAR = /^(⤓\s*)?(exportar|descargar)\b|excel|\bcsv\b|\bpdf\b|imprimir/i;
+function quitaExportar(raiz) {
+  if (document.documentElement.dataset.sinExportar !== '1') return;
+  raiz.querySelectorAll('button, a.btn').forEach(b => {
+    const t = (b.textContent || '').trim();
+    if (BOTON_EXPORTAR.test(t) && !/^ver pdf$/i.test(t)) b.remove();
+  });
+}
+let vigilaExportar = null;
+function aplicaPermisoExportar() {
+  const captador = !!(api.estado.usuario && api.estado.usuario.rol === 'captador');
+  document.documentElement.dataset.sinExportar = captador ? '1' : '';
+  if (captador && !vigilaExportar) {
+    vigilaExportar = new MutationObserver(() => quitaExportar(document.body));
+    vigilaExportar.observe(document.body, {childList: true, subtree: true});
+  }
+  quitaExportar(document.body);
+}
+
 export async function pintar() {
   const mio = ++turno;
+  aplicaPermisoExportar();
   const {vista, id} = rutaActual();
   const def = VISTAS[vista] || VISTAS.panel;
 

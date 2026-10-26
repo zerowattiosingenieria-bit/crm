@@ -159,6 +159,7 @@ export const ordenarPor = (lista, campo, desc) => lista.slice().sort((a, b) => {
 
 /** Descarga una tabla como CSV (lo abre Excel sin pelear con los acentos). */
 export function descargarCSV(nombre, cabeceras, filas) {
+  if (document.documentElement.dataset.sinExportar === '1') return;   // captadores: sin exportar
   const esc = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
   const texto = '﻿' + [cabeceras.map(esc).join(';')]
     .concat(filas.map(f => f.map(esc).join(';'))).join('\r\n');

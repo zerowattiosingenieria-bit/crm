@@ -174,6 +174,7 @@ function hojaXml(hoja) {
  * («antes» es opcional: líneas sueltas encima de la tabla; la primera, en negrita.)
  */
 export function descargarExcel(nombre, hojas) {
+  if (document.documentElement.dataset.sinExportar === '1') return;   // captadores: sin exportar
   const lista = (Array.isArray(hojas) ? hojas : [hojas]).filter(Boolean);
   if (!lista.length) return;
 
@@ -303,6 +304,7 @@ const CSS_INFORME = `
  *           reparto:{titulo, partes:[{et, n}]}, cabeceras, filas, pie}
  */
 export function informeImprimible(informe) {
+  if (document.documentElement.dataset.sinExportar === '1') return;   // captadores: sin exportar
   const cabeceras = informe.cabeceras || [];
   const filas = informe.filas || [];
   const ahora = new Date().toLocaleString('es-ES',
