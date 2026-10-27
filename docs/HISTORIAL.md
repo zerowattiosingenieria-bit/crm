@@ -11,6 +11,12 @@ luego no hay manera de reconstruir.
 
 ## 27/10/2026
 
+### El email del cliente, completo para todos
+
+Orden de Nando: el email lo ve completo todo el mundo (comerciales y
+captadores incluidos). Solo el DNI (y los DNI dentro de «cotitular») sigue
+tapado con asteriscos para quien no es dirección.
+
 ### Documentos «solo dirección» en la carpeta del cliente
 
 En la pestaña Proyecto de la ficha, la dirección (Rubén, Fernando y el
