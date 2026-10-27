@@ -8,6 +8,22 @@ Esto no sustituye al manual: el manual cuenta cómo se usa el CRM hoy
 luego no hay manera de reconstruir.
 
 
+
+## 27/10/2026
+
+### Documentos «solo dirección» en la carpeta del cliente
+
+En la pestaña Proyecto de la ficha, la dirección (Rubén, Fernando y el
+superadmin) tiene una tarjeta nueva, «🔒 Solo dirección», para subir PDF o
+fotos que no debe ver nadie más: el primero, el resumen de los CAE de cada
+cliente con lo que va a cobrar, sacado de Novawatt.
+
+Son archivos de clase `direccion`. El servidor no se los manda a nadie sin
+alcance «todo»: no salen en la carpeta, ni en las listas de proyectos, ni
+se pueden descargar, borrar o subir aunque alguien conozca su id (responde
+«No existe ese archivo»). En Drive van a la misma carpeta del cliente, que
+no está compartida con nadie. Prueba: `pruebas/direccion-navegador.js`.
+
 ## 23/10/2026
 
 ### Nóminas con todas las cifras de la gestoría
