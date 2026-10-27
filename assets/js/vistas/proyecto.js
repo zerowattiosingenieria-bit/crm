@@ -100,6 +100,8 @@ export function panelProyecto(cliente) {
     const fotos = archivos.filter(a => a.clase === 'foto');
     const docs = archivos.filter(a => a.clase === 'documento');
     const proyectos = archivos.filter(a => a.clase === 'proyecto');
+    /* Solo le llegan a la dirección: el servidor no se los manda a nadie más. */
+    const deDireccion = archivos.filter(a => a.clase === 'direccion');
     const puedeEntregar = api.puede('editarTodo');
     const [etiqueta, color] = ESTADOS[txt(proy.estado)] || ESTADOS.borrador;
 
@@ -213,6 +215,35 @@ export function panelProyecto(cliente) {
       } catch (e) { avisoError(e); }
     });
 
+    /* --- documentos que solo ve la dirección (CAE, dinero, notas internas) --- */
+    const subirPrivado = h('input', {type: 'file', multiple: true,
+      accept: 'application/pdf,image/*', estilo: {display: 'none'}});
+    subirPrivado.addEventListener('change', async () => {
+      const lista = Array.from(subirPrivado.files || []);
+      subirPrivado.value = '';
+      for (const f of lista) {
+        try {
+          const url = await leerComoDataURL(f);
+          await api.subirArchivo({cliente_id: cliente.id, clase: 'direccion', nombre: f.name,
+            mime: f.type || 'application/pdf', datos: soloBase64(url), miniatura: ''});
+        } catch (e) { avisoError(e); }
+      }
+      if (lista.length) { aviso('Guardado. Solo lo ve la dirección.'); await pinta(); }
+    });
+    const privados = puedeEntregar ? tarjeta('🔒 Solo dirección (' + deDireccion.length + ')',
+      h('div',
+        deDireccion.length
+          ? h('ul.zw-docs', deDireccion.map(doc => h('li',
+              h('span', txt(doc.nombre)),
+              h('span.nota', fechaCorta(doc.subido)),
+              h('button.btn.plano', {onclick: e => conEspera(e, () => abrirArchivo(doc))}, '⤓'),
+              h('button.btn.plano', {onclick: e => quitar(e, doc)}, '×'))))
+          : h('p.nota', 'Nada todavía. Aquí van los CAE con su dinero y lo que no deba ver el comercial.'),
+        h('.acciones', {estilo: {marginTop: '10px'}},
+          h('button.btn', {onclick: () => subirPrivado.click()}, '🔒 Subir documento solo dirección'),
+          subirPrivado)),
+      {subtitulo: 'No lo ven comerciales ni captadores'}) : null;
+
     const direccion = puedeEntregar ? tarjeta('Centro de mando',
       h('div',
         h('p.nota', 'Lo que sube el comercial se guarda en la carpeta del cliente en Drive. ' +
@@ -254,6 +285,7 @@ export function panelProyecto(cliente) {
         {subtitulo: 'Lo lee el ingeniero que monta la propuesta'}),
       tarjeta('Fotos (' + fotos.length + ')', h('div', subidor, rejillaFotos)),
       tarjeta('Documentos (' + docs.length + ')', listaDocs),
+      privados,
       direccion);
   }
 }
