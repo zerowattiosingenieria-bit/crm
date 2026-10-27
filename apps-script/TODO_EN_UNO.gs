@@ -5861,9 +5861,18 @@ function accBorrarPuertas_(u, p) {
  *
  * Quién ve qué: exactamente lo mismo que el resto de la ficha. El comercial
  * ve lo de sus clientes y la dirección lo ve todo.
+ *
+ * Excepción: los documentos de clase «direccion» (p. ej. el resumen de los
+ * CAE con el dinero de cada cliente) solo los ven, suben, descargan y quitan
+ * quienes tienen alcance «todo». Al resto ni siquiera les llega que existen.
  */
 
-const CLASES_ARCHIVO = ['foto', 'documento', 'proyecto'];
+const CLASES_ARCHIVO = ['foto', 'documento', 'proyecto', 'direccion'];
+
+/** ¿Puede este usuario saber que existe este archivo? */
+function veArchivo_(u, a) {
+  return normal_(a.clase) !== 'direccion' || permisos_(u).alcance === 'todo';
+}
 const TOPE_ARCHIVO_MB = 12;        // lo que aguanta cómodamente una petición
 const TOPE_MINIATURA = 24000;      // caracteres de la miniatura guardada en la hoja
 
@@ -6042,7 +6051,8 @@ function accProyecto_(u, p) {
   if (v.error) return {ok: false, error: v.error};
   const proy = proyectoDe_(v.cliente, u);
   return {ok: true, proyecto: proy,
-          archivos: archivosDe_(v.cliente.id).map(sinDatos_).sort(function (a, b) {
+          archivos: archivosDe_(v.cliente.id).filter(function (a) { return veArchivo_(u, a); })
+            .map(sinDatos_).sort(function (a, b) {
             return txt_(b.subido).localeCompare(txt_(a.subido)); })};
 }
 
@@ -6070,6 +6080,9 @@ function accSubirArchivo_(u, p) {
   }
   const clase = CLASES_ARCHIVO.indexOf(normal_(p.clase)) >= 0 ? normal_(p.clase) : 'documento';
   if (clase === 'proyecto') return {ok: false, error: 'El proyecto lo sube la dirección.'};
+  if (clase === 'direccion' && permisos_(u).alcance !== 'todo') {
+    return {ok: false, error: 'Los documentos de dirección solo los sube la dirección.'};
+  }
 
   let proy = proyectoDe_(v.cliente, u);
   const carpeta = carpetaDeProyecto_(proy, v.cliente);
@@ -6093,7 +6106,7 @@ function accSubirArchivo_(u, p) {
 function accDescargarArchivo_(u, p) {
   asegurarProyectos_();
   const a = leer_('ARCHIVOS').filter(function (x) { return String(x.id) === String(p.id); })[0];
-  if (!a) return {ok: false, error: 'No existe ese archivo.'};
+  if (!a || !veArchivo_(u, a)) return {ok: false, error: 'No existe ese archivo.'};
   const v = clienteVisible_(u, a.cliente_id);
   if (v.error) return {ok: false, error: v.error};
   let archivo;
@@ -6108,7 +6121,7 @@ function accDescargarArchivo_(u, p) {
 function accBorrarArchivo_(u, p) {
   asegurarProyectos_();
   const a = leer_('ARCHIVOS').filter(function (x) { return String(x.id) === String(p.id); })[0];
-  if (!a) return {ok: false, error: 'No existe ese archivo.'};
+  if (!a || !veArchivo_(u, a)) return {ok: false, error: 'No existe ese archivo.'};
   const v = clienteVisible_(u, a.cliente_id);
   if (v.error) return {ok: false, error: v.error};
   if (String(a.subido_por) !== String(u.id) && !permisos_(u).editarTodo) {
@@ -6311,7 +6324,8 @@ function accProyectosPendientes_(u, p) {
     const pdf = archivos.filter(function (a) {
       return String(a.cliente_id) === String(x.cliente_id) && normal_(a.clase) === 'proyecto';
     }).sort(function (a, b) { return txt_(b.subido).localeCompare(txt_(a.subido)); })[0];
-    const suyos = archivos.filter(function (a) { return String(a.cliente_id) === String(x.cliente_id); });
+    const suyos = archivos.filter(function (a) {
+      return String(a.cliente_id) === String(x.cliente_id) && veArchivo_(u, a); });
     return {id: x.id, cliente_id: x.cliente_id, cliente: txt_(c.nombre),
             direccion: txt_(c.direccion), municipio: txt_(c.municipio),
             telefono: txt_(c.telefono), email: veDatosCompletos_(u) ? txt_(c.email) : tapaEmail_(c.email),
