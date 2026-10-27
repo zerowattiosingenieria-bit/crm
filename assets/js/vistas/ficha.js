@@ -84,11 +84,14 @@ const IBI = {
 const BASE_IRPF = 7500;
 export const PCT_IRPF = 60;
 
-/* Coeficientes de financiación (Finlight): cuota = importe financiado × coeficiente. */
+/* Coeficientes de financiación (Finlight, vigentes desde el 16/10/2026: TIN 8,95 %
+   con la comisión de apertura del 2 % prorrateada en las cuotas):
+   cuota = importe financiado × coeficiente. De 10 a 20 años son los oficiales;
+   72, 84 y 108 meses salen de la misma fórmula (cuota francesa × 1,02). */
 const COEF_FIN = {
-  72: 0.018336, 84: 0.01636, 108: 0.01376, 120: 0.01234902, 132: 0.01161679,
-  144: 0.01101403, 156: 0.01050942, 168: 0.01008303, 180: 0.00971918,
-  192: 0.0094053, 204: 0.00913215, 216: 0.0088948, 228: 0.00868524, 240: 0.00850064
+  72: 0.018361, 84: 0.016385, 108: 0.013787, 120: 0.012894, 132: 0.012172,
+  144: 0.01158, 156: 0.011086, 168: 0.01067, 180: 0.010316,
+  192: 0.010012, 204: 0.00975, 216: 0.00952, 228: 0.009322, 240: 0.009146
 };
 const PLAZOS = Object.keys(COEF_FIN).map(Number);
 
