@@ -131,7 +131,7 @@ console.log('\n== DNI y email a medias para comerciales y captadores ==');
     verDir.dni === '00398384R' && verDir.email === 'laurapeinado63@gmail.com', [verDir.dni, verDir.email]);
   const verCom = datos('nando').clientes.filter(c => c.id === unoNando.id)[0];
   comprobar('el comercial ve el DNI tapado', verCom.dni === '*****384R', verCom.dni);
-  comprobar('y el email tapado', /^la\*{3,}@gmail\.com$/.test(verCom.email), verCom.email);
+  comprobar('pero el email completo (orden 27/10)', verCom.email === 'laurapeinado63@gmail.com', verCom.email);
   comprobar('y el DNI del cotitular tapado', !/50801584N/.test(verCom.cotitular) && /584N/.test(verCom.cotitular), verCom.cotitular);
   const pisa = despachar_({accion: 'guardarCliente', token: sesiones.nando.token,
     cliente: {id: unoNando.id, dni: verCom.dni, email: verCom.email, cotitular: verCom.cotitular, notas: 'x'}});
