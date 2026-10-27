@@ -1556,10 +1556,10 @@ function veOperacion_(u, op) {
 }
 
 /* ---------- datos personales a medias (orden de Nando, 26/10/2026) ----------
-   El DNI y el email del cliente los ve completos la dirección (superadmin y
-   admin). Comerciales y captadores los ven con parte tapada con asteriscos:
-   «*****384R» y «la**********@gmail.com». Al guardar, un valor que todavía
-   lleva los asteriscos no pisa el dato bueno. */
+   El DNI del cliente lo ve completo la dirección (superadmin y admin).
+   Comerciales y captadores lo ven con parte tapada con asteriscos: «*****384R».
+   El email lo ve todo el mundo completo (orden de Nando, 27/10/2026).
+   Al guardar, un valor que todavía lleva los asteriscos no pisa el dato bueno. */
 function veDatosCompletos_(u) { return !!permisos_(u).editarTodo; }
 
 function tapaDni_(v) {
@@ -1588,7 +1588,6 @@ function clienteParaVer_(u, c) {
   const o = {};
   Object.keys(c).forEach(function (k) { o[k] = c[k]; });
   o.dni = tapaDni_(c.dni);
-  o.email = tapaEmail_(c.email);
   o.cotitular = tapaDocumentos_(c.cotitular);
   return o;
 }
@@ -6328,7 +6327,7 @@ function accProyectosPendientes_(u, p) {
       return String(a.cliente_id) === String(x.cliente_id) && veArchivo_(u, a); });
     return {id: x.id, cliente_id: x.cliente_id, cliente: txt_(c.nombre),
             direccion: txt_(c.direccion), municipio: txt_(c.municipio),
-            telefono: txt_(c.telefono), email: veDatosCompletos_(u) ? txt_(c.email) : tapaEmail_(c.email),
+            telefono: txt_(c.telefono), email: txt_(c.email),
             comercial: usuarios[String(c.comercial_id)] || '',
             descripcion: txt_(x.descripcion), estado: txt_(x.estado), pedido: txt_(x.pedido),
             entregado: txt_(x.entregado), faltan: txt_(x.faltan),

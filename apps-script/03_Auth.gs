@@ -428,10 +428,10 @@ function veOperacion_(u, op) {
 }
 
 /* ---------- datos personales a medias (orden de Nando, 26/10/2026) ----------
-   El DNI y el email del cliente los ve completos la dirección (superadmin y
-   admin). Comerciales y captadores los ven con parte tapada con asteriscos:
-   «*****384R» y «la**********@gmail.com». Al guardar, un valor que todavía
-   lleva los asteriscos no pisa el dato bueno. */
+   El DNI del cliente lo ve completo la dirección (superadmin y admin).
+   Comerciales y captadores lo ven con parte tapada con asteriscos: «*****384R».
+   El email lo ve todo el mundo completo (orden de Nando, 27/10/2026).
+   Al guardar, un valor que todavía lleva los asteriscos no pisa el dato bueno. */
 function veDatosCompletos_(u) { return !!permisos_(u).editarTodo; }
 
 function tapaDni_(v) {
@@ -460,7 +460,6 @@ function clienteParaVer_(u, c) {
   const o = {};
   Object.keys(c).forEach(function (k) { o[k] = c[k]; });
   o.dni = tapaDni_(c.dni);
-  o.email = tapaEmail_(c.email);
   o.cotitular = tapaDocumentos_(c.cotitular);
   return o;
 }

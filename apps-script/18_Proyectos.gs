@@ -477,7 +477,7 @@ function accProyectosPendientes_(u, p) {
       return String(a.cliente_id) === String(x.cliente_id) && veArchivo_(u, a); });
     return {id: x.id, cliente_id: x.cliente_id, cliente: txt_(c.nombre),
             direccion: txt_(c.direccion), municipio: txt_(c.municipio),
-            telefono: txt_(c.telefono), email: veDatosCompletos_(u) ? txt_(c.email) : tapaEmail_(c.email),
+            telefono: txt_(c.telefono), email: txt_(c.email),
             comercial: usuarios[String(c.comercial_id)] || '',
             descripcion: txt_(x.descripcion), estado: txt_(x.estado), pedido: txt_(x.pedido),
             entregado: txt_(x.entregado), faltan: txt_(x.faltan),
