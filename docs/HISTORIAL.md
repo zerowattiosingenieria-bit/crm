@@ -11,6 +11,14 @@ luego no hay manera de reconstruir.
 
 ## 27/10/2026
 
+### Ficha de dimensionado con las cuotas nuevas de Finlight
+
+Orden de Nando: la ficha calcula las cuotas con los coeficientes de Finlight
+vigentes desde el 16/10/2026 (TIN 8,95 % con la comisión de apertura del 2 %
+prorrateada): a 10 años 0,012894, es decir, 128,94 €/mes por cada 10.000 €
+(antes 0,01234902). De 10 a 20 años son los oficiales; 72, 84 y 108 meses se
+calculan con la misma fórmula.
+
 ### El email del cliente, completo para todos
 
 Orden de Nando: el email lo ve completo todo el mundo (comerciales y
