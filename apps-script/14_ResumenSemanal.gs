@@ -275,6 +275,12 @@ function resumenSemanal(soloA) {
     } catch (e) { /* la copia no puede tumbar el envío */ }
   }
 
+  /* Y a cada comercial y captador, su lista completa de vencidos (orden de
+     Nando del 29/10/2026: en la agenda del CRM ya no les salen). */
+  if (!soloA) {
+    try { avisoVencidos(); } catch (e) { fallos.push('vencidos: ' + String(e)); }
+  }
+
   registrar_(null, 'resumen_semanal', 'USUARIOS', '', enviados + ' enviados' +
     (fallos.length ? ', fallos: ' + fallos.join(' | ') : ''));
   Logger.log('Resúmenes enviados: ' + enviados + (fallos.length ? ' · fallos: ' + fallos.join(' | ') : ''));
@@ -310,4 +316,85 @@ function actualizarCorreos() {
   });
   Logger.log('Correos actualizados: ' + cambiados);
   return cambiados;
+}
+
+/* ---------- los vencidos de cada uno, los viernes ---------- */
+
+/**
+ * Lo vencido de una persona: seguimientos con la fecha pasada, citas que
+ * siguen pendientes después de su día e instalaciones que debían estar
+ * hechas. Es lo mismo que la agenda enseña a dirección en «Vencido».
+ */
+function vencidosDe_(u, hoy) {
+  const id = String(u.id);
+  const clientes = leer_('CLIENTES');
+  const porId = {};
+  clientes.forEach(function (c) { porId[String(c.id)] = c; });
+  const lista = [];
+
+  if (u.rol !== 'captador') {
+    clientes.forEach(function (c) {
+      if (String(c.comercial_id) !== id) return;
+      if (['ganado', 'perdido'].indexOf(normal_(c.estado)) >= 0) return;
+      const f = txt_(c.proxima_fecha).slice(0, 10);
+      if (f && f < hoy) lista.push({fecha: f, tipo: 'Seguimiento', nombre: c.nombre,
+        texto: txt_(c.proxima_accion) || 'seguimiento'});
+    });
+    leer_('OPERACIONES').forEach(function (o) {
+      const c = porId[String(o.cliente_id)];
+      if (!c || String(c.comercial_id) !== id) return;
+      const f = txt_(o.fecha_prevista_instalacion).slice(0, 10);
+      if (f && f < hoy && !txt_(o.fecha_instalacion) && normal_(o.estado) !== 'cancelada')
+        lista.push({fecha: f, tipo: 'Instalación', nombre: c.nombre, texto: 'instalación prevista sin hacer'});
+    });
+  }
+  leer_('CAPTACIONES').forEach(function (k) {
+    const mio = u.rol === 'captador' ? String(k.captador_id) === id : String(k.comercial_id) === id;
+    if (!mio || normal_(k.resultado) !== 'pendiente') return;
+    const f = txt_(k.fecha).slice(0, 10);
+    const c = porId[String(k.cliente_id)];
+    if (c && f && f < hoy) lista.push({fecha: f, tipo: 'Cita', nombre: c.nombre,
+      texto: 'cita sin resultado apuntado'});
+  });
+  return lista.sort(function (a, b) { return a.fecha.localeCompare(b.fecha); });
+}
+
+/**
+ * Manda a cada comercial y captador sus vencidos. Va a su propio correo
+ * aunque el resumen semanal esté en pruebas («resumen_a»). Si no tiene nada
+ * vencido, no se le manda nada.
+ */
+function avisoVencidos(soloA) {
+  const hoy = hoyISO_();
+  const gente = leer_('USUARIOS').filter(function (u) {
+    if (normal_(u.activo) !== 'si' || !txt_(u.email)) return false;
+    if (['comercial', 'captador'].indexOf(u.rol) < 0) return false;
+    return soloA ? String(u.id) === String(soloA) || normal_(u.usuario) === normal_(soloA) : true;
+  });
+  let enviados = 0;
+  const fallos = [];
+  gente.forEach(function (u) {
+    try {
+      const lista = vencidosDe_(u, hoy);
+      if (!lista.length) return;
+      const lineas = lista.map(function (x) {
+        return '<b>' + txt_(x.nombre) + '</b> · ' + x.tipo + ' · ' + x.texto + ' · desde el ' + selloFecha_(x.fecha);
+      });
+      const cuerpo =
+        '<p style="margin:0 0 6px;font-size:14px;color:#17191c">Tienes <b>' + lista.length +
+        '</b> cosa' + (lista.length === 1 ? '' : 's') + ' pasada' + (lista.length === 1 ? '' : 's') +
+        ' de fecha sin cerrar. Ponlas al día en el CRM (apunta el resultado o una fecha nueva).</p>' +
+        listaHtml_('Vencidos a ' + selloFecha_(hoy), lineas);
+      const html = correoHtml_(u, cuerpo, 'Lo que se apunta se sigue; lo que no, se pierde.')
+        .replace('Resumen de la semana', 'Tus vencidos')
+        .replace('Así ha ido del lunes al viernes.', 'Lo que se te ha pasado de fecha.');
+      MailApp.sendEmail({to: txt_(u.email),
+        subject: 'Tus vencidos en el CRM · ' + lista.length + ' pendiente' + (lista.length === 1 ? '' : 's'),
+        htmlBody: html, name: 'CRM ZERO WATTIOS'});
+      enviados++;
+    } catch (e) { fallos.push(txt_(u.usuario) + ': ' + String(e)); }
+  });
+  registrar_(null, 'aviso_vencidos', 'USUARIOS', '', enviados + ' enviados' +
+    (fallos.length ? ', fallos: ' + fallos.join(' | ') : ''));
+  return {ok: true, enviados: enviados, fallos: fallos};
 }
