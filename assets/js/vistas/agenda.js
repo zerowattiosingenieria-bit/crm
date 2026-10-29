@@ -1,4 +1,4 @@
-/* vistas/agenda.js — qué toca hoy: citas, seguimientos y cosas vencidas. */
+/* vistas/agenda.js — qué toca hoy: citas, seguimientos y (solo dirección) cosas vencidas. */
 
 import {h, poner, txt, num, eur, miles, fechaCorta, fechaLarga, haceDias, normal,
         hoyISO, sumarDias, dias, comoLlegarHref, destinoDe, etiquetaCliente} from '../util.js';
@@ -73,8 +73,14 @@ export async function vistaAgenda({ir, refrescar}) {
       operacion: o
     }));
 
-    const todo = acciones.concat(citas, obras).sort((a, b) =>
-      a.fecha.localeCompare(b.fecha) || txt(a.hora).localeCompare(txt(b.hora)));
+    /* Lo vencido (pasado de fecha y sin hacer) solo lo ve dirección. A
+       comerciales y captadores les llega su lista los viernes por correo;
+       en su agenda solo sale lo de hoy en adelante. */
+    const verVencidos = api.esDireccion();
+    const todo = acciones.concat(citas, obras)
+      .filter(x => verVencidos || x.fecha >= hoy)
+      .sort((a, b) =>
+        a.fecha.localeCompare(b.fecha) || txt(a.hora).localeCompare(txt(b.hora)));
     const vencidas = todo.filter(x => x.fecha < hoy);
     const deHoy = todo.filter(x => x.fecha === hoy);
     const semana = todo.filter(x => x.fecha > hoy && x.fecha <= finSemana);
@@ -127,8 +133,8 @@ export async function vistaAgenda({ir, refrescar}) {
 
     poner(contenedor,
       kpis(
-        kpi('Vencidas', miles(vencidas.length), 'sin hacer y pasadas de fecha',
-          {estado: vencidas.length ? 'mal' : 'bien', destacado: vencidas.length > 0}),
+        verVencidos ? kpi('Vencidas', miles(vencidas.length), 'sin hacer y pasadas de fecha',
+          {estado: vencidas.length ? 'mal' : 'bien', destacado: vencidas.length > 0}) : null,
         kpi('Hoy', miles(deHoy.length), fechaLarga(hoy)),
         kpi('Esta semana', miles(semana.length), 'próximos 7 días'),
         kpi('Más adelante', miles(despues.length), 'con fecha puesta')
@@ -145,7 +151,7 @@ export async function vistaAgenda({ir, refrescar}) {
             {subtitulo: 'Pulsa un día para ver lo que hay'}),
           delDia),
         h('div',
-          bloque('Vencido', vencidas, 'Nada pendiente de días anteriores.'),
+          verVencidos ? bloque('Vencido', vencidas, 'Nada pendiente de días anteriores.') : null,
           bloque('Hoy', deHoy, 'Hoy no tienes nada con fecha.'))),
       bloque('Esta semana', semana, 'La semana está despejada.'),
       bloque('Más adelante', despues, 'Nada más en la agenda.'));
