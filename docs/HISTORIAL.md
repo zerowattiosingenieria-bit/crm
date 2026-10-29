@@ -11,6 +11,34 @@ luego no hay manera de reconstruir.
 
 ## 29/10/2026
 
+### Ficha de dimensionado: «¿Qué se ofrece?» manda sobre lo que se ve
+
+Orden de Nando: la ficha empieza por «¿Qué se ofrece?» (las dos, solo
+aerotermia o solo fotovoltaica) y oculta lo que no hace falta meter. Con solo
+FV desaparecen calefacción actual, combustible, emisor, Easy Connect,
+refrigeración, ACS e inercia, factor de sustitución, CAE, precio y garantía
+de aerotermia; con solo aerotermia, placas, inversor, tejado, batería,
+cobertura FV, precio y garantía de FV. Lo común (cliente, luz, consumo,
+potencia, fase, IBI, financiación y cierre) siempre se ve. El cálculo solo
+cuenta lo elegido. Igual en la ficha suelta del móvil (repositorio `ficha`).
+
+### Factura de luz, factura de gas y fotos de la vivienda, cada una en su sitio
+
+Orden de Nando: en la pestaña Proyecto de la ficha, el comercial sube por
+separado la factura de la luz, la del gas (o gasóleo, propano) y las fotos
+de la vivienda. Cada zona tiene su botón y su lista; las facturas aceptan
+PDF o foto. Se guardan con clase propia (`factura_luz`, `factura_gas`,
+`foto`), así que el ingeniero las distingue en `proyectosPendientes()`.
+
+### El correo de los viernes: tu semana y tus vencidos
+
+Orden de Nando: el correo de los vencidos pasa a «Tu semana y tus vencidos
+en el CRM» y sale siempre. Lleva lo de lunes a viernes (sobre captaciones y
+operaciones): al comercial, sentadas, propuestas hechas con cliente e
+importe, ventas y los ratios sentadas/citas, propuestas/sentadas y
+ventas/sentadas; al captador, fichas, citas, sentadas y los ratios ficha →
+sentada y sentada → venta.
+
 ### Los vencidos, solo para dirección; al equipo, por correo los viernes
 
 Orden de Nando: en la Agenda, el bloque «Vencido» y la cifra «Vencidas»
