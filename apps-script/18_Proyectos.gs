@@ -16,7 +16,7 @@
  * quienes tienen alcance «todo». Al resto ni siquiera les llega que existen.
  */
 
-const CLASES_ARCHIVO = ['foto', 'documento', 'proyecto', 'direccion'];
+const CLASES_ARCHIVO = ['foto', 'documento', 'proyecto', 'direccion', 'factura_luz', 'factura_gas'];
 
 /** ¿Puede este usuario saber que existe este archivo? */
 function veArchivo_(u, a) {
@@ -486,6 +486,8 @@ function accProyectosPendientes_(u, p) {
             archivo_id: pdf ? pdf.id : '', archivo_nombre: pdf ? txt_(pdf.nombre) : '',
             fotos: suyos.filter(function (a) { return normal_(a.clase) === 'foto'; }).length,
             documentos: suyos.filter(function (a) { return normal_(a.clase) === 'documento'; }).length,
+            facturas_luz: suyos.filter(function (a) { return normal_(a.clase) === 'factura_luz'; }).length,
+            facturas_gas: suyos.filter(function (a) { return normal_(a.clase) === 'factura_gas'; }).length,
             archivos: suyos.filter(function (a) { return normal_(a.clase) !== 'proyecto'; })
                            .map(function (a) { return {id: a.id, clase: a.clase, nombre: a.nombre}; })};
   });
