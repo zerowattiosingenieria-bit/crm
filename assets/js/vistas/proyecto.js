@@ -46,10 +46,10 @@ function dibuja(img, lado, calidad) {
 /* Las fotos del móvil pesan varios megas y no hace falta: se reducen aquí,
    en el propio navegador, antes de salir. Así subir desde la obra es rápido
    aunque haya poca cobertura. */
-async function prepara(archivo) {
+async function prepara(archivo, clase) {
   const url = await leerComoDataURL(archivo);
   if (!/^image\//.test(archivo.type)) {
-    return {clase: 'documento', nombre: archivo.name, mime: archivo.type || 'application/pdf',
+    return {clase: clase || 'documento', nombre: archivo.name, mime: archivo.type || 'application/pdf',
             datos: soloBase64(url), miniatura: ''};
   }
   const img = await new Promise((ok, mal) => {
@@ -59,7 +59,7 @@ async function prepara(archivo) {
     i.src = url;
   });
   const grande = dibuja(img, LADO_MAXIMO, 0.82);
-  return {clase: 'foto',
+  return {clase: clase || 'foto',
           nombre: archivo.name.replace(/\.(heic|heif|png|webp)$/i, '.jpg'),
           mime: 'image/jpeg',
           datos: soloBase64(grande),
@@ -99,6 +99,10 @@ export function panelProyecto(cliente) {
     const archivos = d.archivos || [];
     const fotos = archivos.filter(a => a.clase === 'foto');
     const docs = archivos.filter(a => a.clase === 'documento');
+    /* Las facturas van cada una en su sitio, para que quien monta la
+       propuesta las encuentre sin abrir todos los documentos. */
+    const facturasLuz = archivos.filter(a => a.clase === 'factura_luz');
+    const facturasGas = archivos.filter(a => a.clase === 'factura_gas');
     const proyectos = archivos.filter(a => a.clase === 'proyecto');
     /* Solo le llegan a la dirección: el servidor no se los manda a nadie más. */
     const deDireccion = archivos.filter(a => a.clase === 'direccion');
@@ -147,14 +151,14 @@ export function panelProyecto(cliente) {
       estilo: {display: 'none'}});
     const marcador = h('.nota');
 
-    async function suben(lista) {
+    async function suben(lista, clase) {
       const archivos = Array.from(lista || []);
       if (!archivos.length) return;
       let hechos = 0, fallos = 0;
       for (const f of archivos) {
         marcador.textContent = 'Subiendo ' + (hechos + fallos + 1) + ' de ' + archivos.length + '…';
         try {
-          const listo = await prepara(f);
+          const listo = await prepara(f, clase);
           await api.subirArchivo(Object.assign({cliente_id: cliente.id}, listo));
           hechos++;
         } catch (e) { fallos++; avisoError(e); }
@@ -166,12 +170,31 @@ export function panelProyecto(cliente) {
       await pinta();
     }
     entrada.addEventListener('change', () => { suben(entrada.files); entrada.value = ''; });
-    camara.addEventListener('change', () => { suben(camara.files); camara.value = ''; });
+    camara.addEventListener('change', () => { suben(camara.files, 'foto'); camara.value = ''; });
 
     const subidor = h('.acciones',
-      h('button.btn.lima', {onclick: () => entrada.click()}, '+ Fotos y documentos'),
+      h('button.btn.lima', {onclick: () => entrada.click()}, '+ Fotos de la vivienda'),
       h('button.btn', {onclick: () => camara.click()}, '📷 Hacer una foto'),
       entrada, camara, marcador);
+
+    /* Una zona por cada factura: PDF o foto, con su propio botón. */
+    function zonaFactura(titulo, clase, lista, vacio) {
+      const sel = h('input', {type: 'file', multiple: true,
+        accept: 'application/pdf,image/*', estilo: {display: 'none'}});
+      sel.addEventListener('change', () => { suben(sel.files, clase); sel.value = ''; });
+      return tarjeta(titulo + ' (' + lista.length + ')', h('div', {'data-zona': clase},
+        lista.length
+          ? h('ul.zw-docs', lista.map(doc => h('li',
+              h('span', txt(doc.nombre)),
+              h('span.nota', fechaCorta(doc.subido)),
+              h('button.btn.plano', {onclick: e => conEspera(e, () => abrirArchivo(doc))}, '⤓'),
+              h('button.btn.plano', {onclick: e => quitar(e, doc)}, '×'))))
+          : h('p.nota', vacio),
+        h('.acciones', {estilo: {marginTop: '10px'}},
+          h('button.btn.lima', {onclick: () => sel.click()}, '+ Subir ' + titulo.toLowerCase()),
+          sel)),
+        {subtitulo: 'PDF o foto de la factura'});
+    }
 
     /* --- galería --- */
     const rejillaFotos = fotos.length
@@ -189,7 +212,7 @@ export function panelProyecto(cliente) {
           h('span.nota', fechaCorta(doc.subido)),
           h('button.btn.plano', {onclick: e => conEspera(e, () => abrirArchivo(doc))}, '⤓'),
           h('button.btn.plano', {onclick: e => quitar(e, doc)}, '×'))))
-      : h('p.nota', 'Ningún documento todavía (factura de la luz, catastro, presupuestos…).');
+      : h('p.nota', 'Ningún otro documento todavía (catastro, IBI, presupuestos…).');
 
     async function quitar(e, a) {
       if (!await confirmar('¿Quitar «' + txt(a.nombre) + '»?')) return;
@@ -283,8 +306,13 @@ export function panelProyecto(cliente) {
           h('.acciones', {estilo: {marginTop: '10px'}}, guardar,
             h('span.nota', 'Con la descripción y una foto, el proyecto se pide solo.'))),
         {subtitulo: 'Lo lee el ingeniero que monta la propuesta'}),
-      tarjeta('Fotos (' + fotos.length + ')', h('div', subidor, rejillaFotos)),
-      tarjeta('Documentos (' + docs.length + ')', listaDocs),
+      zonaFactura('Factura de luz', 'factura_luz', facturasLuz,
+        'Sube aquí las facturas de la luz (mejor 2 o 3 recientes).'),
+      zonaFactura('Factura de gas / combustible', 'factura_gas', facturasGas,
+        'Sube aquí las facturas del gas, gasóleo o propano.'),
+      tarjeta('Fotos de la vivienda (' + fotos.length + ')', h('div', {'data-zona': 'foto'}, subidor, rejillaFotos),
+        {subtitulo: 'Tejado, cuadro eléctrico, caldera, radiadores, sitio de la máquina…'}),
+      tarjeta('Otros documentos (' + docs.length + ')', listaDocs),
       privados,
       direccion);
   }
