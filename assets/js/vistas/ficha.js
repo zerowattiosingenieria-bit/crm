@@ -201,7 +201,16 @@ export function ultimaOperacionDe(c) {
 
 /* ---------- secciones del formulario ---------- */
 
+/* Qué se ofrece: manda sobre lo que se ve. Con una sola tecnología, lo de
+   la otra se oculta y no cuenta en el cálculo (orden de Nando, 29/10/2026). */
+export const OFRECE = [['ambas', 'Las dos: aerotermia y fotovoltaica'], ['aero', 'Solo aerotermia'], ['fv', 'Solo fotovoltaica']];
+export const ofreceDe = f => f.aero === 'si' && f.pv !== 'si' ? 'aero' : (f.pv === 'si' && f.aero !== 'si' ? 'fv' : 'ambas');
+const conA = f => f.aero === 'si', conP = f => f.pv === 'si';
+
 const SECCIONES = [
+  {titulo: '¿Qué se ofrece?', nota: 'Elige primero: solo se piden los datos de lo que se ofrece.', campos: [
+    {id: 'ofrece', et: 'Se ofrece', tipo: 'select', vacio: false, opciones: OFRECE, ancho: 2}
+  ]},
   {titulo: '1 · Comercial y cliente', campos: [
     {id: 'tecnico', et: 'Técnico comercial'},
     {id: 'cliente', et: 'Titular (nombre y apellidos)', ancho: 2},
@@ -214,43 +223,43 @@ const SECCIONES = [
     {id: 'telefono', et: 'Teléfono', tipo: 'tel'},
     {id: 'email', et: 'Correo del cliente', tipo: 'email'},
     {id: 'cups', et: 'CUPS', ayuda: 'Está en la factura de la luz.'},
-    {id: 'aero', et: 'Aerotermia en esta obra', tipo: 'select', vacio: false, opciones: SI_NO},
-    {id: 'pv', et: 'Fotovoltaica en esta obra', tipo: 'select', vacio: false, opciones: SI_NO},
-    {id: 'bateria', et: 'Batería', tipo: 'select', vacio: false, opciones: SI_NO},
+    {id: 'aero', et: 'Aerotermia en esta obra', tipo: 'select', vacio: false, opciones: SI_NO, solo: () => false},
+    {id: 'pv', et: 'Fotovoltaica en esta obra', tipo: 'select', vacio: false, opciones: SI_NO, solo: () => false},
+    {id: 'bateria', et: 'Batería', tipo: 'select', vacio: false, opciones: SI_NO, solo: conP},
     {id: 'cargador', et: 'Cargador de coche', tipo: 'select', vacio: false, opciones: SI_NO}
   ]},
   {titulo: '2 · Vivienda', campos: [
     {id: 'm2', et: 'Superficie útil a climatizar (m²)', tipo: 'numero',
      ayuda: 'Míralo en el Catastro. ≤160 → 12 kW · 161–270 → 16 kW · 271–350 → 19 kW · 351–500 → 22 kW · más, cascada'},
-    {id: 'altura', et: 'Altura libre (m)', tipo: 'numero', paso: '0.1'},
-    {id: 'zona', et: 'Zona climática', tipo: 'select', vacio: false,
+    {id: 'altura', et: 'Altura libre (m)', tipo: 'numero', paso: '0.1', solo: conA},
+    {id: 'zona', et: 'Zona climática', tipo: 'select', vacio: false, solo: conA,
      opciones: [['B', 'Cálida'], ['C', 'Templada'], ['D', 'Fría · Madrid'], ['E', 'Muy fría']]},
-    {id: 'anyoConst', et: 'Año de construcción', tipo: 'numero', ayuda: 'Con el año, el aislamiento sale solo.'},
-    {id: 'anyo', et: 'Año / aislamiento', tipo: 'select', vacio: false,
+    {id: 'anyoConst', et: 'Año de construcción', tipo: 'numero', ayuda: 'Con el año, el aislamiento sale solo.', solo: conA},
+    {id: 'anyo', et: 'Año / aislamiento', tipo: 'select', vacio: false, solo: conA,
      opciones: [['<1980', 'Antes de 1980'], ['1980-2007', '1980–2007'], ['2007-2019', '2007–2019'], ['>2019', 'CTE 2019']]},
     {id: 'personas', et: 'Ocupantes habituales', tipo: 'numero'},
-    {id: 'banos', et: 'Baños con ducha', tipo: 'numero'}
+    {id: 'banos', et: 'Baños con ducha', tipo: 'numero', solo: conA}
   ]},
   {titulo: '3 · Instalación actual', campos: [
-    {id: 'caldera', et: 'Generador actual', tipo: 'select', vacio: false,
+    {id: 'caldera', et: 'Generador actual', tipo: 'select', vacio: false, solo: conA,
      opciones: [['gasoil', 'Gasóleo'], ['gas', 'Gas natural'], ['glp', 'Propano'], ['electrica', 'Eléctrica'], ['ninguno', 'Obra nueva / sin calefacción']]},
-    {id: 'calderaKw', et: 'Potencia caldera actual (kW)', tipo: 'numero'},
-    {id: 'emisor', et: 'Emisor existente', tipo: 'select', vacio: false,
+    {id: 'calderaKw', et: 'Potencia caldera actual (kW)', tipo: 'numero', solo: conA},
+    {id: 'emisor', et: 'Emisor existente', tipo: 'select', vacio: false, solo: conA,
      opciones: [['suelo', 'Suelo radiante'], ['rad_bt', 'Radiador baja Tª'], ['rad_at', 'Radiador tradicional'], ['fancoil', 'Fancoil']]},
     {id: 'suministro', et: 'Suministro eléctrico', tipo: 'select', vacio: false,
      opciones: [['mono', 'Monofásico 230 V'], ['tri', 'Trifásico 400 V']]},
     {id: 'potenciaContratada', et: 'Potencia contratada (kW)', tipo: 'numero', paso: '0.01'},
-    {id: 'ec', et: 'Módulo wifi Easy Connect', tipo: 'select', vacio: false, opciones: SI_NO},
-    {id: 'refrig', et: 'Refrigeración', tipo: 'select', vacio: false, opciones: SI_NO}
+    {id: 'ec', et: 'Módulo wifi Easy Connect', tipo: 'select', vacio: false, opciones: SI_NO, solo: conA},
+    {id: 'refrig', et: 'Refrigeración', tipo: 'select', vacio: false, opciones: SI_NO, solo: conA}
   ]},
   {titulo: '4 · Gastos actuales', nota: 'Son los números que sostienen la venta: no los estimes, pide la factura.', campos: [
     {id: 'gastoLuzMes', et: 'Gasto de luz (€/mes)', tipo: 'euro'},
-    {id: 'gastoCombAnio', et: 'Gasóleo / gas / propano (€/año)', tipo: 'euro'},
+    {id: 'gastoCombAnio', et: 'Gasóleo / gas / propano (€/año)', tipo: 'euro', solo: conA},
     {id: 'consumo', et: 'Consumo eléctrico anual (kWh)', tipo: 'numero'},
     {id: 'ibiAnual', et: 'IBI anual de la vivienda (€)', tipo: 'euro'},
-    {id: 'factorSust', et: 'Factor de sustitución (%, 0 = automático)', tipo: 'numero',
+    {id: 'factorSust', et: 'Factor de sustitución (%, 0 = automático)', tipo: 'numero', solo: conA,
      ayuda: 'Gasóleo 35 % · propano 30 % · gas natural 55 % · eléctrica 30 %'},
-    {id: 'coberturaFV', et: 'Cobertura fotovoltaica (%)', tipo: 'numero',
+    {id: 'coberturaFV', et: 'Cobertura fotovoltaica (%)', tipo: 'numero', solo: conP,
      ayuda: 'Orientativo: 55–65 % sin batería, 70–85 % con batería.'}
   ]},
   {titulo: '5 · ACS, inercia y tramos', solo: f => f.aero === 'si', campos: [
@@ -278,7 +287,7 @@ const SECCIONES = [
     {id: 'precioBateria', et: 'Precio batería (€, 0 = tarifa)', tipo: 'euro',
      solo: f => f.pv === 'si' && f.bateria === 'si'},
     {id: 'precioCargador', et: 'Precio cargador (€, 0 = tarifa)', tipo: 'euro', solo: f => f.cargador === 'si'},
-    {id: 'cae', et: 'CAE estimado (€)', tipo: 'euro',
+    {id: 'cae', et: 'CAE estimado (€)', tipo: 'euro', solo: conA,
      ayuda: 'Lo cobra el cliente; solo si se sustituye una caldera de combustión.'},
     {id: 'reserva', et: 'Reserva (€)', tipo: 'euro'},
     {id: 'mensualidades', et: 'Plazo de financiación', tipo: 'select', vacio: false,
@@ -344,7 +353,7 @@ export function calcular(fEntrada) {
   /* economía */
   const factor = f.factorSust > 0 ? f.factorSust / 100 : FACTOR[f.caldera];
   const luzAnio = f.gastoLuzMes * 12;
-  const combAnio = f.gastoCombAnio;
+  const combAnio = conAero ? f.gastoCombAnio : 0;   // con solo FV, el combustible no cuenta
   const actual = luzAnio + combAnio;
   const termFut = conAero ? combAnio * factor : combAnio;
   const subtotal = termFut + luzAnio;
@@ -379,7 +388,7 @@ export function calcular(fEntrada) {
   const ibiAnual = f.ibiAnual * ibiMun.pct / 100;
   const ibiTopado = ibiMun.tope ? Math.min(ibiAnual, ibiMun.tope) : ibiAnual;
   const ibiTotal = Math.round(ibiTopado * ibiMun.anios);
-  const cae = f.cae;
+  const cae = conAero ? f.cae : 0;
   const ayudas = deduccion + ibiTotal + cae;
   const facturado = inversion;
   const costeReal = Math.max(0, facturado - deduccion - ibiTotal - cae);
@@ -430,7 +439,7 @@ export function avisosFicha(fEntrada, r) {
   if (!r.conAero && !r.conFV) E('La ficha no tiene marcada ni aerotermia ni fotovoltaica: activa al menos una.');
   if (!f.cliente) E('Falta el nombre del cliente.');
   if (!f.email) E('Falta el email: sin él el motor no puede enviar la propuesta.');
-  if (!f.gastoCombAnio && !f.gastoLuzMes) E('Sin gastos actuales no se puede calcular el ahorro. Pide la factura antes de salir de la casa.');
+  if (!(r.conAero && f.gastoCombAnio) && !f.gastoLuzMes) E('Sin gastos actuales no se puede calcular el ahorro. Pide la factura antes de salir de la casa.');
   const mun = r.ibiMun;
   if (!f.ibiAnual && mun.pct) W('Falta el IBI anual: sin él no se puede cuantificar la bonificación de ' + mun.pct + '% durante ' + mun.anios + ' años.');
   if (f.municipio === 'Otro / a confirmar' && !String(f.municipioOtro || '').trim()) E('Has marcado «Otro»: escribe el nombre del municipio en el campo de debajo.');
@@ -455,7 +464,7 @@ export function avisosFicha(fEntrada, r) {
   if (r.conBat && !r.modulosBat) W('Batería marcada como sí pero sin módulos: pon cuántos lleva y completa el modelo antes de cerrar la ficha.');
 
   if (r.conAero && f.caldera === 'gas') W('Cliente de gas natural: el ahorro es más moderado y el coste 0 puede no salir. Argumenta confort, refrigeración y letra energética, y NO prometas coste 0 sin comprobar el número.');
-  if (f.caldera === 'gasoil' || f.caldera === 'glp') OK('Cliente de ' + (f.caldera === 'gasoil' ? 'gasóleo' : 'propano') + ': es el mejor caso de amortización. Retorno típico de 4 a 6 años.');
+  if (r.conAero && (f.caldera === 'gasoil' || f.caldera === 'glp')) OK('Cliente de ' + (f.caldera === 'gasoil' ? 'gasóleo' : 'propano') + ': es el mejor caso de amortización. Retorno típico de 4 a 6 años.');
   if (r.cuota > 0 && r.coste0) OK('COSTE 0: la cuota de ' + eur2(r.cuota) + '/mes cabe dentro del ahorro de ' + eur2(r.ahorroMes) + '/mes. Se puede plantear así.');
   if (r.intereses > 0) I('Con ' + f.mensualidades + ' meses el cliente paga ' + eur(r.totalPagado) + ' en total por ' + eur(r.facturado) + ' de instalación: ' + eur(r.intereses) + ' de coste de financiación. Dilo si te lo preguntan.');
   if (r.tramo === 60) W('Tramo del 60%: la ficha calcula ' + eur(r.deduccion) + ' con base de ' + eur(BASE_IRPF) + ' por tecnología. La normativa fija además un límite anual de base de deducción, así que puede que el cliente no se lo deduzca todo en un solo ejercicio. Di "hasta ' + eur(r.deduccion) + '" y que lo confirme con su asesor: no prometas que se lo devuelven de golpe el año que viene.');
@@ -693,24 +702,28 @@ export function textoResumen(fEntrada, r, {op, por, cuando, version} = {}) {
 
   s('2 · Vivienda');
   p('Superficie útil', f.m2 + ' m²');
-  p('Altura libre', String(f.altura).replace('.', ',') + ' m');
-  p('Zona climática', ZONA_TXT[f.zona]);
-  p('Aislamiento', etSel('anyo', f.anyo) + (f.anyoConst ? ' (construida en ' + f.anyoConst + ')' : ''));
-  p('Ocupantes / baños', f.personas + ' personas · ' + f.banos + ' baños con ducha');
+  if (r.conAero) {
+    p('Altura libre', String(f.altura).replace('.', ',') + ' m');
+    p('Zona climática', ZONA_TXT[f.zona]);
+    p('Aislamiento', etSel('anyo', f.anyo) + (f.anyoConst ? ' (construida en ' + f.anyoConst + ')' : ''));
+    p('Ocupantes / baños', f.personas + ' personas · ' + f.banos + ' baños con ducha');
+  } else p('Ocupantes', f.personas + ' personas');
 
   s('3 · Instalación actual');
-  p('Generador', etSel('caldera', f.caldera) + (f.calderaKw ? ' · ' + f.calderaKw + ' kW' : ''));
-  p('Emisor', etSel('emisor', f.emisor));
+  if (r.conAero) {
+    p('Generador', etSel('caldera', f.caldera) + (f.calderaKw ? ' · ' + f.calderaKw + ' kW' : ''));
+    p('Emisor', etSel('emisor', f.emisor));
+  }
   p('Suministro', etSel('suministro', f.suministro) + ' · ' + String(f.potenciaContratada).replace('.', ',') + ' kW contratados');
-  p('Easy Connect / refrigeración', siNo(f.ec) + ' / ' + siNo(f.refrig));
+  if (r.conAero) p('Easy Connect / refrigeración', siNo(f.ec) + ' / ' + siNo(f.refrig));
 
   s('4 · Gastos actuales');
   p('Luz', eur(f.gastoLuzMes) + '/mes');
-  p('Combustible', eur(f.gastoCombAnio) + '/año');
+  if (r.conAero) p('Combustible', eur(f.gastoCombAnio) + '/año');
   p('Consumo eléctrico', f.consumo ? miles(f.consumo) + ' kWh/año' : '');
   p('IBI anual', eur(f.ibiAnual));
-  p('Hipótesis', 'factor de sustitución ' + Math.round(r.factor * 100) + ' %' +
-    (r.conFV ? ' · cobertura FV ' + f.coberturaFV + ' %' : ''));
+  p('Hipótesis', [r.conAero ? 'factor de sustitución ' + Math.round(r.factor * 100) + ' %' : '',
+    r.conFV ? 'cobertura FV ' + f.coberturaFV + ' %' : ''].filter(Boolean).join(' · '));
 
   if (r.conAero) {
     s('5 · ACS, inercia y tramos');
@@ -735,7 +748,7 @@ export function textoResumen(fEntrada, r, {op, por, cuando, version} = {}) {
   p('Deducción IRPF 60 %', 'aerotermia ' + eur(r.deduccionAero) + ' + fotovoltaica ' + eur(r.deduccionFV) +
     ' = ' + eur(r.deduccion) + ' (base máxima 7.500 € por tecnología)');
   p('Ayudas', 'IRPF ' + eur(r.deduccion) + ' · IBI ' + eur(r.ibiTotal) +
-    ' (' + r.ibiMun.pct + ' % × ' + r.ibiMun.anios + ' años) · CAE ' + eur(r.cae));
+    ' (' + r.ibiMun.pct + ' % × ' + r.ibiMun.anios + ' años)' + (r.conAero ? ' · CAE ' + eur(r.cae) : ''));
   p('Coste real tras ayudas', eur(r.costeReal));
   p('Financiación', 'cuota a 10 años ' + eur2(r.cuota10) + '/mes' +
     (r.meses !== 120 ? ' · a ' + r.meses + ' meses ' + eur2(r.cuota) + '/mes' : '') +
@@ -832,11 +845,20 @@ export function panelFicha(cliente) {
     const valores = base.valores;
     const op = base.op;
 
+    valores.ofrece = ofreceDe(valores);
     const formularios = SECCIONES.map(s => ({s, f: formulario(s.campos, valores)}));
     const nodo = id => { for (const {f} of formularios) if (f.nodos[id]) return f.nodos[id]; return null; };
     const leer = () => {
       const o = {};
       formularios.forEach(({f}) => Object.assign(o, f.leer()));
+      /* «Qué se ofrece» decide aerotermia y fotovoltaica (salvo que lo diga
+         la instalación, que manda y deja el selector bloqueado). */
+      const ofr = nodo('ofrece');
+      if (ofr && !ofr.control.disabled && o.ofrece) {
+        o.aero = o.ofrece === 'fv' ? 'no' : 'si';
+        o.pv = o.ofrece === 'aero' ? 'no' : 'si';
+        ['aero', 'pv'].forEach(k => { const n = nodo(k); if (n && !n.control.disabled) n.control.value = o[k]; });
+      }
       o.tramoIrpf = String(PCT_IRPF);
       return o;
     };
@@ -862,6 +884,10 @@ export function panelFicha(cliente) {
       const n = nodo(k);
       if (n) { n.control.dataset.crm = 'cliente'; pista(k, 'Se guarda también en el cliente'); }
     });
+    if ('aero' in base.deOperacion || 'pv' in base.deOperacion) {
+      const ofr = nodo('ofrece');
+      if (ofr) { ofr.control.disabled = true; pista('ofrece', 'De la instalación · se cambia en Instalaciones'); }
+    }
     const tec = nodo('tecnico');
     if (tec) { tec.control.disabled = true; pista('tecnico', 'El comercial del cliente'); }
 
@@ -993,7 +1019,7 @@ export function panelFicha(cliente) {
             ' (máximo 7.500 € de base por tecnología)'),
           kv('− Bonificación IBI (' + r.ibiMun.pct + ' % × ' + r.ibiMun.anios + ' años' +
             (r.ibiMun.tope ? ', tope ' + r.ibiMun.tope + ' €/año' : '') + ')', '− ' + eur(r.ibiTotal)),
-          kv('− CAE (lo cobra el cliente)', '− ' + eur(r.cae)),
+          r.conAero ? kv('− CAE (lo cobra el cliente)', '− ' + eur(r.cae)) : null,
           kv('Coste real tras ayudas', eur(r.costeReal), true),
           r.ahorro > 0 ? kv('Se paga sola en', coma(r.retorno) + ' años') : null) : null,
         r.cuota > 0 ? h('div',
