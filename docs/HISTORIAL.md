@@ -9,6 +9,23 @@ luego no hay manera de reconstruir.
 
 
 
+## 29/10/2026
+
+### Los vencidos, solo para dirección; al equipo, por correo los viernes
+
+Orden de Nando: en la Agenda, el bloque «Vencido» y la cifra «Vencidas»
+solo los ve dirección (Rubén, Fernando y el superadmin). A comerciales y
+captadores no les sale nada pasado de fecha: ni en las listas ni en el
+calendario; su agenda empieza hoy.
+
+A cambio, cada viernes, con el resumen semanal (sobre las 18:00), cada
+comercial y captador recibe en su correo «Tus vencidos en el CRM»: la lista
+completa de lo suyo pasado de fecha (seguimientos, citas sin resultado e
+instalaciones previstas sin hacer). Va a su propio correo aunque el resumen
+semanal esté en pruebas con «resumen_a»; si no tiene nada vencido, no se le
+manda nada. Función `avisoVencidos()` en `14_ResumenSemanal.gs`; se puede
+lanzar a mano desde el editor. Prueba: `pruebas/agenda-navegador.js`.
+
 ## 27/10/2026
 
 ### Ficha de dimensionado con las cuotas nuevas de Finlight
