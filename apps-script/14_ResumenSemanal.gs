@@ -360,12 +360,73 @@ function vencidosDe_(u, hoy) {
 }
 
 /**
- * Manda a cada comercial y captador sus vencidos. Va a su propio correo
- * aunque el resumen semanal esté en pruebas («resumen_a»). Si no tiene nada
- * vencido, no se le manda nada.
+ * Lo de la semana (lunes a viernes) de un comercial o captador: citas,
+ * sentadas, propuestas hechas, ventas y los ratios entre ellas. Se cuenta
+ * sobre las captaciones y operaciones, no sobre los partes, para que salga
+ * aunque alguien no los haya rellenado.
+ */
+function semanaDe_(u, lunes, viernes) {
+  const id = String(u.id);
+  const esCaptador = u.rol === 'captador';
+  const enSemana = function (f) { const x = txt_(f).slice(0, 10); return x >= lunes && x <= viernes; };
+  const clientes = leer_('CLIENTES');
+  const porId = {};
+  clientes.forEach(function (c) { porId[String(c.id)] = c; });
+  const mio = function (x) { return String(esCaptador ? x.captador_id : x.comercial_id) === id; };
+
+  const caps = leer_('CAPTACIONES').filter(mio);
+  const citas = caps.filter(function (k) {
+    return enSemana(k.fecha) && normal_(k.resultado) !== 'cancelada' && porId[String(k.cliente_id)];
+  });
+  const sentadas = citas.filter(function (k) {
+    return ['sentada', 'potencial', 'venta'].indexOf(normal_(k.resultado)) >= 0;
+  });
+  const fichas = esCaptador ? caps.filter(function (k) { return enSemana(txt_(k.creado) || k.fecha); }) : [];
+
+  const ops = leer_('OPERACIONES').filter(mio);
+  const ventas = ops.filter(function (o) { return esGanada_(o) && enSemana(txt_(o.fecha_firma)); });
+
+  /* Propuestas: operaciones con fecha de propuesta esta semana y proyectos
+     entregados esta semana; una por cliente. */
+  const propuestas = [];
+  const vistos = {};
+  ops.forEach(function (o) {
+    if (!enSemana(o.fecha_propuesta) || vistos[String(o.cliente_id)]) return;
+    vistos[String(o.cliente_id)] = true;
+    const c = porId[String(o.cliente_id)];
+    propuestas.push({nombre: c ? c.nombre : o.cliente_id, importe: num_(o.total), fecha: txt_(o.fecha_propuesta).slice(0, 10)});
+  });
+  leer_('PROYECTOS').forEach(function (p) {
+    const c = porId[String(p.cliente_id)];
+    if (!c || !mio(c) || vistos[String(p.cliente_id)]) return;
+    const f = txt_(p.entregado) || txt_(p.enviado);
+    if (!enSemana(f)) return;
+    vistos[String(p.cliente_id)] = true;
+    const op = ops.filter(function (o) { return String(o.cliente_id) === String(p.cliente_id); })[0];
+    propuestas.push({nombre: c.nombre, importe: op ? num_(op.total) : 0, fecha: f.slice(0, 10)});
+  });
+
+  return {citas: citas, sentadas: sentadas, fichas: fichas, ventas: ventas, propuestas: propuestas,
+    ratio_sentadas: pct_(sentadas.length, citas.length),
+    ratio_propuestas: pct_(propuestas.length, sentadas.length),
+    ratio_ventas: pct_(ventas.length, sentadas.length),
+    ratio_ficha_sentada: pct_(fichas.filter(function (k) {
+      return ['sentada', 'potencial', 'venta'].indexOf(normal_(k.resultado)) >= 0; }).length, fichas.length),
+    ratio_sentada_venta: pct_(sentadas.filter(function (k) { return normal_(k.resultado) === 'venta'; }).length,
+      sentadas.length)};
+}
+
+/**
+ * Los viernes, a cada comercial y captador: su semana (propuestas,
+ * sentadas, ventas y ratios) y la lista completa de sus vencidos. Va a su
+ * propio correo aunque el resumen semanal esté en pruebas («resumen_a») y
+ * sale siempre, tenga o no vencidos.
  */
 function avisoVencidos(soloA) {
   const hoy = hoyISO_();
+  const d = fecha_(hoy);
+  const lunes = sumarDias_(hoy, -((d.getDay() + 6) % 7));
+  const viernes = sumarDias_(lunes, 4);
   const gente = leer_('USUARIOS').filter(function (u) {
     if (normal_(u.activo) !== 'si' || !txt_(u.email)) return false;
     if (['comercial', 'captador'].indexOf(u.rol) < 0) return false;
@@ -376,20 +437,49 @@ function avisoVencidos(soloA) {
   gente.forEach(function (u) {
     try {
       const lista = vencidosDe_(u, hoy);
-      if (!lista.length) return;
-      const lineas = lista.map(function (x) {
+      const s = semanaDe_(u, lunes, viernes);
+      const esCaptador = u.rol === 'captador';
+      const cajas = esCaptador
+        ? '<table style="width:100%;border-collapse:separate;border-spacing:0"><tr>' +
+            cajaHtml_('Fichas', milesTxt_(s.fichas.length), 'esta semana') +
+            cajaHtml_('Citas', milesTxt_(s.citas.length), 'con fecha esta semana') +
+            cajaHtml_('Sentadas', milesTxt_(s.sentadas.length), '') +
+          '</tr><tr>' +
+            cajaHtml_('Ficha → sentada', pctTxt_(s.ratio_ficha_sentada), '') +
+            cajaHtml_('Sentada → venta', pctTxt_(s.ratio_sentada_venta), '') +
+            cajaHtml_('Vencidos', milesTxt_(lista.length), 'por cerrar') +
+          '</tr></table>'
+        : '<table style="width:100%;border-collapse:separate;border-spacing:0"><tr>' +
+            cajaHtml_('Sentadas', milesTxt_(s.sentadas.length), 'de ' + s.citas.length + ' citas') +
+            cajaHtml_('Propuestas', milesTxt_(s.propuestas.length), 'hechas esta semana') +
+            cajaHtml_('Ventas', milesTxt_(s.ventas.length), eurTxt_(s.ventas.reduce(function (a, o) { return a + num_(o.total); }, 0))) +
+          '</tr><tr>' +
+            cajaHtml_('Sentadas / citas', pctTxt_(s.ratio_sentadas), '') +
+            cajaHtml_('Propuestas / sentadas', pctTxt_(s.ratio_propuestas), '') +
+            cajaHtml_('Ventas / sentadas', pctTxt_(s.ratio_ventas), '') +
+          '</tr></table>';
+      const lProp = s.propuestas.map(function (x) {
+        return '<b>' + txt_(x.nombre) + '</b>' + (x.importe ? ' · ' + eurTxt_(x.importe) : '') + ' · ' + selloFecha_(x.fecha);
+      });
+      const lSent = s.sentadas.map(function (k) {
+        const c = leer_('CLIENTES').filter(function (x) { return String(x.id) === String(k.cliente_id); })[0];
+        return '<b>' + (c ? txt_(c.nombre) : k.cliente_id) + '</b> · ' +
+          api_etiqueta_(k.resultado) + ' · ' + selloFecha_(k.fecha);
+      });
+      const lVenc = lista.map(function (x) {
         return '<b>' + txt_(x.nombre) + '</b> · ' + x.tipo + ' · ' + x.texto + ' · desde el ' + selloFecha_(x.fecha);
       });
-      const cuerpo =
-        '<p style="margin:0 0 6px;font-size:14px;color:#17191c">Tienes <b>' + lista.length +
-        '</b> cosa' + (lista.length === 1 ? '' : 's') + ' pasada' + (lista.length === 1 ? '' : 's') +
-        ' de fecha sin cerrar. Ponlas al día en el CRM (apunta el resultado o una fecha nueva).</p>' +
-        listaHtml_('Vencidos a ' + selloFecha_(hoy), lineas);
+      const cuerpo = cajas +
+        listaHtml_('Propuestas hechas esta semana', lProp) +
+        listaHtml_('Sentadas de la semana', lSent) +
+        (lista.length
+          ? listaHtml_('Vencidos a ' + selloFecha_(hoy) + ' (ponlos al día en el CRM)', lVenc)
+          : '<p style="margin:18px 0 0;font-size:14px;color:#17191c">No tienes nada vencido. ¡Así da gusto!</p>');
       const html = correoHtml_(u, cuerpo, 'Lo que se apunta se sigue; lo que no, se pierde.')
-        .replace('Resumen de la semana', 'Tus vencidos')
-        .replace('Así ha ido del lunes al viernes.', 'Lo que se te ha pasado de fecha.');
+        .replace('Resumen de la semana', 'Tu semana y tus vencidos')
+        .replace('Así ha ido del lunes al viernes.', 'Del ' + selloFecha_(lunes) + ' al ' + selloFecha_(viernes) + '.');
       MailApp.sendEmail({to: txt_(u.email),
-        subject: 'Tus vencidos en el CRM · ' + lista.length + ' pendiente' + (lista.length === 1 ? '' : 's'),
+        subject: 'Tu semana y tus vencidos en el CRM · ' + selloFecha_(lunes) + ' a ' + selloFecha_(viernes),
         htmlBody: html, name: 'CRM ZERO WATTIOS'});
       enviados++;
     } catch (e) { fallos.push(txt_(u.usuario) + ': ' + String(e)); }
@@ -397,4 +487,9 @@ function avisoVencidos(soloA) {
   registrar_(null, 'aviso_vencidos', 'USUARIOS', '', enviados + ' enviados' +
     (fallos.length ? ', fallos: ' + fallos.join(' | ') : ''));
   return {ok: true, enviados: enviados, fallos: fallos};
+}
+
+/* Nombre legible del resultado de una captación, para el correo. */
+function api_etiqueta_(v) {
+  return {sentada: 'sentada', potencial: 'visita con potencial', venta: 'venta'}[normal_(v)] || txt_(v);
 }
