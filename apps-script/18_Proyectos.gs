@@ -449,7 +449,10 @@ function avisarFaltanDatos_(proy, cli, faltan) {
  */
 function accProyectosPendientes_(u, p) {
   const per = permisos_(u);
-  if (per.alcance !== 'todo' && u.rol !== 'comercial') {
+  /* El captador también ve los proyectos ya enviados de los clientes que
+     ha captado, para poder descargarlos (orden de Nando, 30/10/2026). */
+  const esCaptador = per.alcance === 'captador';
+  if (per.alcance !== 'todo' && u.rol !== 'comercial' && !esCaptador) {
     return {ok: true, proyectos: []};
   }
   asegurarProyectos_();
@@ -458,7 +461,8 @@ function accProyectosPendientes_(u, p) {
   const usuarios = {};
   leer_('USUARIOS').forEach(function (x) { usuarios[String(x.id)] = txt_(x.nombre); });
   const archivos = leer_('ARCHIVOS');
-  const quiero = txt_(p.estado) ? [normal_(p.estado)] : ['pedido', 'en_curso'];
+  const quiero = esCaptador ? ['enviado']
+    : (txt_(p.estado) ? [normal_(p.estado)] : ['pedido', 'en_curso']);
   /* Con «dias», solo los enviados en esos últimos días (lo que mira la
      dirección para ver quién ha mandado qué). */
   const desdeEnvio = num_(p.dias) > 0 ? sumarDias_(hoyISO_(), -num_(p.dias)) : '';
@@ -467,7 +471,8 @@ function accProyectosPendientes_(u, p) {
     if (desdeEnvio && txt_(x.enviado).slice(0, 10) < desdeEnvio) return false;
     const c = clientes[String(x.cliente_id)];
     if (!c) return false;
-    return per.alcance === 'todo' || String(c.comercial_id) === String(u.id);
+    if (per.alcance === 'todo') return true;
+    return esCaptador ? String(c.captador_id) === String(u.id) : String(c.comercial_id) === String(u.id);
   }).map(function (x) {
     const c = clientes[String(x.cliente_id)] || {};
     const pdf = archivos.filter(function (a) {
