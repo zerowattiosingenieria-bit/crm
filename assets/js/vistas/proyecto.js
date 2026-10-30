@@ -131,7 +131,7 @@ export function panelProyecto(cliente) {
     const verOrd = proyectos.slice().sort((a, b) => txt(a.subido).localeCompare(txt(b.subido)));
     const versiones = verOrd.length ? tarjeta('Versiones del proyecto (' + verOrd.length + ')',
       h('ul.zw-docs', verOrd.slice().reverse().map((a, i) => h('li',
-        h('span', h('b', 'v' + (verOrd.length - i)), ' · ' + txt(a.nombre).replace(/^ANULADO[^·]*·\s*/, '') + ' ',
+        h('span', h('b', 'v' + (verOrd.length - i)), ' · ' + txt(a.nombre).replace(/^ANULADO[^·-]*[·-]\s*/, '') + ' ',
           i === 0 ? marca('VIGENTE', 'bien') : null),
         h('span.nota', [fh(a.subido), api.persona(a.subido_por) ? api.persona(a.subido_por).nombre : '',
                         txt(a.notas)].filter(Boolean).join(' · ')),
