@@ -202,7 +202,40 @@ function accProyecto_(u, p) {
   return {ok: true, proyecto: proy,
           archivos: archivosDe_(v.cliente.id).filter(function (a) { return veArchivo_(u, a); })
             .map(sinDatos_).sort(function (a, b) {
-            return txt_(b.subido).localeCompare(txt_(a.subido)); })};
+            return txt_(b.subido).localeCompare(txt_(a.subido)); }),
+          historial: historialProyecto_(u, proy, v.cliente)};
+}
+
+/* Control de versiones del proyecto (30/10/2026): qué se ha cambiado, cuándo
+   y quién, sacado del registro. Las versiones del PDF son los archivos de
+   clase «proyecto», que ya llegan todos en «archivos». */
+const ACCIONES_PROYECTO = {
+  guardar_proyecto: 'Descripción o ficha actualizada',
+  entregar_proyecto: 'Nueva versión del proyecto (PDF)',
+  estado_proyecto: 'Cambio de estado',
+  proyecto_enviado: 'Enviado al cliente',
+  proyecto_no_enviado: 'Envío deshecho',
+  subir_archivo: 'Archivo subido'
+};
+function historialProyecto_(u, proy, cli) {
+  try {
+    const suyos = {};
+    archivosDe_(cli.id).forEach(function (a) { if (veArchivo_(u, a)) suyos[String(a.id)] = true; });
+    const nombres = {};
+    leer_('USUARIOS').forEach(function (x) { nombres[String(x.id)] = txt_(x.nombre); });
+    return leer_('LOG').filter(function (l) {
+      const acc = txt_(l.accion);
+      if (!ACCIONES_PROYECTO[acc]) return false;
+      if (acc === 'subir_archivo') return !!suyos[String(l.entidad_id)];
+      return String(l.entidad_id) === String(proy.id);
+    }).map(function (l) {
+      const acc = txt_(l.accion);
+      const sinDetalle = acc === 'guardar_proyecto' || acc === 'proyecto_enviado' || acc === 'proyecto_no_enviado';
+      return {fecha: txt_(l.fecha), quien: nombres[String(l.usuario_id)] || txt_(l.usuario),
+              que: ACCIONES_PROYECTO[acc],
+              detalle: sinDetalle ? '' : (acc === 'entregar_proyecto' ? txt_(l.detalle).split(' · ').pop() : txt_(l.detalle)).slice(0, 160)};
+    }).sort(function (a, b) { return b.fecha.localeCompare(a.fecha); }).slice(0, 150);
+  } catch (e) { return []; }
 }
 
 /** Guarda la descripción del proyecto (y mira si ya se puede pedir). */
