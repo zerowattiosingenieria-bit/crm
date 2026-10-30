@@ -33,6 +33,11 @@ export async function vistaAgenda({ir, refrescar}) {
     const idCaptador = yo.rol === 'captador' ? txt(yo.id)
       : (est.persona && (api.estado.usuarios.find(x => txt(x.id) === est.persona) || {}).rol === 'captador'
           ? est.persona : '');
+    /* Un comercial ve en su agenda las visitas que le han puesto a él (el
+       comercial de la cita; si la cita no lo tiene, el del cliente). */
+    const idComercial = yo.rol === 'comercial' ? txt(yo.id)
+      : (est.persona && (api.estado.usuarios.find(x => txt(x.id) === est.persona) || {}).rol === 'comercial'
+          ? est.persona : '');
 
     /* Seguimientos con fecha */
     const acciones = idCaptador ? [] : api.estado.clientes.filter(c =>
@@ -48,14 +53,18 @@ export async function vistaAgenda({ir, refrescar}) {
       if (!cli || !txt(c.fecha)) return false;
       if (idCaptador) {
         if (txt(c.captador_id) !== idCaptador) return false;
+        /* Solo las que ya ha puesto a un comercial. */
+        if (!txt(c.comercial_id)) return false;
         /* Pasados: solo los que siguen pendientes (vencidos); hoy y en adelante, todos. */
         return txt(c.fecha) >= hoy || normal(c.resultado) === 'pendiente';
       }
-      return mios(cli) && txt(c.fecha) >= sumarDias(hoy, -1) &&
+      if (idComercial && (txt(c.comercial_id) || txt(cli.comercial_id)) !== idComercial) return false;
+      return (idComercial ? true : mios(cli)) && txt(c.fecha) >= sumarDias(hoy, -1) &&
              normal(c.resultado) === 'pendiente';
     }).map(c => ({
       tipo: 'cita', fecha: txt(c.fecha), hora: txt(c.hora_cita), cliente: api.cliente(c.cliente_id),
       texto: 'Sentada · ' + txt(c.tecnologia) +
+        (idCaptador && api.persona(c.comercial_id) ? ' · con ' + api.persona(c.comercial_id).nombre : '') +
         (idCaptador && normal(c.resultado) !== 'pendiente'
           ? ' · ' + api.etiquetaCatalogo('resultadosCaptacion', c.resultado) : ''),
       captacion: c,
