@@ -126,6 +126,25 @@ export function panelProyecto(cliente) {
       {subtitulo: txt(proy.estado) === 'enviado'
         ? 'Enviado al cliente el ' + fechaCorta(proy.enviado) : 'Listo para enviar al cliente'}) : null;
 
+    /* --- control de versiones: todas las versiones del PDF y quién ha tocado qué --- */
+    const fh = s => txt(s) ? fechaCorta(txt(s).slice(0, 10)) + ' · ' + txt(s).slice(11, 16) : '—';
+    const verOrd = proyectos.slice().sort((a, b) => txt(a.subido).localeCompare(txt(b.subido)));
+    const versiones = verOrd.length ? tarjeta('Versiones del proyecto (' + verOrd.length + ')',
+      h('ul.zw-docs', verOrd.slice().reverse().map((a, i) => h('li',
+        h('span', h('b', 'v' + (verOrd.length - i)), ' · ' + txt(a.nombre).replace(/^ANULADO[^·]*·\s*/, '') + ' ',
+          i === 0 ? marca('VIGENTE', 'bien') : null),
+        h('span.nota', [fh(a.subido), api.persona(a.subido_por) ? api.persona(a.subido_por).nombre : '',
+                        txt(a.notas)].filter(Boolean).join(' · ')),
+        h('button.btn.plano', {title: 'Descargar esta versión',
+          onclick: e => conEspera(e, () => abrirArchivo(a))}, '⤓')))),
+      {subtitulo: 'Todas las versiones entregadas, con fecha, hora y quién la subió; la de arriba es la vigente'}) : null;
+    const historial = d.historial || [];
+    const cambios = historial.length ? tarjeta('Historial de cambios (' + historial.length + ')',
+      h('ul.zw-docs', historial.map(x => h('li',
+        h('span', h('b', txt(x.que)), x.detalle ? ' · ' + txt(x.detalle) : ''),
+        h('span.nota', fh(x.fecha) + ' · ' + (txt(x.quien) || '—'))))),
+      {subtitulo: 'Quién ha tocado el proyecto y cuándo'}) : null;
+
     /* --- lo que escribe el comercial --- */
     const texto = h('textarea', {
       placeholder: 'Qué tiene la casa, qué quiere el cliente, qué has visto en la visita: ' +
@@ -296,6 +315,7 @@ export function panelProyecto(cliente) {
     poner(caja,
       faltan,
       entregado,
+      versiones,
       tarjeta('Qué hay que proyectar',
         h('div',
           h('.acciones', {estilo: {marginBottom: '10px'}},
@@ -313,6 +333,7 @@ export function panelProyecto(cliente) {
       tarjeta('Fotos de la vivienda (' + fotos.length + ')', h('div', {'data-zona': 'foto'}, subidor, rejillaFotos),
         {subtitulo: 'Tejado, cuadro eléctrico, caldera, radiadores, sitio de la máquina…'}),
       tarjeta('Otros documentos (' + docs.length + ')', listaDocs),
+      cambios,
       privados,
       direccion);
   }
