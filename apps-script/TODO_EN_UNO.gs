@@ -1778,13 +1778,9 @@ function accDatos_(u, p) {
     salida.facturas = leer_('FACTURAS');
     salida.gastos = leer_('GASTOS');
   } else {
-    /* Un comercial sí ve el calendario de cobro de SUS operaciones,
-       porque necesita saber si el cliente ha pagado la entrada. */
-    salida.cobros = leer_('COBROS').filter(function (c) { return opVisibles[String(c.operacion_id)]; })
-      .map(function (c) {
-        return {id: c.id, operacion_id: c.operacion_id, concepto: c.concepto, importe: c.importe,
-                fecha_prevista: c.fecha_prevista, fecha_cobro: c.fecha_cobro, estado: c.estado};
-      });
+    /* Lo financiero y contable (cobros, facturas, gastos, banco) solo lo ve
+       dirección; comerciales y captadores no reciben nada (30/10/2026). */
+    salida.cobros = [];
     salida.facturas = [];
     salida.gastos = [];
   }
@@ -1962,6 +1958,8 @@ function recalcularCobros_(u, op) {
 }
 
 function cobrosDe_(u, operacionId) {
+  /* Cobros = contabilidad: solo dirección (30/10/2026). */
+  if (!permisos_(u).finanzas) return [];
   return leer_('COBROS').filter(function (c) { return String(c.operacion_id) === String(operacionId); });
 }
 
@@ -6480,7 +6478,10 @@ function avisarFaltanDatos_(proy, cli, faltan) {
  */
 function accProyectosPendientes_(u, p) {
   const per = permisos_(u);
-  if (per.alcance !== 'todo' && u.rol !== 'comercial') {
+  /* El captador también ve los proyectos ya enviados de los clientes que
+     ha captado, para poder descargarlos (orden de Nando, 30/10/2026). */
+  const esCaptador = per.alcance === 'captador';
+  if (per.alcance !== 'todo' && u.rol !== 'comercial' && !esCaptador) {
     return {ok: true, proyectos: []};
   }
   asegurarProyectos_();
@@ -6489,7 +6490,8 @@ function accProyectosPendientes_(u, p) {
   const usuarios = {};
   leer_('USUARIOS').forEach(function (x) { usuarios[String(x.id)] = txt_(x.nombre); });
   const archivos = leer_('ARCHIVOS');
-  const quiero = txt_(p.estado) ? [normal_(p.estado)] : ['pedido', 'en_curso'];
+  const quiero = esCaptador ? ['enviado']
+    : (txt_(p.estado) ? [normal_(p.estado)] : ['pedido', 'en_curso']);
   /* Con «dias», solo los enviados en esos últimos días (lo que mira la
      dirección para ver quién ha mandado qué). */
   const desdeEnvio = num_(p.dias) > 0 ? sumarDias_(hoyISO_(), -num_(p.dias)) : '';
@@ -6498,7 +6500,8 @@ function accProyectosPendientes_(u, p) {
     if (desdeEnvio && txt_(x.enviado).slice(0, 10) < desdeEnvio) return false;
     const c = clientes[String(x.cliente_id)];
     if (!c) return false;
-    return per.alcance === 'todo' || String(c.comercial_id) === String(u.id);
+    if (per.alcance === 'todo') return true;
+    return esCaptador ? String(c.captador_id) === String(u.id) : String(c.comercial_id) === String(u.id);
   }).map(function (x) {
     const c = clientes[String(x.cliente_id)] || {};
     const pdf = archivos.filter(function (a) {
