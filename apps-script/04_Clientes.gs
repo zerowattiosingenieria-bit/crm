@@ -44,13 +44,9 @@ function accDatos_(u, p) {
     salida.facturas = leer_('FACTURAS');
     salida.gastos = leer_('GASTOS');
   } else {
-    /* Un comercial sí ve el calendario de cobro de SUS operaciones,
-       porque necesita saber si el cliente ha pagado la entrada. */
-    salida.cobros = leer_('COBROS').filter(function (c) { return opVisibles[String(c.operacion_id)]; })
-      .map(function (c) {
-        return {id: c.id, operacion_id: c.operacion_id, concepto: c.concepto, importe: c.importe,
-                fecha_prevista: c.fecha_prevista, fecha_cobro: c.fecha_cobro, estado: c.estado};
-      });
+    /* Lo financiero y contable (cobros, facturas, gastos, banco) solo lo ve
+       dirección; comerciales y captadores no reciben nada (30/10/2026). */
+    salida.cobros = [];
     salida.facturas = [];
     salida.gastos = [];
   }
@@ -228,6 +224,8 @@ function recalcularCobros_(u, op) {
 }
 
 function cobrosDe_(u, operacionId) {
+  /* Cobros = contabilidad: solo dirección (30/10/2026). */
+  if (!permisos_(u).finanzas) return [];
   return leer_('COBROS').filter(function (c) { return String(c.operacion_id) === String(operacionId); });
 }
 
