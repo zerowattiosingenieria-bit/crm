@@ -33,6 +33,10 @@ export async function vistaPanel({ir}) {
   /* La dirección ve además quién ha mandado qué en las dos últimas semanas. */
   const enviados = esDir
     ? await api.proyectosEnviados(14).then(x => x.proyectos || []).catch(() => []) : [];
+  /* El captador ve los proyectos ya enviados de los clientes que ha captado
+     (últimos 90 días) y puede descargar el PDF. */
+  const enviadosCapt = u.rol === 'captador'
+    ? await api.proyectosEnviados(90).then(x => x.proyectos || []).catch(() => []) : [];
 
   const saludo = (() => {
     const hora = new Date().getHours();
@@ -47,7 +51,7 @@ export async function vistaPanel({ir}) {
       : 'Esto es lo que tienes entre manos ahora mismo.'));
 
   return esDir ? panelDireccion({cabecera, r, al, an, fin, listos, esperando, solicitados, enviados, cif, ir})
-               : (u.rol === 'captador' ? panelCaptador({cabecera, r, al, ir})
+               : (u.rol === 'captador' ? panelCaptador({cabecera, r, al, ir, enviados: enviadosCapt})
                                        : panelComercial({cabecera, r, al, listos, esperando, solicitados, ir}));
 }
 
@@ -346,7 +350,7 @@ function panelComercial({cabecera, r, al, listos, esperando, solicitados, ir}) {
 }
 
 /* ================= captador ================= */
-function panelCaptador({cabecera, r, al, ir}) {
+function panelCaptador({cabecera, r, al, ir, enviados}) {
   const ev = r.evolucion.slice(-6);
   return h('div', cabecera,
     kpis(
@@ -362,6 +366,8 @@ function panelCaptador({cabecera, r, al, ir}) {
     ),
 
     bloqueLeadsCaptador(ir),
+
+    tarjetaProyectosCaptador(enviados, ir),
 
     h('.doble',
       tarjeta('Objetivo del periodo',
@@ -492,6 +498,33 @@ function tarjetaProyectosListos(listos, ir) {
     })),
     {subtitulo: 'Cuando se lo mandes, pulsa «Enviado al cliente»: sale de aquí y te apunta llamarle a la semana'});
   return t;
+}
+
+/* ---------- proyectos enviados de los clientes del captador ---------- */
+function tarjetaProyectosCaptador(enviados, ir) {
+  const lista = enviados || [];
+  const descarga = async (ev, p) => {
+    ev.stopPropagation();
+    const b = ev.currentTarget;
+    b.disabled = true;
+    try { await abrirArchivo({id: p.archivo_id, nombre: p.archivo_nombre}); }
+    catch (e) { avisoError(e); }
+    finally { b.disabled = false; }
+  };
+  return tarjeta('Proyectos enviados de tus clientes (' + lista.length + ')',
+    lista.length ? h('ul.zw-listos', lista.map(p => h('li',
+      h('span.nivel.bajo', {estilo: {marginTop: '7px'}}),
+      h('div', {estilo: {flex: '1', minWidth: '0', cursor: 'pointer'},
+                onclick: () => ir('cliente/' + p.cliente_id)},
+        h('b', nombreProyecto(p)),
+        h('.nota', ['enviado el ' + fechaCorta(txt(p.enviado).slice(0, 10)),
+                    txt(p.municipio), 'comercial: ' + (txt(p.comercial) || '—')].filter(Boolean).join(' · '))),
+      h('.zw-listos-botones',
+        p.archivo_id
+          ? h('button.btn.primario', {onclick: e => descarga(e, p)}, '⤓ PDF')
+          : h('span.nota', 'sin PDF')))))
+      : h('.vacio', 'En los últimos 90 días no se ha enviado ningún proyecto de tus clientes.'),
+    {subtitulo: 'Las propuestas que ya tiene el cliente, para que las puedas consultar y descargar'});
 }
 
 /* ---------- lo enviado en las dos últimas semanas (dirección) ---------- */
