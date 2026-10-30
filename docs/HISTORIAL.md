@@ -10,6 +10,13 @@ luego no hay manera de reconstruir.
 
 ## 30/10/2026
 
+### Agenda: cada uno ve sus visitas
+
+El comercial ve en su agenda las visitas que le han puesto a él (el comercial
+de la cita; si la cita no lo tiene, el del cliente). El captador ve solo las
+citas que ha captado él y ya ha puesto a un comercial, con el nombre del
+comercial que va.
+
 ### Los captadores ven y descargan los proyectos enviados
 
 En su panel, el captador tiene ahora la tarjeta «Proyectos enviados de tus
