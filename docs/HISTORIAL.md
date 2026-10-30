@@ -8,6 +8,21 @@ Esto no sustituye al manual: el manual cuenta cómo se usa el CRM hoy
 luego no hay manera de reconstruir.
 
 
+## 30/10/2026
+
+### Los captadores ven y descargan los proyectos enviados
+
+En su panel, el captador tiene ahora la tarjeta «Proyectos enviados de tus
+clientes»: los proyectos ya mandados al cliente en los últimos 90 días de
+los clientes que ha captado él, con el botón «⤓ PDF» para descargarlos. Desde
+la ficha del cliente (pestaña Proyecto) también lo puede descargar. Solo ve
+los enviados, no los que están en cola ni los listos para enviar.
+
+### Lo financiero y contable, solo para dirección
+
+Comerciales y captadores ya no reciben cobros (antes el comercial veía el
+calendario de cobro de sus operaciones). Facturas, gastos, banco y cifras ya
+estaban cerrados para ellos.
 
 ## 29/10/2026
 
