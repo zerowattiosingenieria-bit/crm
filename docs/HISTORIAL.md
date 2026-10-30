@@ -10,6 +10,16 @@ luego no hay manera de reconstruir.
 
 ## 30/10/2026
 
+### Control de versiones del proyecto
+
+En la pestaña Proyecto de cada cliente salen ahora todas las versiones del
+PDF (v1, v2…, la vigente arriba), cada una con su fecha, hora, quién la
+subió y qué cambiaba, y con su botón para descargarla. Debajo, el
+historial de cambios del proyecto (sacado del registro): cada vez que
+alguien guarda la descripción o la ficha, sube un archivo, entrega una
+versión, cambia el estado o lo marca como enviado, con fecha, hora y quién.
+Lo ven el comercial y el captador del cliente y la dirección.
+
 ### Agenda: cada uno ve sus visitas
 
 El comercial ve en su agenda las visitas que le han puesto a él (el comercial
