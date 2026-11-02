@@ -520,3 +520,12 @@ ul.zw-faltan li::before{content:'!'; position:absolute; left:0; top:6px; width:1
   border:1px solid var(--linea); border-radius:10px; background:var(--papel); color:inherit; cursor:pointer; font:inherit}
 .opcion-apuntar:hover{border-color:var(--lima-osc)}
 .opcion-apuntar .icono{font-size:22px; line-height:1}
+
+/* En el móvil los formularios van a una columna: los campos anchos (span 2/3)
+   creaban columnas de más y la ventana se salía por los lados. */
+@media (max-width:640px){
+  .rejilla{grid-template-columns:1fr}
+  .rejilla > *{grid-column:1 / -1 !important; min-width:0}
+  .ventana > .cuerpo{padding:16px}
+  .ventana input, .ventana select, .ventana textarea{max-width:100%}
+}
