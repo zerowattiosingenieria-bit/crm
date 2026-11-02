@@ -7,6 +7,7 @@ import {tarjeta, tabla, kpi, kpis, etiquetaEstado, marca, ventanaFormulario, avi
 import {gastoAnual} from './clientes.js';
 import {estadoLead} from './leads.js';
 import {avisoDuplicadoVivo} from './ficha-cliente.js';
+import {botonesCita} from './citas-cambios.js';
 
 function nuevaCaptacion(refrescar, ir) {
   const comerciales = api.estado.usuarios
@@ -74,6 +75,8 @@ function nuevaCaptacion(refrescar, ir) {
       aviso(r.aviso_duplicado || 'Ficha de captación guardada.');
       await refrescar();
       if (r.aviso_agenda) aviso('Ojo con la cita: ' + r.aviso_agenda, 'error');
+      /* Otro captador ya ha sacado leads a menos de 200 m: se avisa aquí y por correo. */
+      if (r.aviso_zona) aviso('Misma zona que un compañero. ' + r.aviso_zona + ' Os ha llegado un correo a los dos y a dirección.', 'error');
       if (r.captacion && r.captacion.cliente_id) ir('cliente/' + r.captacion.cliente_id);
     },
     extra: h('div', ayudas, revision)
@@ -268,8 +271,9 @@ function tablaEmbudo(filas, etiquetaPersona) {
      pinta: f => f.sentadas ? pct(f.pctVenta) : '—'},
     {clave: 'leadsPorVenta', et: 'Leads por venta', num: true, valor: f => f.leadsPorVenta,
      pinta: f => f.ventas ? f.leadsPorVenta.toFixed(1) : '—'},
-    {clave: 'importe', et: 'Vendido', num: true, valor: f => f.importe,
-     pinta: f => f.importe ? eur(f.importe) : '—'}
+    /* Lo vendido en euros solo lo ve dirección (orden de Nando). */
+    ...(api.puede('finanzas') ? [{clave: 'importe', et: 'Vendido', num: true, valor: f => f.importe,
+     pinta: f => f.importe ? eur(f.importe) : '—'}] : [])
   ], filas, {vacio: 'Todavía no hay fichas para medir.'});
 }
 
@@ -400,9 +404,11 @@ export async function vistaCaptaciones({ir, refrescar}) {
        pinta: c => txt(c.comercial_id)
          ? marca(api.nombrePersona(c.comercial_id), 'info')
          : h('span.nota', 'sin adjudicar')},
-      ...(puedeAdjudicar ? [{clave: 'acciones', et: '', noOrden: true,
-        pinta: c => h('button.btn.mini', {onclick: e => { e.stopPropagation(); adjudicar(c, refrescar); }},
-          txt(c.comercial_id) ? 'Cambiar' : 'Adjudicar')}] : [])
+      {clave: 'acciones', et: '', noOrden: true,
+        pinta: c => h('div.acciones', {estilo: {display: 'flex', gap: '6px', flexWrap: 'wrap'}},
+          botonesCita(c, refrescar),
+          puedeAdjudicar ? h('button.btn.mini', {onclick: e => { e.stopPropagation(); adjudicar(c, refrescar); }},
+            txt(c.comercial_id) ? 'Cambiar' : 'Adjudicar') : null)}
     ], lista, {alPulsar: c => ir('cliente/' + c.cliente_id), csv: 'captaciones_zerowattios.csv',
                vacio: 'No hay fichas con esos filtros.'});
 

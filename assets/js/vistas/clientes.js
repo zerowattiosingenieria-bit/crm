@@ -9,7 +9,7 @@ import {tarjeta, tabla, kpi, kpis, etiquetaEstado, marca, ventanaFormulario, ven
 import {editorOperacion, tarjetaOperacion} from './operaciones.js';
 import {panelProyecto} from './proyecto.js';
 import {panelFicha} from './ficha.js';
-import {avisoDuplicadoVivo, ventanaYaExiste, duplicadoLocal, faltaPorMeter, menuApuntar, panelHistorial,
+import {avisoDuplicadoVivo, ventanaYaExiste, duplicadoLocal, faltaPorMeter, menuApuntar, panelHistorial, panelCambios,
         panelCitas, sucesosDe, ventanaRepetidos, CAMPOS_VIVIENDA, CAMPOS_CONTACTO} from './ficha-cliente.js';
 
 /* ---------- campos del formulario de cliente ---------- */
@@ -401,7 +401,7 @@ export async function vistaCliente({id, ir, refrescar}) {
 
   const tabs = [
     ['resumen', 'Resumen', () => panelResumen(c, ops, seg, refrescar, {acc, abrir, ir})],
-    ['historial', 'Historial (' + sucesosDe(c).length + ')', () => panelHistorial(c, {apuntar})],
+    ['historial', 'Historial (' + sucesosDe(c).length + ')', () => h('div', panelHistorial(c, {apuntar}), panelCambios(c))],
     ['citas', 'Citas (' + citas.length + ')', () => panelCitas(c, {refrescar, nuevaCita: acc.cita})],
     ['vivienda', 'Vivienda y consumo', () => panelVivienda(c, acc.vivienda)],
     ['dimensionado', 'Ficha de dimensionado', () => panelFicha(c)],

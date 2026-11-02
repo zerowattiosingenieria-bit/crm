@@ -13,6 +13,7 @@
 import {h, poner, txt, num, eur, fechaCorta, fechaLarga, normal, hoyISO, etiquetaCliente} from '../util.js';
 import * as api from '../api.js';
 import {tarjeta, marca, etiquetaEstado, ventana, ventanaFormulario, aviso, avisoError, confirmar} from '../ui.js';
+import {botonesCita} from './citas-cambios.js';
 
 /* ---------- duplicados (mismo criterio que el servidor) ---------- */
 
@@ -189,7 +190,8 @@ export function panelCitas(c, {refrescar, nuevaCita}) {
       num(k.interes) ? ' ' : null, num(k.interes) ? marca('Interés ' + num(k.interes) + '/10') : null),
     txt(k.notas) ? h('.nota', k.notas) : null,
     h('.acciones', {estilo: {marginTop: '6px'}},
-      h('button.btn.mini', {onclick: () => editarCita(k, c, refrescar)}, 'Resultado o cambio')));
+      h('button.btn.mini', {onclick: () => editarCita(k, c, refrescar)}, 'Resultado'),
+      botonesCita(k, refrescar)));
   return tarjeta('Citas (' + citas.length + ')',
     citas.length ? h('ul.linea-tiempo', citas.map(fila)) : h('.vacio', 'Sin citas.'),
     {subtitulo: 'La de arriba es la que cuenta', acciones: [h('button.btn.mini.lima', {onclick: nuevaCita}, '+ Cita')]});
@@ -253,4 +255,35 @@ export async function ventanaRepetidos({ir, refrescar}) {
         } catch (e) { avisoError(e); }
       }}, 'Quedarse con esta')))))));
   return v;
+}
+
+/* ---------- histórico de cambios del lead (02/11/2026) ---------- */
+
+/** Qué ha cambiado cada uno en la ficha y en las citas: campo, antes, después, quién y cuándo. */
+export function panelCambios(c) {
+  const cuerpo = h('div', h('p.nota', 'Cargando el histórico…'));
+  (async () => {
+    let r;
+    try { r = await api.historialCambios(c.id); } catch (e) { return poner(cuerpo, h('p.nota', 'No se ha podido cargar: ' + e.message)); }
+    const lista = r.cambios || [];
+    if (!lista.length) return poner(cuerpo, h('.vacio', 'Todavía no hay cambios apuntados (se apuntan desde el 02/11/2026).'));
+    /* Lo que hizo la misma persona de una vez (en pocos segundos) sobre lo mismo, junto. */
+    const seg = f => Date.parse(txt(f).replace(' ', 'T')) / 1000 || 0;
+    const grupos = [];
+    lista.forEach(x => {
+      const g = grupos[grupos.length - 1];
+      if (g && g.x.usuario_id === x.usuario_id && g.x.que === x.que && Math.abs(seg(g.ultima) - seg(x.fecha)) <= 3) {
+        g.filas.push(x); g.ultima = x.fecha;
+      } else grupos.push({x, ultima: x.fecha, filas: [x]});
+    });
+    poner(cuerpo, h('ul.linea-tiempo', grupos.map(g => h('li',
+      h('.cuando', fechaCorta(g.x.fecha) + ' ' + txt(g.x.fecha).slice(11, 16) + ' · ' + g.x.quien + ' · ' + g.x.que),
+      h('div', g.filas.map(f => h('div', {estilo: {margin: '2px 0'}},
+        h('b', f.nombre_campo + ': '),
+        f.campo === 'alta' || f.campo === 'motivo' || !txt(f.antes)
+          ? h('span', txt(f.despues) || '—')
+          : h('span', h('span', {estilo: {textDecoration: 'line-through', color: 'var(--gris, #888)'}}, f.antes), ' → ', txt(f.despues) || '(vacío)'))))))));
+  })();
+  return tarjeta('Histórico de cambios', cuerpo,
+    {subtitulo: 'Todo lo que han cambiado el captador, el comercial o dirección en la ficha y en sus citas, con quién y cuándo'});
 }

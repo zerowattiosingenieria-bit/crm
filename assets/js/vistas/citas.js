@@ -74,6 +74,7 @@ export function nuevaCita({refrescar, clienteId, fecha} = {}) {
         notas: d.notas, resultado: 'pendiente'});
       aviso(r.aviso_agenda ? 'Cita guardada. Ojo: ' + r.aviso_agenda : 'Cita guardada en el CRM.',
             r.aviso_agenda ? 'error' : undefined);
+      if (r.aviso_zona) aviso('Misma zona que un compañero. ' + r.aviso_zona, 'error');
       if (refrescar) await refrescar();
     }
   });
