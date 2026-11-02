@@ -298,7 +298,9 @@ function metrosEntre_(a, b) {
 function coordenadasCliente_(cli) {
   const co = coordenadas_(cli.coordenadas);
   if (co) return co;
-  if (!/\d/.test(txt_(cli.direccion)) || !txt_(cli.municipio)) return null;
+  if (!/\d/.test(txt_(cli.direccion))) return null;
+  /* Sin municipio, solo si la dirección ya lo lleva (o el código postal). */
+  if (!txt_(cli.municipio) && !/\b\d{5}\b|,.*[a-záéíóúñ]{3}/i.test(txt_(cli.direccion).replace(/^[^,]*,/, ''))) return null;
   try {
     const r = Maps.newGeocoder().setRegion('es').geocode([txt_(cli.direccion), txt_(cli.municipio), txt_(cli.cp), 'España']
       .filter(String).join(', '));
@@ -393,4 +395,30 @@ function avisoZonaCaptacion_(cap) {
   } catch (e) {
     return '';
   }
+}
+
+/**
+ * Dirección: busca las coordenadas de los clientes de las fichas de los
+ * últimos 90 días que no las tienen (solo si Google da el portal), para que
+ * el aviso de misma zona tenga con qué comparar. Va por tandas.
+ */
+function accCoordenadasZona_(u, p) {
+  exigir_(u, 'editarTodo');
+  const limite = Math.min(num_(p.limite) || 25, 60);
+  const desde = sumarDias_(hoyISO_(), -DIAS_ZONA);
+  const clientes = indexar_(leer_('CLIENTES'), 'id');
+  const vistos = {};
+  const pendientes = [];
+  leer_('CAPTACIONES').forEach(function (k) {
+    const alta = txt_(k.creado).slice(0, 10) || txt_(k.fecha).slice(0, 10);
+    const c = clientes[String(k.cliente_id)];
+    if (!c || !txt_(k.captador_id) || !alta || alta < desde || vistos[c.id] || coordenadas_(c.coordenadas)) return;
+    vistos[c.id] = 1;
+    pendientes.push(c);
+  });
+  let hechos = 0, sin = 0;
+  const tanda = pendientes.slice(0, limite);
+  tanda.forEach(function (c) { if (coordenadasCliente_(c)) hechos++; else sin++; });
+  registrar_(u, 'coordenadas_zona', 'CLIENTES', '', hechos + ' de ' + tanda.length);
+  return {ok: true, hechos: hechos, sin_precision: sin, quedan: Math.max(0, pendientes.length - tanda.length)};
 }

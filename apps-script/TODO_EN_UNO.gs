@@ -4171,7 +4171,7 @@ function acciones_() {
 
     /* Reagendar y cancelar citas, estadísticas (24_Estadisticas.gs) */
     reagendarCita: accReagendarCita_, cancelarCita: accCancelarCita_, estadisticas: accEstadisticas_,
-    historialCambios: accHistorialCambios_
+    historialCambios: accHistorialCambios_, coordenadasZona: accCoordenadasZona_
   };
 }
 
@@ -7173,7 +7173,7 @@ const PREFIJOS_MODIFICACION = /^(guardar|borrar|importar|entregar|subir|ajustar|
 const OTRAS_MODIFICACIONES = {
   estadoProyecto: 1, estadoTarea: 1, reanalizar: 1, geocodificar: 1,
   gastoDesdeBanco: 1, copiaAhora: 1, enviadoProyecto: 1, resumenSemanalAhora: 1, avisoPuertas: 1,
-  probarResumen: 1, llaveServicio: 1, revocarLlaves: 1, pedirCambios: 1, casarAuto: 1, fusionarClientes: 1, recordarCRM: 1, recordatorios: 1, reagendarCita: 1
+  probarResumen: 1, llaveServicio: 1, revocarLlaves: 1, pedirCambios: 1, casarAuto: 1, fusionarClientes: 1, recordarCRM: 1, recordatorios: 1, reagendarCita: 1, coordenadasZona: 1
 };
 
 /* Nombres de parámetro que nunca se apuntan, ni sueltos ni dentro de otro. */
@@ -8621,7 +8621,9 @@ function metrosEntre_(a, b) {
 function coordenadasCliente_(cli) {
   const co = coordenadas_(cli.coordenadas);
   if (co) return co;
-  if (!/\d/.test(txt_(cli.direccion)) || !txt_(cli.municipio)) return null;
+  if (!/\d/.test(txt_(cli.direccion))) return null;
+  /* Sin municipio, solo si la dirección ya lo lleva (o el código postal). */
+  if (!txt_(cli.municipio) && !/\b\d{5}\b|,.*[a-záéíóúñ]{3}/i.test(txt_(cli.direccion).replace(/^[^,]*,/, ''))) return null;
   try {
     const r = Maps.newGeocoder().setRegion('es').geocode([txt_(cli.direccion), txt_(cli.municipio), txt_(cli.cp), 'España']
       .filter(String).join(', '));
@@ -8716,6 +8718,32 @@ function avisoZonaCaptacion_(cap) {
   } catch (e) {
     return '';
   }
+}
+
+/**
+ * Dirección: busca las coordenadas de los clientes de las fichas de los
+ * últimos 90 días que no las tienen (solo si Google da el portal), para que
+ * el aviso de misma zona tenga con qué comparar. Va por tandas.
+ */
+function accCoordenadasZona_(u, p) {
+  exigir_(u, 'editarTodo');
+  const limite = Math.min(num_(p.limite) || 25, 60);
+  const desde = sumarDias_(hoyISO_(), -DIAS_ZONA);
+  const clientes = indexar_(leer_('CLIENTES'), 'id');
+  const vistos = {};
+  const pendientes = [];
+  leer_('CAPTACIONES').forEach(function (k) {
+    const alta = txt_(k.creado).slice(0, 10) || txt_(k.fecha).slice(0, 10);
+    const c = clientes[String(k.cliente_id)];
+    if (!c || !txt_(k.captador_id) || !alta || alta < desde || vistos[c.id] || coordenadas_(c.coordenadas)) return;
+    vistos[c.id] = 1;
+    pendientes.push(c);
+  });
+  let hechos = 0, sin = 0;
+  const tanda = pendientes.slice(0, limite);
+  tanda.forEach(function (c) { if (coordenadasCliente_(c)) hechos++; else sin++; });
+  registrar_(u, 'coordenadas_zona', 'CLIENTES', '', hechos + ' de ' + tanda.length);
+  return {ok: true, hechos: hechos, sin_precision: sin, quedan: Math.max(0, pendientes.length - tanda.length)};
 }
 
 
