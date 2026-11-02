@@ -1,6 +1,6 @@
 /* app.js — armazón: entrada, menú según el rol y reparto de pantallas. */
 
-import {$, h, poner, txt, iniciales, capital} from './util.js';
+import {$, h, poner, txt, iniciales, capital, normal, etiquetaCliente} from './util.js';
 import * as api from './api.js';
 import {aviso, avisoError, cargando} from './ui.js';
 
@@ -21,11 +21,16 @@ import {vistaUsuarios, vistaAjustes, vistaPerfil} from './vistas/ajustes.js';
 import {vistaRegistro} from './vistas/registro.js';
 import {vistaDashboard} from './vistas/dashboard.js?v=2';
 import {vistaTablero, tituloTablero} from './vistas/tablero.js';
+import {vistaHoy} from './vistas/hoy.js';
+import {vistaVisita, vaciarColaVisita} from './vistas/visita.js';
+import {dictadoEnTodo} from './voz.js';
 
 export const VERSION = '1.0.0';
 
 /* ---------- pantallas ---------- */
 const VISTAS = {
+  hoy:          {titulo: 'Hoy',                pinta: vistaHoy},
+  visita:       {titulo: 'Modo visita',        pinta: vistaVisita},
   panel:        {titulo: 'Panel',              pinta: vistaPanel},
   tablero:      {titulo: 'Mi tablero',         pinta: vistaTablero},
   agenda:       {titulo: 'Agenda',             pinta: vistaAgenda},
@@ -67,6 +72,7 @@ function menuDe(rol) {
   if (rol === 'captador') {
     return [
       trabajo,
+      {id: 'hoy', et: 'Hoy', ico: '★'},
       {id: 'panel', et: 'Panel', ico: '▦'},
       {id: 'tablero', et: 'Mi tablero', ico: '◑'},
       {id: 'agenda', et: 'Agenda', ico: '◷'},
@@ -83,6 +89,7 @@ function menuDe(rol) {
   if (rol === 'comercial') {
     return [
       trabajo,
+      {id: 'hoy', et: 'Hoy', ico: '★'},
       {id: 'panel', et: 'Panel', ico: '▦'},
       {id: 'tablero', et: 'Mi tablero', ico: '◑'},
       {id: 'agenda', et: 'Agenda', ico: '◷'},
@@ -100,6 +107,7 @@ function menuDe(rol) {
   }
   return [
     trabajo,
+    {id: 'hoy', et: 'Hoy', ico: '★'},
     {id: 'panel', et: 'Panel', ico: '▦'},
     {id: 'tablero', et: etiquetaTablero(), ico: '◑'},
     {id: 'agenda', et: 'Agenda', ico: '◷'},
@@ -136,11 +144,28 @@ function rutaActual() {
   return {vista: partes[0] || 'panel', id: partes[1] ? decodeURIComponent(partes[1]) : null};
 }
 
+/* Menú corto (02/11/2026): solo lo que cada uno usa a diario. Se cambia
+   abajo del menú y queda guardado en ese aparato. */
+const K_MENU = 'zw.crm.menuSimple';
+const MENU_CORTO = {
+  captador: ['hoy', 'agenda', 'captaciones', 'clientes', 'parte', 'perfil'],
+  comercial: ['hoy', 'agenda', 'clientes', 'operaciones', 'parte', 'perfil'],
+  otro: ['hoy', 'panel', 'tablero', 'agenda', 'clientes', 'operaciones', 'captaciones', 'cobros', 'banco', 'perfil']
+};
+const menuCorto = () => { try { return localStorage.getItem(K_MENU) === '1'; } catch (e) { return false; } };
+
 function pintaMenu() {
   const menu = $('#menu');
   const {vista} = rutaActual();
   const rol = api.estado.usuario.rol;
-  poner(menu, menuDe(rol).map(x => {
+  const corto = menuCorto();
+  const deja = MENU_CORTO[rol] || MENU_CORTO.otro;
+  const items = menuDe(rol).filter(x => !corto || x.grupo === 'Trabajo diario' || (x.id && deja.includes(x.id)));
+  const cambiar = h('a.nav', {onclick: () => {
+    try { localStorage.setItem(K_MENU, corto ? '0' : '1'); } catch (e) { /* nada */ }
+    pintaMenu();
+  }}, h('span.ico', corto ? '⊕' : '⊖'), corto ? 'Ver menú completo' : 'Menú corto');
+  poner(menu, items.map(x => {
     if (x.grupo) return h('.grupo', x.grupo);
     if (x.soloSuper && rol !== 'superadmin') return null;
     const def = VISTAS[x.id];
@@ -149,7 +174,39 @@ function pintaMenu() {
     return h('a.nav' + (vista === x.id ? '.activo' : ''),
       {onclick: () => { ir(x.id); $('#lateral').classList.remove('abierto'); }},
       h('span.ico', x.ico), x.et);
-  }).filter(Boolean));
+  }).filter(Boolean), cambiar);
+}
+
+/* Buscador de arriba: clientes por calle, nombre, teléfono o correo,
+   instalaciones por referencia y, para dirección, facturas por número. */
+function pintaBuscador() {
+  const entrada = $('#buscador');
+  if (!entrada || entrada.dataset.vivo) return;
+  entrada.dataset.vivo = '1';
+  const caja = entrada.parentNode;
+  caja.classList.add('buscador-global');
+  const res = h('.resultados', {hidden: true});
+  const cerrar = () => { res.hidden = true; };
+  entrada.addEventListener('input', () => {
+    const q = normal(entrada.value);
+    if (q.length < 2) return cerrar();
+    const dig = q.replace(/\D/g, '');
+    const cl = api.estado.clientes.filter(c => [c.nombre, c.direccion, c.municipio, c.email, c.id].some(v => normal(v).includes(q)) ||
+      (dig.length >= 4 && txt(c.telefono).replace(/\D/g, '').includes(dig))).slice(0, 12)
+      .map(c => h('a', {onclick: () => { cerrar(); entrada.value = ''; ir('cliente/' + c.id); }},
+        h('b', etiquetaCliente(c)), h('span.nota', ' · ' + (txt(c.telefono) || c.id))));
+    const ops = api.estado.operaciones.filter(o => normal(o.referencia).includes(q) || normal(o.id).includes(q)).slice(0, 5)
+      .map(o => h('a', {onclick: () => { cerrar(); entrada.value = ''; ir('cliente/' + o.cliente_id); }},
+        h('b', txt(o.referencia || o.id)), h('span.nota', ' · instalación de ' + etiquetaCliente(api.cliente(o.cliente_id) || {}))));
+    const fac = (api.estado.facturas || []).filter(f => normal(f.numero).includes(q)).slice(0, 5)
+      .map(f => h('a', {onclick: () => { cerrar(); entrada.value = ''; ir('facturas'); }},
+        h('b', 'Factura ' + txt(f.numero)), h('span.nota', ' · ' + txt(f.total) + ' €')));
+    const todo = [...cl, ...ops, ...fac];
+    poner(res, todo.length ? todo : h('a', h('span.nota', 'Nada con «' + entrada.value + '»')));
+    res.hidden = false;
+  });
+  entrada.addEventListener('blur', () => setTimeout(cerrar, 200));
+  caja.appendChild(res);
 }
 
 function pintaYo() {
@@ -233,6 +290,9 @@ function mostrarApp() {
   $('#app').classList.add('visible');
   pintaYo();
   pintaMenu();
+  pintaBuscador();
+  dictadoEnTodo(document.body);
+  vaciarColaVisita();
 }
 
 /* ---------- recordar los datos de entrada ---------- */

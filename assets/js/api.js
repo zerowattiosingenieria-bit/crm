@@ -297,3 +297,13 @@ export const tareas = (opciones = {}) => pedir('tareas', opciones);
 export const guardarTarea = tarea => pedir('guardarTarea', {tarea});
 export const estadoTarea = (id, estado) => pedir('estadoTarea', {id, estado});
 export const borrarTarea = id => pedir('borrarTarea', {id});
+
+/* Mejoras del 02/11/2026 */
+export const agendaHuecos = (desde, hasta) => pedir('agendaHuecos', {desde, hasta});
+export const comprobarCita = datos => pedir('comprobarCita', datos);
+export const pedirCambios = (cliente_id, texto) => pedir('pedirCambios', {cliente_id, texto});
+export const casarAuto = simular => pedir('casarAuto', {simular: !!simular});
+export const alertasBanco = () => pedir('alertasBanco', {});
+export const catastro = datos => pedir('catastro', datos);
+export const llaveServicio = (usuario_id, nota) => pedir('llaveServicio', {usuario_id, nota});
+export const revocarLlaves = usuario_id => pedir('revocarLlaves', {usuario_id});
