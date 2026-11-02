@@ -1904,6 +1904,12 @@ const c = nueva(sesiones.sandra, 3, {coordenadas: '40.405100,-3.875100'});
 comprobar('una ficha del mismo captador cerca no avisa de nada nuevo a él solo', c.ok, c.error);
 comprobar('la pareja ya avisada no vuelve a mandar correo', correosEnviados().filter(x => /misma zona/.test(x.subject)).length <= 1);
 const lejos = nueva(entrar('abraham'), 4, {coordenadas: '40.420000,-3.875000'});
+/* Hace 3 días otra captadora sacó una ficha al lado: ya no cuenta (solo menos de 48 h). */
+const vieja = nueva(sesiones.sandra, 5, {coordenadas: '40.430000,-3.875000'});
+actualizar_('CAPTACIONES', vieja.captacion.id, {creado: sumarDias_(hoy, -3) + ' 10:00:00'});
+vaciarCorreos();
+const tarde = nueva(entrar('abraham'), 6, {coordenadas: '40.430500,-3.875000'});
+comprobar('a 55 m pero de hace 3 días no avisa (solo menos de 48 h)', tarde.ok && !tarde.aviso_zona && !correosEnviados().some(c => /misma zona/.test(c.subject)), tarde.aviso_zona);
 comprobar('a 1,6 km no avisa', lejos.ok && !lejos.aviso_zona, lejos.aviso_zona);
 
 /* Reagendar */
