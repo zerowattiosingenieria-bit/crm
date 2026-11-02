@@ -7,7 +7,7 @@ import {tarjeta, tabla, kpi, kpis, etiquetaEstado, marca, ventanaFormulario, avi
 import {gastoAnual} from './clientes.js';
 import {estadoLead} from './leads.js';
 import {avisoDuplicadoVivo} from './ficha-cliente.js';
-import {botonesCita} from './citas-cambios.js';
+import {botonesCita, conAutorizacion} from './citas-cambios.js';
 
 function nuevaCaptacion(refrescar, ir) {
   const comerciales = api.estado.usuarios
@@ -71,7 +71,7 @@ function nuevaCaptacion(refrescar, ir) {
           interes: d.interes, perfil: d.perfil, origen: 'captacion', comercial_id: d.comercial_id
         }
       };
-      const r = await api.guardarCaptacion(captacion);
+      const r = await conAutorizacion(pedir => api.guardarCaptacion(Object.assign({}, captacion, pedir ? {pedir_autorizacion: true} : {})));
       aviso(r.aviso_duplicado || 'Ficha de captación guardada.');
       await refrescar();
       if (r.aviso_agenda) aviso('Ojo con la cita: ' + r.aviso_agenda, 'error');
@@ -161,8 +161,8 @@ function adjudicar(captacion, refrescar) {
     alGuardar: async d => {
       d.id = captacion.id;
       d.cliente_id = captacion.cliente_id;
-      await api.guardarCaptacion(d);
-      aviso(d.comercial_id ? 'Captación adjudicada.' : 'Captación sin adjudicar.');
+      const r = await conAutorizacion(pedir => api.guardarCaptacion(Object.assign({}, d, pedir ? {pedir_autorizacion: true} : {})));
+      if (!r.pendiente_autorizacion) aviso(d.comercial_id ? 'Captación adjudicada.' : 'Captación sin adjudicar.');
       await refrescar();
     }
   });

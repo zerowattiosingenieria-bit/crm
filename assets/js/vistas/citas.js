@@ -9,6 +9,7 @@
 import {h, poner, txt, normal, hoyISO, sumarDias, fechaLarga, debounce, etiquetaCliente} from '../util.js';
 import * as api from '../api.js';
 import {ventanaFormulario, aviso, tarjeta, marca} from '../ui.js';
+import {conAutorizacion} from './citas-cambios.js';
 
 const hhmm = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
 const aMin = s => { const m = txt(s).match(/^(\d{1,2})[:.](\d{2})/); return m ? +m[1] * 60 + +m[2] : -1; };
@@ -68,10 +69,10 @@ export function nuevaCita({refrescar, clienteId, fecha} = {}) {
     alGuardar: async d => {
       const cli = clienteDe(d.cliente);
       if (!cli) throw new Error('Elige el cliente de la lista.');
-      const r = await api.guardarCaptacion({
+      const r = await conAutorizacion(pedir => api.guardarCaptacion({
         cliente_id: cli.id, comercial_id: esComercial ? yo.id : d.comercial_id, fecha: d.fecha,
         hora_cita: d.hora_cita, estado_cita: d.estado_cita, tecnologia: d.tecnologia,
-        notas: d.notas, resultado: 'pendiente'});
+        notas: d.notas, resultado: 'pendiente', ...(pedir ? {pedir_autorizacion: true} : {})}));
       aviso(r.aviso_agenda ? 'Cita guardada. Ojo: ' + r.aviso_agenda : 'Cita guardada en el CRM.',
             r.aviso_agenda ? 'error' : undefined);
       if (r.aviso_zona) aviso('Misma zona que un compañero. ' + r.aviso_zona, 'error');

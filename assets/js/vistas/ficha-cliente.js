@@ -13,7 +13,7 @@
 import {h, poner, txt, num, eur, fechaCorta, fechaLarga, normal, hoyISO, etiquetaCliente} from '../util.js';
 import * as api from '../api.js';
 import {tarjeta, marca, etiquetaEstado, ventana, ventanaFormulario, aviso, avisoError, confirmar} from '../ui.js';
-import {botonesCita} from './citas-cambios.js';
+import {botonesCita, conAutorizacion} from './citas-cambios.js';
 
 /* ---------- duplicados (mismo criterio que el servidor) ---------- */
 
@@ -212,8 +212,8 @@ function editarCita(k, c, refrescar) {
     ],
     valores: Object.assign({}, k, {interes: k.interes || c.interes, resultado: k.resultado || 'pendiente'}),
     alGuardar: async d => {
-      const r = await api.guardarCaptacion(Object.assign({id: k.id, cliente_id: c.id}, d,
-        d.resultado !== k.resultado ? {fecha_resultado: hoyISO()} : {}));
+      const r = await conAutorizacion(pedir => api.guardarCaptacion(Object.assign({id: k.id, cliente_id: c.id}, d,
+        d.resultado !== k.resultado ? {fecha_resultado: hoyISO()} : {}, pedir ? {pedir_autorizacion: true} : {})));
       aviso(r.aviso_agenda ? 'Guardado. Ojo: ' + r.aviso_agenda : 'Cita guardada.', r.aviso_agenda ? 'error' : undefined);
       await refrescar();
     }

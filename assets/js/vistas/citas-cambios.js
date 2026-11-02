@@ -6,7 +6,27 @@
 
 import {h, txt, normal, fechaCorta, hoyISO, sumarDias, etiquetaCliente} from '../util.js';
 import * as api from '../api.js';
-import {ventanaFormulario, aviso} from '../ui.js';
+import {ventanaFormulario, aviso, confirmar} from '../ui.js';
+
+/**
+ * Reglas de la agenda de Nando (02/11/2026): los captadores no le pueden dar
+ * más de 3 visitas al día, ni los viernes, ni después de las 17:30, salvo que
+ * él lo autorice. Si el servidor lo rechaza, se ofrece guardarla sin
+ * adjudicar y pedirle la autorización por correo.
+ */
+export async function conAutorizacion(guardar) {
+  try {
+    return await guardar(false);
+  } catch (e) {
+    if (!e.datos || !e.datos.requiere_autorizacion) throw e;
+    const si = await confirmar(e.message + ' ¿La guardo sin adjudicar y le pido autorización por correo? Si no, cambia el día o la hora.',
+      {titulo: 'Hace falta la autorización de ' + (e.datos.comercial || 'el comercial'), botón: 'Pedir autorización', peligro: false});
+    if (!si) throw new Error('No se ha guardado: elige otro día u hora.');
+    const r = await guardar(true);
+    if (r && r.pendiente_autorizacion) aviso(r.pendiente_autorizacion);
+    return r;
+  }
+}
 
 export const MOTIVOS_CANCELACION = [
   ['no_interesa', 'Ya no le interesa'],
@@ -37,7 +57,8 @@ export function ventanaReagendar(k, refrescar) {
     extra: h('p.nota', 'Estaba el ' + fechaCorta(k.fecha) + (txt(k.hora_cita) ? ' a las ' + k.hora_cita : '') +
       '. Queda apuntado como cita reagendada en las estadísticas.'),
     alGuardar: async d => {
-      const r = await api.reagendarCita({id: k.id, fecha: d.fecha, hora_cita: d.hora_cita, motivo: d.motivo, confirmada: d.confirmada === 'si'});
+      const r = await conAutorizacion(pedir => api.reagendarCita({id: k.id, fecha: d.fecha, hora_cita: d.hora_cita, motivo: d.motivo,
+        confirmada: d.confirmada === 'si', pedir_autorizacion: pedir}));
       if (!r.ok) throw new Error(r.error || 'No se ha podido reagendar.');
       aviso('Cita reagendada al ' + fechaCorta(d.fecha) + ' a las ' + d.hora_cita + '.');
       if (r.aviso_agenda) aviso('Ojo con la cita: ' + r.aviso_agenda, 'error');
