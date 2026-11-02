@@ -8732,16 +8732,20 @@ function accCoordenadasZona_(u, p) {
   const clientes = indexar_(leer_('CLIENTES'), 'id');
   const vistos = {};
   const pendientes = [];
+  /* Los que Google no sabe situar en el portal no se vuelven a preguntar en 30 días. */
+  const fallidos = leerProp_('zona_sin_coordenadas', {});
   leer_('CAPTACIONES').forEach(function (k) {
     const alta = txt_(k.creado).slice(0, 10) || txt_(k.fecha).slice(0, 10);
     const c = clientes[String(k.cliente_id)];
     if (!c || !txt_(k.captador_id) || !alta || alta < desde || vistos[c.id] || coordenadas_(c.coordenadas)) return;
+    if (fallidos[c.id] && diasEntre_(fallidos[c.id], hoyISO_()) < 30) return;
     vistos[c.id] = 1;
     pendientes.push(c);
   });
   let hechos = 0, sin = 0;
   const tanda = pendientes.slice(0, limite);
-  tanda.forEach(function (c) { if (coordenadasCliente_(c)) hechos++; else sin++; });
+  tanda.forEach(function (c) { if (coordenadasCliente_(c)) hechos++; else { sin++; fallidos[c.id] = hoyISO_(); } });
+  guardarProp_('zona_sin_coordenadas', fallidos);
   registrar_(u, 'coordenadas_zona', 'CLIENTES', '', hechos + ' de ' + tanda.length);
   return {ok: true, hechos: hechos, sin_precision: sin, quedan: Math.max(0, pendientes.length - tanda.length)};
 }
