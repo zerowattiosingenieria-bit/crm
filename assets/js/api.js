@@ -241,8 +241,13 @@ export const operacionesDe = idCliente =>
 export const seguimientoDe = idCliente =>
   estado.seguimiento.filter(s => String(s.cliente_id) === String(idCliente))
     .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
-export const captacionDe = idCliente =>
-  estado.captaciones.find(c => String(c.cliente_id) === String(idCliente));
+/* Todas las citas de un cliente, la última primero. */
+const claveCita = c => String(c.fecha || '').slice(0, 10) + ' ' + String(c.hora_cita || '') + ' ' + String(c.creado || '');
+export const captacionesDe = idCliente =>
+  estado.captaciones.filter(c => String(c.cliente_id) === String(idCliente))
+    .sort((a, b) => claveCita(b).localeCompare(claveCita(a)));
+/* La cita que manda es la última (antes se cogía la primera que aparecía). */
+export const captacionDe = idCliente => captacionesDe(idCliente)[0];
 export const cobrosDe = idOperacion =>
   estado.cobros.filter(c => String(c.operacion_id) === String(idOperacion));
 export const gastosDe = idOperacion =>
@@ -266,6 +271,9 @@ export const guardarOperacion = operacion => pedir('guardarOperacion', {operacio
 export const guardarSeguimiento = seguimiento => pedir('guardarSeguimiento', {seguimiento});
 export const guardarParte = parte => pedir('guardarParte', {parte});
 export const guardarCaptacion = captacion => pedir('guardarCaptacion', {captacion});
+export const duplicados = () => pedir('duplicados');
+export const fusionarClientes = (origen, destino) => pedir('fusionarClientes', {origen, destino});
+export const borrarCliente = id => pedir('borrarCliente', {id});
 export const borrarCaptacion = ids => pedir('borrarCaptacion', Array.isArray(ids) ? {ids} : {id: ids});
 
 /* La carpeta del cliente: fotos, documentos y el PDF del proyecto. */
