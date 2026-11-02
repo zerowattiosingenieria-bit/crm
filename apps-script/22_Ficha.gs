@@ -217,6 +217,12 @@ function sincronizarCaptacionCliente_(u, cap, cli) {
     cambios.estado = nuevo;
     cambios.fecha_estado = hoyISO_();
   }
+  /* Con la visita hecha (o caída), la «Sentada concertada» automática deja de ser el próximo paso. */
+  if (res && res !== 'pendiente' && normal_(cli.proxima_accion) === 'sentada concertada' &&
+      txt_(cli.proxima_fecha).slice(0, 10) <= (txt_(cap.fecha).slice(0, 10) || hoyISO_())) {
+    cambios.proxima_accion = '';
+    cambios.proxima_fecha = '';
+  }
   if (Object.keys(cambios).length) {
     cambios.modificado = ahora_();
     cambios.modificado_por = u.id;

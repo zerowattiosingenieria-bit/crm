@@ -326,6 +326,7 @@ function actualizarCorreos() {
  * hechas. Es lo mismo que la agenda enseña a dirección en «Vencido».
  */
 function vencidosDe_(u, hoy) {
+  yaCompro_.cache = null;
   const id = String(u.id);
   const clientes = leer_('CLIENTES');
   const porId = {};
@@ -336,6 +337,8 @@ function vencidosDe_(u, hoy) {
     clientes.forEach(function (c) {
       if (String(c.comercial_id) !== id) return;
       if (['ganado', 'perdido'].indexOf(normal_(c.estado)) >= 0) return;
+      /* La «Sentada concertada» automática y los que ya compraron no son seguimientos pendientes. */
+      if (normal_(c.proxima_accion) === 'sentada concertada' || yaCompro_(c)) return;
       const f = txt_(c.proxima_fecha).slice(0, 10);
       if (f && f < hoy) lista.push({fecha: f, tipo: 'Seguimiento', nombre: c.nombre,
         texto: txt_(c.proxima_accion) || 'seguimiento'});
@@ -492,4 +495,19 @@ function avisoVencidos(soloA) {
 /* Nombre legible del resultado de una captación, para el correo. */
 function api_etiqueta_(v) {
   return {sentada: 'sentada', potencial: 'visita con potencial', venta: 'venta'}[normal_(v)] || txt_(v);
+}
+
+/** ¿Este cliente ya ha comprado? Operación firmada o más adelante, o una cita con venta. */
+function yaCompro_(c) {
+  const id = String(c.id);
+  if (normal_(c.estado) === 'ganado') return true;
+  if (!yaCompro_.cache) {
+    const v = {};
+    leer_('OPERACIONES').forEach(function (o) {
+      if (['firmada', 'tramite', 'material', 'instalacion', 'instalada', 'legalizada', 'cerrada'].indexOf(normal_(o.estado)) >= 0) v[String(o.cliente_id)] = 1;
+    });
+    leer_('CAPTACIONES').forEach(function (k) { if (normal_(k.resultado) === 'venta') v[String(k.cliente_id)] = 1; });
+    yaCompro_.cache = v;
+  }
+  return !!yaCompro_.cache[id];
 }

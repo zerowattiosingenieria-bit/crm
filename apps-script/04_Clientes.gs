@@ -401,7 +401,9 @@ function guardarCaptacionSinReglas_(u, p) {
     if (!d._cambio_apuntado) apuntarCambiosDeCaptacion_(u, anterior, Object.assign({}, anterior, cambios));
     const r = actualizar_('CAPTACIONES', d.id, cambios);
     if (anterior) apuntarHistorial_(u, 'CAPTACIONES', d.id, cli.id, anterior, cambios);
-    if (anterior && txt_(cambios.resultado) && normal_(cambios.resultado) !== normal_(anterior.resultado)) {
+    /* Si el resultado lo pone el propio captador, no se le avisa a él mismo. */
+    if (anterior && txt_(cambios.resultado) && normal_(cambios.resultado) !== normal_(anterior.resultado) &&
+        String(u.id) !== String(r.captador_id)) {
       avisarCaptador_(r, cli);
     }
     sincronizarCaptacionCliente_(u, r, leer_('CLIENTES').filter(function (c) { return String(c.id) === String(cli.id); })[0]);
