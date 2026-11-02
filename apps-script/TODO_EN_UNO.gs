@@ -59,7 +59,7 @@ const DIAS_EQUIPO = 90;
 const LARGO_CLAVE = 10;
 
 /* Roles. El orden importa: de más a menos permisos. */
-const ROLES = ['superadmin', 'admin', 'comercial', 'captador'];
+const ROLES = ['superadmin', 'admin', 'comercial', 'captador', 'agente'];
 
 /* Qué puede hacer cada rol. Esto se comprueba SIEMPRE en el servidor:
    el navegador solo esconde botones, quien manda es esta tabla. */
@@ -92,6 +92,19 @@ const PERMISOS = {
     nominasAjenas: false,
     partesAjenos: false,
     editarTodo: false,
+    config: false
+  },
+  /* Los agentes de Claude (02/11/2026): leen y escriben todo lo operativo
+     con una llave de servicio que no caduca por inactividad. No tocan
+     usuarios ni ajustes, ni ven nóminas ajenas. */
+  agente: {
+    alcance: 'todo',
+    finanzas: true,
+    costes: true,
+    usuarios: false,
+    nominasAjenas: false,
+    partesAjenos: true,
+    editarTodo: true,
     config: false
   },
   captador: {
@@ -1402,7 +1415,7 @@ function sesion_(token) {
      portátil olvidado abierto en una obra no es una puerta abierta. */
   const visto = txt_(s.ultimo_uso) || txt_(s.creado);
   const parada = minutosDesde_(visto);
-  if (visto && parada > MINUTOS_INACTIVIDAD) {
+  if (visto && parada > MINUTOS_INACTIVIDAD && !esSesionServicio_(s)) {
     sesionCaida_(s, 'sin uso más de ' + MINUTOS_INACTIVIDAD + ' min');
     borrarSesion_(tk);
     return null;
@@ -1916,7 +1929,8 @@ function sincronizarEstadoCliente_(u, op) {
   if (cap) {
     const res = nuevo === 'ganado' ? 'venta' : (nuevo === 'perdido' ? 'no_sentada' : 'sentada');
     if (normal_(cap.resultado) !== res) {
-      actualizar_('CAPTACIONES', cap.id, {resultado: res, fecha_resultado: hoyISO_(), operacion_id: op.id});
+      const nuevaCap = actualizar_('CAPTACIONES', cap.id, {resultado: res, fecha_resultado: hoyISO_(), operacion_id: op.id});
+      avisarCaptador_(nuevaCap, cli);
     }
   }
 }
@@ -1948,6 +1962,14 @@ function recalcularCobros_(u, op) {
     return;
   }
   const cobrado = cobros.filter(function (c) { return txt_(c.fecha_cobro); });
+  /* 02/11/2026: los cobros metidos a mano (hitos de Finlight, acuerdos con
+     el cliente) no se tocan nunca. Solo se rehacen los que creó el CRM. */
+  const aMano = cobros.filter(function (c) { return txt_(c.notas).indexOf('Generado automáticamente') !== 0; });
+  if (aMano.length) {
+    registrar_(u, 'importe_cambiado_con_cobros', 'OPERACIONES', op.id,
+      'Cobros puestos a mano: no se rehacen solos; revisar el calendario si hace falta.');
+    return;
+  }
   if (cobrado.length) {
     registrar_(u, 'importe_cambiado_con_cobros', 'OPERACIONES', op.id,
       'Revisar a mano el calendario de cobros: ya había dinero cobrado.');
@@ -2029,6 +2051,9 @@ function accGuardarCaptacion_(u, p) {
     const cambios = {};
     campos.forEach(function (c) { if (d[c] !== undefined) cambios[c] = d[c]; });
     const r = actualizar_('CAPTACIONES', d.id, cambios);
+    if (anterior && txt_(cambios.resultado) && normal_(cambios.resultado) !== normal_(anterior.resultado)) {
+      avisarCaptador_(r, cli);
+    }
 
     /* Adjudicar la captación a un comercial es lo que hace que ese comercial
        la vea: el cliente pasa a ser suyo. Si se quita, deja de verla. */
@@ -2044,11 +2069,15 @@ function accGuardarCaptacion_(u, p) {
       actualizar_('CLIENTES', cli.id, {proxima_accion: 'Sentada concertada',
         proxima_fecha: txt_(cambios.fecha), modificado: ahora_(), modificado_por: u.id});
     }
-    return {ok: true, captacion: r};
+    return {ok: true, captacion: r,
+            aviso_agenda: (cambios.fecha || cambios.hora_cita || cambios.comercial_id) ? choqueAgenda_(r) : ''};
   }
-  const nueva = {cliente_id: clienteId, captador_id: u.rol === 'captador' ? u.id : (d.captador_id || ''),
+  const nueva = {cliente_id: clienteId,
+                 captador_id: u.rol === 'captador' ? u.id : (d.captador_id || cli.captador_id || ''),
                  creado: ahora_()};
   campos.forEach(function (c) { nueva[c] = d[c] === undefined ? '' : d[c]; });
+  /* El comercial que da una cita a un cliente suyo se la queda él. */
+  if (!nueva.comercial_id && u.rol === 'comercial') nueva.comercial_id = u.id;
   nueva.fecha = nueva.fecha || hoyISO_();
   nueva.resultado = nueva.resultado || 'pendiente';
   const r = insertar_('CAPTACIONES', nueva);
@@ -2058,7 +2087,7 @@ function accGuardarCaptacion_(u, p) {
   if (nueva.fecha) { cambiosCliente.proxima_accion = 'Sentada concertada'; cambiosCliente.proxima_fecha = nueva.fecha; }
   actualizar_('CLIENTES', cli.id, cambiosCliente);
   registrar_(u, 'alta_captacion', 'CAPTACIONES', r.id, cli.nombre);
-  return {ok: true, captacion: r};
+  return {ok: true, captacion: r, aviso_agenda: choqueAgenda_(r)};
 }
 
 /**
@@ -4049,7 +4078,17 @@ function acciones_() {
 
     /* resumen semanal por correo */
     resumenSemanalAhora: accResumenSemanalAhora_,
-    probarResumen: accProbarResumen_
+    probarResumen: accProbarResumen_,
+
+    /* Mejoras del 02/11/2026 (21_Mejoras.gs) */
+    llaveServicio: accLlaveServicio_,
+    revocarLlaves: accRevocarLlaves_,
+    agendaHuecos: accAgendaHuecos_,
+    comprobarCita: accComprobarCita_,
+    pedirCambios: accPedirCambios_,
+    casarAuto: accCasarAuto_,
+    alertasBanco: accAlertasBanco_,
+    catastro: accCatastro_
   };
 }
 
@@ -5255,6 +5294,7 @@ function api_etiqueta_(v) {
   return {sentada: 'sentada', potencial: 'visita con potencial', venta: 'venta'}[normal_(v)] || txt_(v);
 }
 
+
 /* ==========================================================================
    15_Importar.gs
    ========================================================================== */
@@ -6045,7 +6085,8 @@ function accBorrarPuertas_(u, p) {
  * quienes tienen alcance «todo». Al resto ni siquiera les llega que existen.
  */
 
-const CLASES_ARCHIVO = ['foto', 'documento', 'proyecto', 'direccion', 'factura_luz', 'factura_gas'];
+const CLASES_ARCHIVO = ['foto', 'documento', 'proyecto', 'direccion', 'factura_luz', 'factura_gas',
+                        'aceptacion', 'dni'];
 
 /** ¿Puede este usuario saber que existe este archivo? */
 function veArchivo_(u, a) {
@@ -7039,7 +7080,7 @@ const PREFIJOS_MODIFICACION = /^(guardar|borrar|importar|entregar|subir|ajustar|
 const OTRAS_MODIFICACIONES = {
   estadoProyecto: 1, estadoTarea: 1, reanalizar: 1, geocodificar: 1,
   gastoDesdeBanco: 1, copiaAhora: 1, enviadoProyecto: 1, resumenSemanalAhora: 1, avisoPuertas: 1,
-  probarResumen: 1
+  probarResumen: 1, llaveServicio: 1, revocarLlaves: 1, pedirCambios: 1, casarAuto: 1
 };
 
 /* Nombres de parámetro que nunca se apuntan, ni sueltos ni dentro de otro. */
@@ -7365,4 +7406,360 @@ function accRegistro_(u, p) {
     }
   }
   return {ok: true, registro: fuera, truncado: truncado, tope: tope, desde: desde, hasta: hasta};
+}
+
+
+/* ==========================================================================
+   21_Mejoras.gs
+   ========================================================================== */
+
+/**
+ * 21_Mejoras.gs — Mejoras del 02/11/2026 (orden de Nando).
+ *
+ * - Llave de servicio para los agentes: una sesión que no cae por
+ *   inactividad, para que el sistema no se pare cuando caduca la de Nando.
+ * - Agenda del CRM preparada para ser la única: huecos por comercial,
+ *   días bloqueados (los viernes de Nando) y aviso de choques al dar citas.
+ *   Mientras tanto Trello sigue mandando y los agentes lo copian aquí.
+ * - Pedir cambios al ingeniero sobre un proyecto ya entregado.
+ * - Banco: casado automático de cobros y alertas de pagos raros.
+ * - Catastro: referencia, m² y año a partir de las coordenadas.
+ * - Aviso por correo al captador cuando su ficha pasa a sentada, venta o se cae.
+ */
+
+/* ---------- llave de servicio ---------- */
+
+const PREFIJO_SERVICIO = 'SERVICIO';
+const DIAS_LLAVE_SERVICIO = 365;
+
+function esSesionServicio_(s) { return txt_(s && s.agente).indexOf(PREFIJO_SERVICIO) === 0; }
+
+/** El superadmin genera la llave de un usuario con rol «agente». Se enseña una vez. */
+function accLlaveServicio_(u, p) {
+  exigir_(u, 'usuarios');
+  const dest = leer_('USUARIOS').filter(function (x) { return String(x.id) === String(p.usuario_id); })[0];
+  if (!dest) return {ok: false, error: 'No existe ese usuario.'};
+  if (normal_(dest.rol) !== 'agente') {
+    return {ok: false, error: 'Las llaves de servicio solo se dan a usuarios con rol «Agente».'};
+  }
+  const tk = token_();
+  const expira = dentroDe_(DIAS_LLAVE_SERVICIO * 24 * 60);
+  insertar_('SESIONES', {
+    token: tk, usuario_id: dest.id, creado: ahora_(), expira: expira,
+    agente: (PREFIJO_SERVICIO + ' · ' + (txt_(p.nota) || txt_(dest.nombre))).slice(0, 120),
+    equipo: 'servicio', ultimo_uso: ahora_()
+  });
+  registrar_(u, 'llave_servicio', 'USUARIOS', dest.id, 'caduca ' + expira);
+  return {ok: true, token: tk, expira: expira};
+}
+
+/** Quita todas las llaves de servicio de un usuario (si se pierde o se filtra). */
+function accRevocarLlaves_(u, p) {
+  exigir_(u, 'usuarios');
+  const h = hoja_('SESIONES');
+  const filas = leer_('SESIONES');
+  let n = 0;
+  for (let i = filas.length - 1; i >= 0; i--) {
+    const s = filas[i];
+    if (String(s.usuario_id) === String(p.usuario_id) && esSesionServicio_(s)) { h.deleteRow(i + 2); n++; }
+  }
+  registrar_(u, 'revocar_llaves', 'USUARIOS', p.usuario_id, n + ' llaves');
+  return {ok: true, revocadas: n};
+}
+
+/* ---------- agenda ---------- */
+
+/** Bloqueos fijos de la agenda: {"U-000004":{"dias":[5],"nota":"Viernes sin visitas"}}. */
+function bloqueosAgenda_() {
+  const c = config_();
+  let b = {};
+  try { b = JSON.parse(txt_(c.agenda_bloqueos) || '{}'); } catch (e) { b = {}; }
+  if (!txt_(c.agenda_bloqueos)) b = {'U-000004': {dias: [5], nota: 'Viernes sin visitas (Nando)'}};
+  return b;
+}
+
+/* Orden de Nando (02/11/2026): una visita dura como mínimo 1 h 45 min, y entre
+   una y otra hay que contar lo que tarda el comercial en coche. */
+function duracionCita_() { return configNum_('agenda_duracion_min', 105); }
+
+function minutosHora_(h) {
+  const m = txt_(h).match(/^(\d{1,2})[:.](\d{2})/);
+  return m ? Number(m[1]) * 60 + Number(m[2]) : -1;
+}
+const hhmm_ = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+
+/** Dónde está la visita: coordenadas si las hay, si no la dirección con el municipio. */
+function puntoCliente_(cli) {
+  if (!cli) return '';
+  const c = txt_(cli.coordenadas);
+  if (/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(c)) return c.replace(/\s/g, '');
+  return [txt_(cli.direccion), txt_(cli.municipio), txt_(cli.cp)].filter(String).join(', ');
+}
+
+/**
+ * Minutos en coche de un punto a otro con Google Maps (servicio Maps de
+ * Apps Script). Se guarda en caché 6 horas. Si Maps no contesta, 30 min.
+ */
+function minutosCoche_(origen, destino) {
+  origen = txt_(origen); destino = txt_(destino);
+  if (!origen || !destino) return {min: 30, estimado: true};
+  if (normal_(origen) === normal_(destino)) return {min: 0, estimado: false};
+  const k = ('coche|' + normal_(origen) + '>' + normal_(destino)).slice(0, 240);
+  let cache = null;
+  try { cache = CacheService.getScriptCache(); } catch (e) { cache = null; }
+  const enCache = cache ? cache.get(k) : null;
+  if (enCache) return {min: Number(enCache), estimado: false};
+  try {
+    const r = Maps.newDirectionFinder().setOrigin(origen).setDestination(destino)
+      .setMode(Maps.DirectionFinder.Mode.DRIVING).setRegion('es').getDirections();
+    const seg = r && r.routes && r.routes[0] && r.routes[0].legs[0].duration.value;
+    if (!seg) return {min: 30, estimado: true};
+    const min = Math.ceil(seg / 60);
+    if (cache) cache.put(k, String(min), 21600);
+    return {min: min, estimado: false};
+  } catch (e) { return {min: 30, estimado: true}; }
+}
+
+/** Citas vivas de un comercial un día, ordenadas por hora, con su punto. */
+function citasDelDia_(comercialId, fecha, salvoId) {
+  const clientes = indexar_(leer_('CLIENTES'), 'id');
+  return leer_('CAPTACIONES').filter(function (o) {
+    return String(o.id) !== String(salvoId || '') && txt_(o.comercial_id) === txt_(comercialId) &&
+           txt_(o.fecha).slice(0, 10) === fecha && minutosHora_(o.hora_cita) >= 0 &&
+           ['no_sentada', 'cancelada'].indexOf(normal_(o.resultado)) < 0;
+  }).map(function (o) {
+    const cli = clientes[o.cliente_id];
+    return {id: o.id, ini: minutosHora_(o.hora_cita), punto: puntoCliente_(cli),
+            sitio: cli ? txt_(cli.direccion || cli.nombre) : ''};
+  }).sort(function (a, b) { return a.ini - b.ini; });
+}
+
+/**
+ * Comprueba una cita: día bloqueado, duración mínima y tiempo de coche desde
+ * la visita anterior y hasta la siguiente. Devuelve un texto (vacío si cuadra).
+ * Avisa, no bloquea: quien da la cita decide.
+ */
+function revisarCita_(comercialId, fecha, hora, punto, salvoId) {
+  const avisos = [];
+  fecha = txt_(fecha).slice(0, 10);
+  if (!comercialId || !fecha) return {texto: '', detalle: []};
+  const bloq = bloqueosAgenda_()[txt_(comercialId)];
+  const dia = new Date(fecha + 'T12:00:00').getDay();
+  if (bloq && (bloq.dias || []).indexOf(dia) >= 0) avisos.push(txt_(bloq.nota) || 'Ese día está bloqueado para ese comercial.');
+  const ini = minutosHora_(hora);
+  const detalle = [];
+  if (ini >= 0) {
+    const dur = duracionCita_();
+    const citas = citasDelDia_(comercialId, fecha, salvoId);
+    const antes = citas.filter(function (c) { return c.ini <= ini; }).pop();
+    const despues = citas.filter(function (c) { return c.ini > ini; })[0];
+    if (antes) {
+      const t = minutosCoche_(antes.punto, punto);
+      const libre = antes.ini + dur + t.min;
+      detalle.push({de: antes.sitio, min: t.min, estimado: t.estimado});
+      if (ini < libre) avisos.push('No le da tiempo: la visita de las ' + hhmm_(antes.ini) + ' (' + antes.sitio +
+        ') acaba a las ' + hhmm_(antes.ini + dur) + ' y luego hay ' + t.min + ' min en coche' +
+        (t.estimado ? ' (estimado)' : '') + '. Lo antes posible: ' + hhmm_(libre) + '.');
+    }
+    if (despues) {
+      const t = minutosCoche_(punto, despues.punto);
+      const tope = despues.ini - dur - t.min;
+      detalle.push({a: despues.sitio, min: t.min, estimado: t.estimado});
+      if (ini > tope) avisos.push('No llega a la siguiente: a las ' + hhmm_(despues.ini) + ' tiene ' + despues.sitio +
+        ' y desde aquí son ' + t.min + ' min en coche' + (t.estimado ? ' (estimado)' : '') +
+        '. Como muy tarde: ' + hhmm_(Math.max(0, tope)) + '.');
+    }
+  }
+  return {texto: avisos.join(' '), detalle: detalle};
+}
+
+/** Para el aviso al guardar una captación. */
+function choqueAgenda_(cap) {
+  try {
+    if (!cap || !txt_(cap.comercial_id) || !txt_(cap.fecha)) return '';
+    const cli = leer_('CLIENTES').filter(function (c) { return String(c.id) === String(cap.cliente_id); })[0];
+    return revisarCita_(cap.comercial_id, cap.fecha, cap.hora_cita, puntoCliente_(cli), cap.id).texto;
+  } catch (e) { return ''; }
+}
+
+/** Para comprobar una cita antes de darla (pantalla de nueva cita). */
+function accComprobarCita_(u, p) {
+  let punto = txt_(p.direccion);
+  if (txt_(p.cliente_id)) {
+    const cli = leer_('CLIENTES').filter(function (c) { return String(c.id) === String(p.cliente_id); })[0];
+    if (cli && veCliente_(u, cli)) punto = puntoCliente_(cli) || punto;
+  }
+  const r = revisarCita_(p.comercial_id, p.fecha, p.hora, punto, p.captacion_id);
+  return {ok: true, aviso: r.texto, detalle: r.detalle, duracion_min: duracionCita_()};
+}
+
+/** Huecos de cada comercial entre dos fechas: lo ocupado y lo bloqueado. */
+function accAgendaHuecos_(u, p) {
+  const desde = txt_(p.desde) || hoyISO_();
+  const hasta = txt_(p.hasta) || sumarDias_(desde, 6);
+  const comerciales = leer_('USUARIOS').filter(function (x) {
+    return normal_(x.rol) === 'comercial' && normal_(x.activo) === 'si';
+  }).map(function (x) { return {id: x.id, nombre: x.nombre}; });
+  const clientes = indexar_(leer_('CLIENTES'), 'id');
+  const citas = [];
+  leer_('CAPTACIONES').forEach(function (c) {
+    const f = txt_(c.fecha).slice(0, 10);
+    if (!f || f < desde || f > hasta || !txt_(c.comercial_id)) return;
+    if (['no_sentada', 'cancelada'].indexOf(normal_(c.resultado)) >= 0) return;
+    const cli = clientes[c.cliente_id];
+    const visible = cli && veCliente_(u, cli);
+    citas.push({id: c.id, comercial_id: c.comercial_id, fecha: f, hora: txt_(c.hora_cita).slice(0, 5),
+      confirmada: normal_(c.estado_cita) === 'confirmada',
+      cliente: visible ? txt_(cli.direccion || cli.nombre) : 'Ocupado'});
+  });
+  return {ok: true, desde: desde, hasta: hasta, comerciales: comerciales, citas: citas,
+          bloqueos: bloqueosAgenda_(), duracion_min: duracionCita_(),
+          fuente: txt_(config_().agenda_fuente) || 'trello'};
+}
+
+/* ---------- proyecto: pedir cambios al ingeniero ---------- */
+
+function accPedirCambios_(u, p) {
+  const v = clienteVisible_(u, p.cliente_id);
+  if (v.error) return {ok: false, error: v.error};
+  const texto = txt_(p.texto);
+  if (!texto) return {ok: false, error: 'Escribe qué hay que cambiar.'};
+  let proy = proyectoDe_(v.cliente, u);
+  const nota = '— CAMBIOS PEDIDOS (' + ahora_().slice(0, 16) + ' · ' + txt_(u.nombre) + '): ' + texto;
+  proy = actualizar_('PROYECTOS', proy.id, {
+    descripcion: (txt_(proy.descripcion) ? txt_(proy.descripcion) + '\n\n' : '') + nota,
+    estado: 'pedido', pedido: ahora_(), pedido_por: u.id,
+    modificado: ahora_(), modificado_por: u.id});
+  registrar_(u, 'pedir_cambios', 'PROYECTOS', proy.id, v.cliente.nombre + ' · ' + texto.slice(0, 120));
+  return {ok: true, proyecto: proy};
+}
+
+/* ---------- banco: casado automático y alertas ---------- */
+
+/**
+ * Casa las entradas del banco con los cobros pendientes cuando no hay duda:
+ * el importe coincide con un único cobro pendiente, o el concepto lleva el
+ * número de la factura del cobro. Con «simular» solo dice lo que haría.
+ */
+function accCasarAuto_(u, p) {
+  exigir_(u, 'finanzas');
+  const cobros = leer_('COBROS').filter(function (c) { return !txt_(c.fecha_cobro); });
+  const facturas = indexar_(leer_('FACTURAS'), 'id');
+  const movs = leer_('BANCO').filter(function (m) {
+    return num_(m.importe) > 0 && !txt_(m.cobro_id) && normal_(m.conciliado) !== 'si';
+  });
+  const usados = {};
+  const hechos = [];
+  movs.forEach(function (m) {
+    const imp = redondear_(num_(m.importe), 2);
+    const concepto = normal_(m.concepto).replace(/\s/g, '');
+    let elegido = null, motivo = '';
+    const porFactura = cobros.filter(function (c) {
+      const f = facturas[c.factura_id];
+      return !usados[c.id] && f && txt_(f.numero) && concepto.indexOf(normal_(f.numero).replace(/\s/g, '')) >= 0;
+    });
+    if (porFactura.length === 1) { elegido = porFactura[0]; motivo = 'nº de factura en el concepto'; }
+    if (!elegido) {
+      const porImporte = cobros.filter(function (c) {
+        return !usados[c.id] && Math.abs(redondear_(num_(c.importe), 2) - imp) < 0.02 &&
+               (!txt_(c.fecha_prevista) || diasEntre_(txt_(c.fecha_prevista), txt_(m.fecha)) > -60);
+      });
+      if (porImporte.length === 1) { elegido = porImporte[0]; motivo = 'mismo importe, único pendiente'; }
+    }
+    if (!elegido) return;
+    usados[elegido.id] = true;
+    hechos.push({movimiento: m.id, fecha: txt_(m.fecha), importe: imp, concepto: txt_(m.concepto).slice(0, 60),
+                 cobro: elegido.id, operacion: elegido.operacion_id, motivo: motivo});
+    if (!p.simular) {
+      accGuardarMovimiento_(u, {movimiento: {id: m.id, cobro_id: elegido.id}});
+      const f = facturas[elegido.factura_id];
+      if (f && !txt_(f.fecha_cobro)) actualizar_('FACTURAS', f.id, {fecha_cobro: txt_(m.fecha), estado: 'cobrada'});
+    }
+  });
+  if (!p.simular && hechos.length) registrar_(u, 'casar_auto', 'BANCO', '', hechos.length + ' cobros casados');
+  return {ok: true, simulado: !!p.simular, casados: hechos};
+}
+
+/** Pagos raros de los últimos 60 días: posibles duplicados y salidas grandes sin justificar. */
+function accAlertasBanco_(u, p) {
+  exigir_(u, 'finanzas');
+  const dias = Number(p.dias) || 60;
+  const desde = sumarDias_(hoyISO_(), -dias);
+  const salidas = leer_('BANCO').filter(function (m) { return num_(m.importe) < 0 && txt_(m.fecha) >= desde; });
+  const clave = function (m) { return normal_(m.concepto).replace(/[^a-z]/g, '').slice(0, 18); };
+  const duplicados = [];
+  for (let i = 0; i < salidas.length; i++) {
+    for (let j = i + 1; j < salidas.length; j++) {
+      const a = salidas[i], b = salidas[j];
+      if (Math.abs(num_(a.importe) - num_(b.importe)) > 0.01 || clave(a) !== clave(b)) continue;
+      if (Math.abs(diasEntre_(txt_(a.fecha), txt_(b.fecha))) > 5) continue;
+      if (/nomina|tgss|seguridadsocial|traspaso/.test(clave(a))) continue;
+      duplicados.push({fecha_a: a.fecha, fecha_b: b.fecha, importe: num_(a.importe), concepto: txt_(a.concepto).slice(0, 60),
+                       ids: [a.id, b.id]});
+    }
+  }
+  const umbral = Number(p.umbral) || 500;
+  const sinJustificar = salidas.filter(function (m) {
+    const cat = normal_(m.categoria);
+    return Math.abs(num_(m.importe)) >= umbral && !txt_(m.gasto_id) &&
+           (!cat || cat === 'otros' || cat === 'otro' || cat === 'sin_clasificar' || cat === 'compras');
+  }).map(function (m) { return {id: m.id, fecha: m.fecha, importe: num_(m.importe), concepto: txt_(m.concepto).slice(0, 60),
+                                categoria: m.categoria}; });
+  return {ok: true, duplicados: duplicados, sin_justificar: sinJustificar, desde: desde};
+}
+
+/* ---------- catastro ---------- */
+
+/**
+ * Con las coordenadas (o la referencia catastral) devuelve referencia,
+ * dirección, superficie construida, año y uso. Servicio público de la
+ * Sede Electrónica del Catastro (OVC), sin clave.
+ */
+function accCatastro_(u, p) {
+  const base = 'https://ovc.catastro.meh.es/OVCServWeb/OVCWcfCallejero/';
+  let rc = txt_(p.rc).replace(/\s/g, '');
+  let direccion = '';
+  try {
+    if (!rc) {
+      const lat = num_(p.lat), lon = num_(p.lon);
+      if (!lat || !lon) return {ok: false, error: 'Faltan las coordenadas.'};
+      const r1 = JSON.parse(UrlFetchApp.fetch(base + 'COVCCoordenadas.svc/json/Consulta_RCCOOR?SRS=EPSG:4326&CoorX=' +
+        lon + '&CoorY=' + lat, {muteHttpExceptions: true}).getContentText());
+      const res1 = r1.Consulta_RCCOORResult || r1;
+      const c = ((res1.coordenadas || {}).coord || [])[0] || {};
+      rc = txt_((c.pc || {}).pc1) + txt_((c.pc || {}).pc2);
+      direccion = txt_(c.ldt);
+      if (!rc) return {ok: false, error: 'El Catastro no da ninguna parcela en ese punto.'};
+    }
+    const r2 = JSON.parse(UrlFetchApp.fetch(base + 'COVCCallejero.svc/json/Consulta_DNPRC?RefCat=' + rc,
+      {muteHttpExceptions: true}).getContentText());
+    const res2 = r2.consulta_dnprcResult || r2.Consulta_DNPRCResult || r2;
+    const bi = ((res2.bico || {}).bi) || (((res2.lrcdnp || {}).rcdnp || [])[0]) || {};
+    const debi = bi.debi || {};
+    return {ok: true, rc: rc, direccion: txt_(bi.ldt) || direccion,
+            m2: num_(debi.sfc) || null, anyo: num_(debi.ant) || null, uso: txt_(debi.luso),
+            varios: !bi.debi && !!res2.lrcdnp};
+  } catch (e) {
+    return {ok: false, error: 'No se ha podido consultar el Catastro: ' + e.message};
+  }
+}
+
+/* ---------- avisos al captador ---------- */
+
+/** Correo corto al captador cuando su ficha llega a sentada, venta o se cae. */
+function avisarCaptador_(cap, cli) {
+  try {
+    if (normal_(config_().avisos_captador) === 'no') return;
+    const res = normal_(cap && cap.resultado);
+    const textos = {sentada: 'ha llegado a sentada', venta: '¡se ha vendido!', no_sentada: 'se ha caído',
+                    potencial: 'ha quedado como potencial'};
+    if (!textos[res] || !txt_(cap.captador_id)) return;
+    const capt = leer_('USUARIOS').filter(function (x) { return String(x.id) === String(cap.captador_id); })[0];
+    if (!capt || !txt_(capt.email) || normal_(capt.activo) !== 'si') return;
+    const quien = cli ? txt_(cli.direccion || cli.nombre) : '';
+    MailApp.sendEmail({to: txt_(capt.email), name: 'CRM · ZERO WATTIOS',
+      subject: 'Tu ficha ' + quien + ' ' + textos[res],
+      body: 'Hola ' + txt_(capt.nombre) + ',\n\nLa ficha de ' + quien + ' ' + textos[res] + '.\n\n' +
+            'Lo tienes en el CRM: ' + (typeof WEB_CRM !== 'undefined' ? WEB_CRM : '') + '\n\nZERO WATTIOS'});
+  } catch (e) { /* un aviso que no sale no puede parar el guardado */ }
 }

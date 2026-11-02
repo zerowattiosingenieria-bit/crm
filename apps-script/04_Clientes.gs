@@ -182,7 +182,8 @@ function sincronizarEstadoCliente_(u, op) {
   if (cap) {
     const res = nuevo === 'ganado' ? 'venta' : (nuevo === 'perdido' ? 'no_sentada' : 'sentada');
     if (normal_(cap.resultado) !== res) {
-      actualizar_('CAPTACIONES', cap.id, {resultado: res, fecha_resultado: hoyISO_(), operacion_id: op.id});
+      const nuevaCap = actualizar_('CAPTACIONES', cap.id, {resultado: res, fecha_resultado: hoyISO_(), operacion_id: op.id});
+      avisarCaptador_(nuevaCap, cli);
     }
   }
 }
@@ -214,6 +215,14 @@ function recalcularCobros_(u, op) {
     return;
   }
   const cobrado = cobros.filter(function (c) { return txt_(c.fecha_cobro); });
+  /* 02/11/2026: los cobros metidos a mano (hitos de Finlight, acuerdos con
+     el cliente) no se tocan nunca. Solo se rehacen los que creó el CRM. */
+  const aMano = cobros.filter(function (c) { return txt_(c.notas).indexOf('Generado automáticamente') !== 0; });
+  if (aMano.length) {
+    registrar_(u, 'importe_cambiado_con_cobros', 'OPERACIONES', op.id,
+      'Cobros puestos a mano: no se rehacen solos; revisar el calendario si hace falta.');
+    return;
+  }
   if (cobrado.length) {
     registrar_(u, 'importe_cambiado_con_cobros', 'OPERACIONES', op.id,
       'Revisar a mano el calendario de cobros: ya había dinero cobrado.');
@@ -295,6 +304,9 @@ function accGuardarCaptacion_(u, p) {
     const cambios = {};
     campos.forEach(function (c) { if (d[c] !== undefined) cambios[c] = d[c]; });
     const r = actualizar_('CAPTACIONES', d.id, cambios);
+    if (anterior && txt_(cambios.resultado) && normal_(cambios.resultado) !== normal_(anterior.resultado)) {
+      avisarCaptador_(r, cli);
+    }
 
     /* Adjudicar la captación a un comercial es lo que hace que ese comercial
        la vea: el cliente pasa a ser suyo. Si se quita, deja de verla. */
@@ -310,11 +322,15 @@ function accGuardarCaptacion_(u, p) {
       actualizar_('CLIENTES', cli.id, {proxima_accion: 'Sentada concertada',
         proxima_fecha: txt_(cambios.fecha), modificado: ahora_(), modificado_por: u.id});
     }
-    return {ok: true, captacion: r};
+    return {ok: true, captacion: r,
+            aviso_agenda: (cambios.fecha || cambios.hora_cita || cambios.comercial_id) ? choqueAgenda_(r) : ''};
   }
-  const nueva = {cliente_id: clienteId, captador_id: u.rol === 'captador' ? u.id : (d.captador_id || ''),
+  const nueva = {cliente_id: clienteId,
+                 captador_id: u.rol === 'captador' ? u.id : (d.captador_id || cli.captador_id || ''),
                  creado: ahora_()};
   campos.forEach(function (c) { nueva[c] = d[c] === undefined ? '' : d[c]; });
+  /* El comercial que da una cita a un cliente suyo se la queda él. */
+  if (!nueva.comercial_id && u.rol === 'comercial') nueva.comercial_id = u.id;
   nueva.fecha = nueva.fecha || hoyISO_();
   nueva.resultado = nueva.resultado || 'pendiente';
   const r = insertar_('CAPTACIONES', nueva);
@@ -324,7 +340,7 @@ function accGuardarCaptacion_(u, p) {
   if (nueva.fecha) { cambiosCliente.proxima_accion = 'Sentada concertada'; cambiosCliente.proxima_fecha = nueva.fecha; }
   actualizar_('CLIENTES', cli.id, cambiosCliente);
   registrar_(u, 'alta_captacion', 'CAPTACIONES', r.id, cli.nombre);
-  return {ok: true, captacion: r};
+  return {ok: true, captacion: r, aviso_agenda: choqueAgenda_(r)};
 }
 
 /**

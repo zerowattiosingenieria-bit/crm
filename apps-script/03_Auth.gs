@@ -274,7 +274,7 @@ function sesion_(token) {
      portátil olvidado abierto en una obra no es una puerta abierta. */
   const visto = txt_(s.ultimo_uso) || txt_(s.creado);
   const parada = minutosDesde_(visto);
-  if (visto && parada > MINUTOS_INACTIVIDAD) {
+  if (visto && parada > MINUTOS_INACTIVIDAD && !esSesionServicio_(s)) {
     sesionCaida_(s, 'sin uso más de ' + MINUTOS_INACTIVIDAD + ' min');
     borrarSesion_(tk);
     return null;

@@ -124,7 +124,17 @@ function acciones_() {
 
     /* resumen semanal por correo */
     resumenSemanalAhora: accResumenSemanalAhora_,
-    probarResumen: accProbarResumen_
+    probarResumen: accProbarResumen_,
+
+    /* Mejoras del 02/11/2026 (21_Mejoras.gs) */
+    llaveServicio: accLlaveServicio_,
+    revocarLlaves: accRevocarLlaves_,
+    agendaHuecos: accAgendaHuecos_,
+    comprobarCita: accComprobarCita_,
+    pedirCambios: accPedirCambios_,
+    casarAuto: accCasarAuto_,
+    alertasBanco: accAlertasBanco_,
+    catastro: accCatastro_
   };
 }
 

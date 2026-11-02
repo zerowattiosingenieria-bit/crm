@@ -16,7 +16,8 @@
  * quienes tienen alcance «todo». Al resto ni siquiera les llega que existen.
  */
 
-const CLASES_ARCHIVO = ['foto', 'documento', 'proyecto', 'direccion', 'factura_luz', 'factura_gas'];
+const CLASES_ARCHIVO = ['foto', 'documento', 'proyecto', 'direccion', 'factura_luz', 'factura_gas',
+                        'aceptacion', 'dni'];
 
 /** ¿Puede este usuario saber que existe este archivo? */
 function veArchivo_(u, a) {

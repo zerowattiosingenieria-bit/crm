@@ -42,7 +42,7 @@ const DIAS_EQUIPO = 90;
 const LARGO_CLAVE = 10;
 
 /* Roles. El orden importa: de más a menos permisos. */
-const ROLES = ['superadmin', 'admin', 'comercial', 'captador'];
+const ROLES = ['superadmin', 'admin', 'comercial', 'captador', 'agente'];
 
 /* Qué puede hacer cada rol. Esto se comprueba SIEMPRE en el servidor:
    el navegador solo esconde botones, quien manda es esta tabla. */
@@ -75,6 +75,19 @@ const PERMISOS = {
     nominasAjenas: false,
     partesAjenos: false,
     editarTodo: false,
+    config: false
+  },
+  /* Los agentes de Claude (02/11/2026): leen y escriben todo lo operativo
+     con una llave de servicio que no caduca por inactividad. No tocan
+     usuarios ni ajustes, ni ven nóminas ajenas. */
+  agente: {
+    alcance: 'todo',
+    finanzas: true,
+    costes: true,
+    usuarios: false,
+    nominasAjenas: false,
+    partesAjenos: true,
+    editarTodo: true,
     config: false
   },
   captador: {

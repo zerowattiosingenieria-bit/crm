@@ -43,7 +43,7 @@ const PREFIJOS_MODIFICACION = /^(guardar|borrar|importar|entregar|subir|ajustar|
 const OTRAS_MODIFICACIONES = {
   estadoProyecto: 1, estadoTarea: 1, reanalizar: 1, geocodificar: 1,
   gastoDesdeBanco: 1, copiaAhora: 1, enviadoProyecto: 1, resumenSemanalAhora: 1, avisoPuertas: 1,
-  probarResumen: 1
+  probarResumen: 1, llaveServicio: 1, revocarLlaves: 1, pedirCambios: 1, casarAuto: 1
 };
 
 /* Nombres de parámetro que nunca se apuntan, ni sueltos ni dentro de otro. */
