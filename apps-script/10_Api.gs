@@ -165,6 +165,9 @@ function doGet(e) {
 function despachar_(p) {
   const accion = txt_(p && p.accion);
   if (accion === 'ping') return {ok: true, version: VERSION, servidor: ahora_()};
+  /* Peticiones del servidor de crm.zerowattios.com (Drive, correo, mapas,
+     espejo): van con su llave y no pasan por sesiones ni registro. */
+  if (esPeticionDeServicio_(p)) return atenderServicio_(p);
   empezarPeticion_(p, accion);
   let r;
   try {
