@@ -339,3 +339,23 @@ export const reagendarCita = datos => pedir('reagendarCita', datos);
 export const cancelarCita = datos => pedir('cancelarCita', datos);
 export const estadisticas = hoy => pedir('estadisticas', hoy ? {hoy} : {});
 export const historialCambios = cliente_id => pedir('historialCambios', {cliente_id});
+
+/* ---------- próximos pasos que de verdad tocan (02/11/2026) ----------
+   Fuera de «Llamadas y próximos pasos», la agenda y los atrasados: los
+   clientes que ya han comprado (operación firmada o más adelante, o cita
+   con venta), los ganados o perdidos, y la «Sentada concertada» que se pone
+   sola al dar una cita: esa visita ya sale en las visitas, no es una llamada. */
+const OPERACION_VENDIDA = ['firmada', 'tramite', 'material', 'instalacion', 'instalada', 'legalizada', 'cerrada'];
+const _norm = v => String(v ?? '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+export function yaCompro(c) {
+  if (!c) return false;
+  if (_norm(c.estado) === 'ganado') return true;
+  return operacionesDe(c.id).some(o => OPERACION_VENDIDA.includes(_norm(o.estado))) ||
+    captacionesDe(c.id).some(k => _norm(k.resultado) === 'venta');
+}
+export function pasoPendiente(c) {
+  if (!c || !String(c.proxima_fecha ?? '').trim()) return false;
+  if (['ganado', 'perdido'].includes(_norm(c.estado))) return false;
+  if (_norm(c.proxima_accion) === 'sentada concertada') return false;
+  return !yaCompro(c);
+}
