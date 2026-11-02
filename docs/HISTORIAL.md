@@ -8,6 +8,21 @@ Esto no sustituye al manual: el manual cuenta cómo se usa el CRM hoy
 luego no hay manera de reconstruir.
 
 
+## 02/11/2026 (noche) · Llamadas y próximos pasos, y la sentada del captador
+
+- **Llamadas y próximos pasos** (Hoy), la agenda, «Se te está pasando» del
+  tablero y los vencidos del correo de los viernes ya no enseñan: clientes
+  que ya han comprado (operación firmada o más adelante, o cita con venta),
+  ganados o perdidos, ni la «Sentada concertada» que se pone sola al dar una
+  cita (esa visita ya sale en las visitas). Salían, por ejemplo, Requexada 8
+  y Auseva 44, ya firmadas. De 68 pasos «pendientes» quedan 26 de verdad.
+- Cuando una cita tiene resultado (sentada, potencial, no sentada,
+  cancelada), la «Sentada concertada» deja de ser el próximo paso del cliente.
+- **El captador puede marcar la sentada**: botón «✓ Sentada» en las citas
+  pendientes cuyo día ya ha llegado (Captaciones y ficha › Citas). Si el
+  resultado lo pone el propio captador, no le llega el aviso de su cambio.
+
+
 ## 02/11/2026 (noche) · Reglas de la agenda de Nando
 
 Regla para los captadores: a Nando no se le pueden dar **más de 3 visitas al

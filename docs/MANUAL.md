@@ -256,6 +256,7 @@ busca otro día u hora.
 
 ## Reagendar o cancelar una cita, y las estadísticas
 
+- Cuando la visita se ha hecho, el captador o el comercial pulsan **✓ Sentada** en la cita (Captaciones o ficha › Citas).
 - En **Captaciones** (o en la ficha del cliente, pestaña **Citas**) cada cita
   pendiente tiene **↻ Reagendar** (nuevo día y hora, y por qué) y
   **✕ Cancelar** (motivo). Todo queda contado en las estadísticas.
