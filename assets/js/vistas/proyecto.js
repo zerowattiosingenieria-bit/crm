@@ -9,6 +9,7 @@
 import {h, poner, txt, fechaCorta} from '../util.js';
 import * as api from '../api.js';
 import {tarjeta, marca, aviso, avisoError, confirmar, cargando} from '../ui.js';
+import {tarjetaEnviar, tarjetaCambios, tarjetaAceptacion} from './proyecto-extra.js';
 
 const ESTADOS = {
   borrador:     ['Sin pedir', ''],
@@ -46,7 +47,7 @@ function dibuja(img, lado, calidad) {
 /* Las fotos del móvil pesan varios megas y no hace falta: se reducen aquí,
    en el propio navegador, antes de salir. Así subir desde la obra es rápido
    aunque haya poca cobertura. */
-async function prepara(archivo, clase) {
+export async function prepara(archivo, clase) {
   const url = await leerComoDataURL(archivo);
   if (!/^image\//.test(archivo.type)) {
     return {clase: clase || 'documento', nombre: archivo.name, mime: archivo.type || 'application/pdf',
@@ -315,6 +316,8 @@ export function panelProyecto(cliente) {
     poner(caja,
       faltan,
       entregado,
+      tarjetaEnviar(cliente, proy, proyectos[0], pinta),
+      tarjetaCambios(cliente, proy, pinta),
       versiones,
       tarjeta('Qué hay que proyectar',
         h('div',
@@ -333,6 +336,7 @@ export function panelProyecto(cliente) {
       tarjeta('Fotos de la vivienda (' + fotos.length + ')', h('div', {'data-zona': 'foto'}, subidor, rejillaFotos),
         {subtitulo: 'Tejado, cuadro eléctrico, caldera, radiadores, sitio de la máquina…'}),
       tarjeta('Otros documentos (' + docs.length + ')', listaDocs),
+      tarjetaAceptacion(cliente, archivos, pinta),
       cambios,
       privados,
       direccion);

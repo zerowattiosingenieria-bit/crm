@@ -6,6 +6,27 @@ import {tarjeta, tabla, kpi, kpis, etiquetaEstado, marca, ventana, ventanaFormul
         aviso, avisoError, confirmar, cargando, formulario} from '../ui.js';
 
 /* ================= usuarios ================= */
+/* Llave de servicio para los agentes de Claude (02/11/2026): una sesión que no
+   caduca por inactividad, para que el sistema no se pare si se cierra la de
+   Nando. Se enseña una sola vez. Se guarda en el ordenador de Nando, en
+   Documentos › Informes Zero Wattios › crm_agente.txt, donde la leen los agentes. */
+async function llave(u) {
+  const r = await api.llaveServicio(u.id, 'Agentes Claude');
+  const caja = h('textarea', {readonly: true, estilo: {minHeight: '70px', fontFamily: 'monospace'}});
+  caja.value = r.token;
+  const v = ventana({titulo: 'Llave de servicio de ' + u.nombre, cuerpo: h('div',
+    h('p', 'Cópiala ahora: no se vuelve a enseñar. Caduca el ' + txt(r.expira).slice(0, 10) + '.'),
+    caja,
+    h('p.nota', 'Guárdala en el ordenador de Nando en Documentos › Informes Zero Wattios › crm_agente.txt. ' +
+      'Si se pierde o se filtra, pulsa «Quitar llaves» y saca otra.')),
+    acciones: [
+      h('button.btn.peligro', {onclick: async () => {
+        const x = await api.revocarLlaves(u.id); aviso('Quitadas ' + x.revocadas + ' llaves.'); v.cerrar();
+      }}, 'Quitar llaves'),
+      h('button.btn', {onclick: () => { navigator.clipboard && navigator.clipboard.writeText(r.token).catch(() => {}); caja.select(); }}, 'Copiar'),
+      h('button.btn.primario', {onclick: () => v.cerrar()}, 'Hecho')]});
+}
+
 export async function vistaUsuarios({ir, refrescar}) {
   const caja = h('div');
   const contenedor = h('div', cargando());
@@ -34,7 +55,8 @@ export async function vistaUsuarios({ir, refrescar}) {
         ? fechaCorta(txt(u.ultimo_acceso).slice(0, 10)) : 'nunca'},
       {clave: 'acciones', et: '', noOrden: true, pinta: u => h('.acciones',
         h('button.btn.mini', {onclick: () => editor(u)}, 'Editar'),
-        h('button.btn.mini.peligro', {onclick: () => resetear(u)}, 'Nueva clave'))}
+        h('button.btn.mini.peligro', {onclick: () => resetear(u)}, 'Nueva clave'),
+        u.rol === 'agente' ? h('button.btn.mini.lima', {onclick: () => llave(u)}, 'Llave de servicio') : null)}
     ], usuarios, {vacio: 'No hay usuarios.'});
 
     poner(contenedor,
@@ -62,7 +84,8 @@ export async function vistaUsuarios({ir, refrescar}) {
       {id: 'usuario', et: 'Usuario para entrar', requerido: true, ayuda: 'Sin espacios ni acentos'},
       {id: 'rol', et: 'Rol', tipo: 'select', vacio: false, requerido: true,
        opciones: [['superadmin', 'Superadmin'], ['admin', 'Administrador'],
-                  ['comercial', 'Comercial'], ['captador', 'Captador']]},
+                  ['comercial', 'Comercial'], ['captador', 'Captador'],
+                  ['agente', 'Agente (Claude) · llave de servicio']]},
       {id: 'area', et: 'Puesto', tipo: 'select', vacio: false,
        ayuda: 'Decide qué ve en su pestaña «Mi tablero»',
        opciones: [['direccion', 'Dirección'], ['contabilidad', 'Contabilidad y administración'],
@@ -188,6 +211,11 @@ export async function vistaAjustes({refrescar}) {
       ['resumen_semanal', '¿Se manda el resumen semanal? (si/no)'],
       ['resumen_a', 'Mandarlo todo a un solo correo (vacío = cada uno el suyo)'],
       ['copia_resumen', 'Copia del envío para quien lo controle']]],
+    ['Agenda y avisos (02/11/2026)', [
+      ['agenda_fuente', 'Agenda que manda: trello (hoy) o crm (cuando se deje Trello)'],
+      ['agenda_duracion_min', 'Duración mínima de una visita (min; por defecto 105)'],
+      ['agenda_bloqueos', 'Días bloqueados por comercial (JSON; por defecto viernes de Nando)'],
+      ['avisos_captador', '¿Avisar por correo al captador cuando su ficha cambia? (si/no)']]],
     ['Herramientas', [
       ['ficha_dimensionado', 'Ficha de visita'], ['ficha_captacion', 'Ficha de captación']]]
   ];

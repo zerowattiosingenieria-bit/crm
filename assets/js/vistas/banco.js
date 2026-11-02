@@ -11,6 +11,7 @@ import * as api from '../api.js';
 import {tarjeta, tabla, kpi, kpis, etiquetaEstado, marca, ventana, ventanaFormulario,
         aviso, avisoError, confirmar, filtros, cargando} from '../ui.js';
 import {barras, anillo} from '../graficos.js';
+import {casarSolos, tarjetaAlertasBanco} from './dinero-extra.js';
 
 export async function vistaBanco({ir}) {
   const caja = h('div');
@@ -158,10 +159,11 @@ export async function vistaBanco({ir}) {
                    aviso(r.cambiados + ' movimiento(s) reclasificados.'); await cargar(); }
              catch (e) { avisoError(e); }
            }}, 'Reclasificar'),
+           h('button.btn.mini.lima', {onclick: () => casarSolos(cargar)}, 'Casar cobros solos'),
            h('button.btn.mini', {onclick: () => t.exportar && t.exportar()}, 'Exportar CSV')]}));
   }
 
-  poner(caja, f.nodo, contenido);
+  poner(caja, f.nodo, tarjetaAlertasBanco(ir), contenido);
   await cargar();
   return caja;
 }

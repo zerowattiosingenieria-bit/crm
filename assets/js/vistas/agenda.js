@@ -7,6 +7,7 @@ import {tarjeta, tabla, kpi, kpis, etiquetaEstado, marca, filtros, aviso} from '
 import {nuevoSeguimiento} from './clientes.js';
 import {calendarioMes, COLOR_EVENTO} from '../calendario.js';
 import {citaSinConfirmar} from './panel.js';
+import {nuevaCita, tarjetaHuecos} from './citas.js';
 
 export async function vistaAgenda({ir, refrescar}) {
   const caja = h('div');
@@ -167,5 +168,9 @@ export async function vistaAgenda({ir, refrescar}) {
   }
 
   pinta();
-  return poner(caja, f ? f.nodo : null, contenedor);
+  /* 02/11/2026: ya se pueden dar las citas en el CRM (Trello sigue mandando un mes más). */
+  const barra = h('.acciones', {estilo: {margin: '0 0 12px'}},
+    h('button.btn.primario', {onclick: () => nuevaCita({refrescar})}, '+ Nueva cita'),
+    h('span.nota', 'Cada visita ocupa 1 h 45 min y el CRM cuenta el coche hasta la siguiente.'));
+  return poner(caja, barra, f ? f.nodo : null, contenedor, tarjetaHuecos());
 }

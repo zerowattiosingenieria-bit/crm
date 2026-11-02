@@ -6,6 +6,7 @@ import * as api from '../api.js';
 import {tarjeta, tabla, kpi, kpis, etiquetaEstado, marca, ventanaFormulario, aviso,
         confirmar, filtros, cargando} from '../ui.js';
 import {lineas, barras, apiladas, anillo, SERIES} from '../graficos.js';
+import {tarjetaReserva, tarjetaFacturasProveedor, botonPaqueteGestoria, facturarCobro} from './dinero-extra.js';
 
 const formatoValor = (v, f) => f === 'eur' ? eur(v) : (f === 'pct' ? pct(v)
   : (f === 'dias' ? miles(v) + ' días' : (f === 'ratio' ? String(v).replace('.', ',') : miles(v))));
@@ -27,7 +28,8 @@ export async function vistaContabilidad({ir}) {
   async function cargar(r) {
     poner(contenedor, cargando('Echando cuentas…'));
     const d = await api.pedir('finanzas', {desde: r.desde || '', hasta: r.hasta || hoyISO()});
-    poner(contenedor, pinta(d, ir));
+    poner(contenedor, h('div', h('.acciones', {estilo: {marginBottom: '10px'}}, botonPaqueteGestoria(d)),
+      h('.doble', tarjetaReserva(d), tarjetaFacturasProveedor(d)), pinta(d, ir)));
   }
 
   poner(caja, f.nodo, contenedor);
@@ -292,7 +294,8 @@ export async function vistaCobros({ir}) {
         !txt(c.fecha_cobro) ? h('button.btn.mini.lima', {onclick: async () => {
           await api.guardarCobro({id: c.id, fecha_cobro: hoyISO(), estado: 'cobrado'});
           aviso('Cobro registrado.'); recargar();
-        }}, 'Cobrado') : null)}
+        }}, 'Cobrado') : null,
+        !txt(c.factura_id) ? h('button.btn.mini', {onclick: () => facturarCobro(c, datos.facturas, recargar)}, 'Facturar') : null)}
     ], lista, {csv: 'cobros_zerowattios.csv', vacio: 'No hay cobros.'});
 
     poner(contenedor,

@@ -352,6 +352,8 @@ export async function vistaCliente({id, ir, refrescar}) {
       h('button.btn', {onclick: () => editarComentario(c, async () => { await refrescar(); })},
         '✎ Comentario'),
       h('button.btn.lima', {onclick: () => nuevoSeguimiento(c, refrescar)}, '+ Apuntar contacto'),
+      h('button.btn', {onclick: () => { location.hash = '#visita/' + c.id; }}, '📋 Modo visita'),
+      h('button.btn', {onclick: () => import('./citas.js').then(m => m.nuevaCita({refrescar, clienteId: c.id}))}, '+ Cita'),
       h('button.btn.primario', {onclick: () => editorOperacion(null, c, async () => { await refrescar(); })},
         '+ Instalación')));
 

@@ -10,7 +10,11 @@ import {estadoLead} from './leads.js';
 function nuevaCaptacion(refrescar, ir) {
   const comerciales = api.estado.usuarios
     .filter(u => ['comercial', 'admin', 'superadmin'].includes(u.rol)).map(u => [u.id, u.nombre]);
-  return ventanaFormulario({
+  /* 02/11/2026: ficha en 30 segundos (ubicación y Catastro) y aviso si la
+     cita no le cuadra al comercial (1 h 45 min por visita más el coche). */
+  const ayudas = h('div', {estilo: {marginTop: '8px'}});
+  const revision = h('div');
+  const vf = ventanaFormulario({
     titulo: 'Nueva ficha de captación',
     ancha: true,
     campos: [
@@ -67,9 +71,55 @@ function nuevaCaptacion(refrescar, ir) {
       const r = await api.guardarCaptacion(captacion);
       aviso('Ficha de captación guardada.');
       await refrescar();
+      if (r.aviso_agenda) aviso('Ojo con la cita: ' + r.aviso_agenda, 'error');
       if (r.captacion && r.captacion.cliente_id) ir('cliente/' + r.captacion.cliente_id);
-    }
+    },
+    extra: h('div', ayudas, revision)
   });
+  const f = vf.formulario;
+  const ctl = id => f.nodos[id] && f.nodos[id].control;
+  const ponerSiVacio = (id, v) => { if (v != null && v !== '' && ctl(id) && !txt(ctl(id).value)) ctl(id).value = v; };
+  const estadoAyuda = h('span.nota');
+  poner(ayudas, h('.acciones',
+    h('button.btn', {type: 'button', onclick: () => {
+      if (!navigator.geolocation) return aviso('Este aparato no da la ubicación.', 'error');
+      estadoAyuda.textContent = 'Buscando tu ubicación…';
+      navigator.geolocation.getCurrentPosition(pos => {
+        ctl('coordenadas').value = pos.coords.latitude.toFixed(6) + ',' + pos.coords.longitude.toFixed(6);
+        estadoAyuda.textContent = 'Ubicación puesta. Pulsa «Datos del Catastro».';
+      }, () => { estadoAyuda.textContent = 'No se ha podido sacar la ubicación (permiso denegado o sin GPS).'; },
+      {enableHighAccuracy: true, timeout: 15000});
+    }}, '📍 Estoy en la puerta'),
+    h('button.btn', {type: 'button', onclick: async () => {
+      const c = txt(ctl('coordenadas').value).split(',').map(x => parseFloat(x));
+      if (c.length < 2 || isNaN(c[0]) || isNaN(c[1])) return aviso('Pon antes las coordenadas (o pulsa «Estoy en la puerta»).', 'error');
+      estadoAyuda.textContent = 'Preguntando al Catastro…';
+      try {
+        const r = await api.catastro({lat: c[0], lon: c[1]});
+        if (!r.ok) throw new Error(r.error);
+        ponerSiVacio('direccion', r.direccion);
+        if (r.m2) ctl('m2').value = r.m2;
+        estadoAyuda.textContent = 'Catastro: ' + [r.rc, r.m2 ? r.m2 + ' m²' : '', r.anyo ? 'año ' + r.anyo : '', r.uso]
+          .filter(Boolean).join(' · ') + (r.varios ? ' (hay varias viviendas en la parcela: revisa los m²)' : '');
+        const notas = ctl('notas');
+        if (notas && r.rc && !txt(notas.value).includes(r.rc)) notas.value = (txt(notas.value) + '\nRef. catastral ' + r.rc +
+          (r.anyo ? ' · año ' + r.anyo : '')).trim();
+      } catch (e) { estadoAyuda.textContent = 'Catastro: ' + e.message; }
+    }}, '🏠 Datos del Catastro'),
+    estadoAyuda),
+    h('p.nota', 'Haz una foto de la fachada y súbela en la ficha del cliente (pestaña Proyecto) en cuanto la guardes.'));
+  const revisar = async () => {
+    const d = f.leer();
+    if (!d.comercial_id || !d.fecha || !d.hora_cita) return poner(revision);
+    try {
+      const r = await api.comprobarCita({comercial_id: d.comercial_id, fecha: d.fecha, hora: d.hora_cita,
+        direccion: txt(d.coordenadas) || [d.direccion, d.municipio, d.cp].filter(Boolean).join(', ')});
+      poner(revision, r.aviso ? h('p', {estilo: {color: 'var(--mal)', fontWeight: 600}}, '⚠ ' + r.aviso)
+                              : h('p', {estilo: {color: 'var(--bien)'}}, '✓ Al comercial le cuadra la cita (1 h 45 min por visita más el coche).'));
+    } catch (e) { poner(revision); }
+  };
+  ['comercial_id', 'fecha', 'hora_cita', 'direccion', 'coordenadas'].forEach(id => ctl(id) && ctl(id).addEventListener('change', revisar));
+  return vf;
 }
 
 /* Adjudicar la ficha a un comercial: hasta que no se hace, ese cliente no
