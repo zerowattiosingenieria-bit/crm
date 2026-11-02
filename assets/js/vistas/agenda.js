@@ -42,7 +42,7 @@ export async function vistaAgenda({ir, refrescar}) {
 
     /* Seguimientos con fecha */
     const acciones = idCaptador ? [] : api.estado.clientes.filter(c =>
-      txt(c.proxima_fecha) && !['ganado', 'perdido'].includes(normal(c.estado)) && mios(c)
+      api.pasoPendiente(c) && mios(c)
     ).map(c => ({
       tipo: 'seguimiento', fecha: txt(c.proxima_fecha), cliente: c,
       texto: txt(c.proxima_accion) || 'Seguimiento'

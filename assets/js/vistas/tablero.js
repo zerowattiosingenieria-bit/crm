@@ -277,8 +277,7 @@ function agendaProxima(ir) {
                 que: 'Sentada', icono: '⚑'}));
 
   const seguimientos = api.estado.clientes.filter(c =>
-    txt(c.proxima_fecha) && txt(c.proxima_fecha) >= hoy && txt(c.proxima_fecha) <= tope &&
-    !['ganado', 'perdido'].includes(normal(c.estado))
+    api.pasoPendiente(c) && txt(c.proxima_fecha) >= hoy && txt(c.proxima_fecha) <= tope
   ).map(c => ({fecha: txt(c.proxima_fecha), cliente: c,
                que: txt(c.proxima_accion) || 'Seguimiento', icono: '☎'}));
 
@@ -321,8 +320,7 @@ function tarjetaSemana(ir) {
 function tarjetaSePasa(ir) {
   const hoy = hoyISO();
   const tarde = api.estado.clientes.filter(c =>
-    txt(c.proxima_fecha) && txt(c.proxima_fecha) < hoy &&
-    !['ganado', 'perdido'].includes(normal(c.estado))
+    api.pasoPendiente(c) && txt(c.proxima_fecha) < hoy
   ).sort((a, b) => txt(a.proxima_fecha).localeCompare(txt(b.proxima_fecha)));
 
   return tarjeta('Se te está pasando (' + tarde.length + ')', tarde.length
@@ -344,8 +342,7 @@ function panelComercial({mias, r, ir, recarga}) {
   const activos = clientes.filter(c => !['ganado', 'perdido'].includes(normal(c.estado)));
   const prox = agendaProxima(ir);
   const atrasados = clientes.filter(c =>
-    txt(c.proxima_fecha) && txt(c.proxima_fecha) < hoy &&
-    !['ganado', 'perdido'].includes(normal(c.estado))).length;
+    api.pasoPendiente(c) && txt(c.proxima_fecha) < hoy).length;
 
   return [
     kpis(

@@ -60,8 +60,7 @@ export async function vistaHoy({ir, refrescar}) {
   if (!esCap) {
     /* --- llamadas y próximos pasos que tocan --- */
     const visibles = api.estado.clientes.filter(c => esDir || txt(c.comercial_id) === txt(yo.id));
-    const tocan = visibles.filter(c => txt(c.proxima_fecha) && txt(c.proxima_fecha) <= hoy &&
-      !['ganado', 'perdido'].includes(normal(c.estado)))
+    const tocan = visibles.filter(c => api.pasoPendiente(c) && txt(c.proxima_fecha) <= hoy)
       .sort((a, b) => txt(a.proxima_fecha).localeCompare(txt(b.proxima_fecha)));
     cifras.push(kpi('Llamadas y pasos', String(tocan.length), 'para hoy o atrasados', {estado: tocan.length ? 'aviso' : 'bien'}));
     if (tocan.length) bloques.push(tarjeta('Llamadas y próximos pasos', h('ul.hoy-lista', tocan.slice(0, 25).map(c => h('li',

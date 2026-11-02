@@ -88,10 +88,24 @@ export function ventanaCancelar(k, refrescar) {
   });
 }
 
-/** Los dos botones, para una fila o una tarjeta. */
+/** Marcar que la visita se hizo (sentada). También lo puede hacer el captador (02/11/2026). */
+export async function marcarSentada(k, refrescar) {
+  const r = await api.guardarCaptacion({id: k.id, cliente_id: k.cliente_id, resultado: 'sentada', fecha_resultado: hoyISO()});
+  if (!r.ok) throw new Error(r.error || 'No se ha podido marcar.');
+  aviso('Marcada como sentada.');
+  await refrescar();
+}
+
+/** Los botones de la cita, para una fila o una tarjeta. */
 export function botonesCita(k, refrescar) {
   if (!citaAbierta(k)) return null;
-  return h('span.acciones', {estilo: {display: 'inline-flex', gap: '6px'}},
+  const pendiente = ['', 'pendiente'].includes(normal(k.resultado));
+  const yaPaso = txt(k.fecha) && txt(k.fecha).slice(0, 10) <= hoyISO();
+  return h('span.acciones', {estilo: {display: 'inline-flex', gap: '6px', flexWrap: 'wrap'}},
+    pendiente && yaPaso ? h('button.btn.mini', {estilo: {color: 'var(--bien)'}, onclick: async e => {
+      e.stopPropagation();
+      try { await marcarSentada(k, refrescar); } catch (err) { aviso(err.message, 'error'); }
+    }}, '✓ Sentada') : null,
     h('button.btn.mini', {onclick: e => { e.stopPropagation(); ventanaReagendar(k, refrescar); }}, '↻ Reagendar'),
     citaCancelada(k) ? null
       : h('button.btn.mini', {estilo: {color: 'var(--mal)'}, onclick: e => { e.stopPropagation(); ventanaCancelar(k, refrescar); }}, '✕ Cancelar'));
