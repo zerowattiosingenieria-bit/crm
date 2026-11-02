@@ -34,6 +34,14 @@ apagar el código desde **Ajustes**, poniendo `dos_pasos` en `no`.
 - **Proyecto**: botones para mandar la propuesta por WhatsApp o correo, pedir cambios y recoger la firma del cliente.
 - **Dirección**: «Casar cobros solos» y pagos raros en Banco; «Facturar» en cada cobro; reserva de impuestos, obras sin factura de proveedor y paquete de la gestoría en Contabilidad.
 
+## La ficha del cliente (desde el 02/11/2026)
+
+- Todo se apunta con **+ Apuntar**: llamada o WhatsApp, la visita, una cita, tu comentario o una instalación.
+- **Historial**: todo lo que ha pasado, en orden. **Citas**: todas, con «Resultado o cambio».
+- **Falta por meter**: pulsa cada botón y se abre donde va.
+- Si al dar de alta sale «Ya está en el CRM», abre su ficha: no se crean dos.
+- Dirección: Clientes › **Fichas repetidas** para fusionarlas.
+
 ## Para los captadores (Sandra y Abraham)
 
 **Mis captaciones → + Nueva ficha.** Es la ficha de la puerta: propietarios,

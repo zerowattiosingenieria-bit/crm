@@ -8,6 +8,29 @@ Esto no sustituye al manual: el manual cuenta cómo se usa el CRM hoy
 luego no hay manera de reconstruir.
 
 
+## 02/11/2026 (tarde) · Un cliente, una ficha
+
+Revisión de los datos reales: 872 clientes, de los que 7 parejas eran el
+mismo cliente dos veces (mismo teléfono o misma casa); 12 clientes con
+varias citas de las que la ficha solo enseñaba la primera; el interés
+apuntado en la cita y en el cliente con números distintos en 17 casos;
+fichas borradas que dejaban apuntes y proyectos sueltos.
+
+- **Sin duplicados al dar de alta.** Si el teléfono o la dirección ya están,
+  el CRM avisa mientras se escribe y no crea otra ficha. Si es la cita de un
+  captador, se apunta en la ficha que ya existía y se aprovecha lo que esta
+  no tenía (m², gastos…). Dirección puede forzarlo (otra vivienda del mismo dueño).
+- **Fichas repetidas** (Clientes, solo dirección): lista y botón de fusionar.
+  Todo lo de la repetida pasa a la buena y la repetida desaparece.
+- **Un cliente con cosas enlazadas no se borra**: se fusiona.
+- **La cita que manda es la última** (o la de la instalación), no la primera.
+- **Un solo dato de interés y de estado**: lo que deja la cita pasa al cliente;
+  una sentada pasa el cliente a «Sentada» y una cita nueva no lo hace retroceder.
+- **Ficha nueva**: un solo botón «+ Apuntar» (llamada, visita, cita,
+  comentario, instalación); pestaña Historial con todo en una línea de tiempo;
+  pestaña Citas con todas; «Falta por meter» con el botón que abre cada dato;
+  vivienda y contacto se editan por partes; aviso de posible ficha repetida.
+
 ## 02/11/2026
 
 ### Pantalla «Hoy» para todos
