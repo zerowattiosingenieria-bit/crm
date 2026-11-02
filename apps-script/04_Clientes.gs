@@ -308,7 +308,52 @@ function accGuardarSeguimiento_(u, p) {
 
 /* ---------- captaciones ---------- */
 
+/**
+ * Reglas fijas de la agenda de cada comercial (Nando, 02/11/2026: como mucho
+ * 3 visitas al día, los viernes no y nunca después de las 17:30, salvo que
+ * él lo autorice). Son regla para los captadores: si la cita no las cumple,
+ * no se le adjudica; se puede guardar sin adjudicar y le llega un correo
+ * para que la acepte él (adjudicándosela).
+ */
 function accGuardarCaptacion_(u, p) {
+  const d = p.captacion || {};
+  let pendiente = null;
+  if (u.rol === 'captador') {
+    const ant = d.id ? leer_('CAPTACIONES').filter(function (x) { return String(x.id) === String(d.id); })[0] : null;
+    const val = function (k, def) { return d[k] !== undefined ? txt_(d[k]) : (ant ? txt_(ant[k]) : def); };
+    const toca = !ant || ['fecha', 'hora_cita', 'comercial_id'].some(function (k) {
+      return d[k] !== undefined && txt_(d[k]) !== txt_(ant[k]); });
+    const com = val('comercial_id', '');
+    const fe = val('fecha', '') || (ant ? '' : hoyISO_());
+    const ho = val('hora_cita', '');
+    const res = normal_(val('resultado', 'pendiente'));
+    if (toca && com && fe && ['cancelada', 'no_sentada', 'venta', 'sentada'].indexOf(res) < 0) {
+      const fallos = reglasAgenda_(com, fe, ho, d.id);
+      if (fallos.length) {
+        const quien = (leer_('USUARIOS').filter(function (x) { return String(x.id) === com; })[0] || {}).nombre || 'ese comercial';
+        if (!p.pedir_autorizacion && !d.pedir_autorizacion) {
+          return {ok: false, requiere_autorizacion: true, comercial: quien, motivos: fallos,
+                  error: 'A ' + quien + ' no se le puede dar esa cita sin su autorización: ' + fallos.join('; ') + '.'};
+        }
+        /* Queda sin adjudicar hasta que él la acepte. */
+        d.comercial_id = '';
+        d.notas = (val('notas', '') ? val('notas', '') + '\n' : '') + 'Pendiente de que ' + quien + ' autorice la visita del ' +
+          fechaLarga_(fe, ho) + ' (' + fallos.join('; ') + ').';
+        pendiente = {comercial_id: com, nombre: quien, fallos: fallos, fecha: fe, hora: ho};
+      }
+    }
+  }
+  const r = guardarCaptacionSinReglas_(u, p);
+  if (pendiente && r.ok && r.captacion) {
+    /* El cliente sí pasa a su cartera, para que lo vea y pueda aceptar la cita. */
+    actualizar_('CLIENTES', r.captacion.cliente_id, {comercial_id: pendiente.comercial_id, modificado: ahora_(), modificado_por: u.id});
+    pedirAutorizacionCita_(u, r.captacion, pendiente);
+    r.pendiente_autorizacion = 'Guardada sin adjudicar: le ha llegado un correo a ' + pendiente.nombre + ' para que la autorice.';
+  }
+  return r;
+}
+
+function guardarCaptacionSinReglas_(u, p) {
   const d = p.captacion || {};
   let clienteId = d.cliente_id;
 

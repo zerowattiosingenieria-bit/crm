@@ -2064,7 +2064,52 @@ function accGuardarSeguimiento_(u, p) {
 
 /* ---------- captaciones ---------- */
 
+/**
+ * Reglas fijas de la agenda de cada comercial (Nando, 02/11/2026: como mucho
+ * 3 visitas al día, los viernes no y nunca después de las 17:30, salvo que
+ * él lo autorice). Son regla para los captadores: si la cita no las cumple,
+ * no se le adjudica; se puede guardar sin adjudicar y le llega un correo
+ * para que la acepte él (adjudicándosela).
+ */
 function accGuardarCaptacion_(u, p) {
+  const d = p.captacion || {};
+  let pendiente = null;
+  if (u.rol === 'captador') {
+    const ant = d.id ? leer_('CAPTACIONES').filter(function (x) { return String(x.id) === String(d.id); })[0] : null;
+    const val = function (k, def) { return d[k] !== undefined ? txt_(d[k]) : (ant ? txt_(ant[k]) : def); };
+    const toca = !ant || ['fecha', 'hora_cita', 'comercial_id'].some(function (k) {
+      return d[k] !== undefined && txt_(d[k]) !== txt_(ant[k]); });
+    const com = val('comercial_id', '');
+    const fe = val('fecha', '') || (ant ? '' : hoyISO_());
+    const ho = val('hora_cita', '');
+    const res = normal_(val('resultado', 'pendiente'));
+    if (toca && com && fe && ['cancelada', 'no_sentada', 'venta', 'sentada'].indexOf(res) < 0) {
+      const fallos = reglasAgenda_(com, fe, ho, d.id);
+      if (fallos.length) {
+        const quien = (leer_('USUARIOS').filter(function (x) { return String(x.id) === com; })[0] || {}).nombre || 'ese comercial';
+        if (!p.pedir_autorizacion && !d.pedir_autorizacion) {
+          return {ok: false, requiere_autorizacion: true, comercial: quien, motivos: fallos,
+                  error: 'A ' + quien + ' no se le puede dar esa cita sin su autorización: ' + fallos.join('; ') + '.'};
+        }
+        /* Queda sin adjudicar hasta que él la acepte. */
+        d.comercial_id = '';
+        d.notas = (val('notas', '') ? val('notas', '') + '\n' : '') + 'Pendiente de que ' + quien + ' autorice la visita del ' +
+          fechaLarga_(fe, ho) + ' (' + fallos.join('; ') + ').';
+        pendiente = {comercial_id: com, nombre: quien, fallos: fallos, fecha: fe, hora: ho};
+      }
+    }
+  }
+  const r = guardarCaptacionSinReglas_(u, p);
+  if (pendiente && r.ok && r.captacion) {
+    /* El cliente sí pasa a su cartera, para que lo vea y pueda aceptar la cita. */
+    actualizar_('CLIENTES', r.captacion.cliente_id, {comercial_id: pendiente.comercial_id, modificado: ahora_(), modificado_por: u.id});
+    pedirAutorizacionCita_(u, r.captacion, pendiente);
+    r.pendiente_autorizacion = 'Guardada sin adjudicar: le ha llegado un correo a ' + pendiente.nombre + ' para que la autorice.';
+  }
+  return r;
+}
+
+function guardarCaptacionSinReglas_(u, p) {
   const d = p.captacion || {};
   let clienteId = d.cliente_id;
 
@@ -7568,7 +7613,35 @@ function bloqueosAgenda_() {
   let b = {};
   try { b = JSON.parse(txt_(c.agenda_bloqueos) || '{}'); } catch (e) { b = {}; }
   if (!txt_(c.agenda_bloqueos)) b = {'U-000004': {dias: [5], nota: 'Viernes sin visitas (Nando)'}};
+  /* Reglas de Nando (02/11/2026): como mucho 3 visitas al día, los viernes
+     nada y ninguna después de las 17:30, salvo que él lo autorice. */
+  const n = b['U-000004'] = b['U-000004'] || {};
+  if (!n.dias) n.dias = [5];
+  if (n.max_dia === undefined) n.max_dia = 3;
+  if (n.hasta === undefined) n.hasta = '17:30';
   return b;
+}
+
+const NOMBRE_DIA_ = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+
+/**
+ * Las reglas fijas de la agenda de un comercial: días sin visitas, hora
+ * límite y máximo de visitas al día. Devuelve lo que no cumple (vacío si cumple).
+ */
+function reglasAgenda_(comercialId, fecha, hora, salvoId) {
+  const fallos = [];
+  fecha = txt_(fecha).slice(0, 10);
+  const r = bloqueosAgenda_()[txt_(comercialId)];
+  if (!r || !fecha) return fallos;
+  const dia = new Date(fecha + 'T12:00:00').getDay();
+  if ((r.dias || []).indexOf(dia) >= 0) fallos.push('los ' + NOMBRE_DIA_[dia] + ' no tiene visitas');
+  const ini = minutosHora_(hora);
+  if (txt_(r.hasta) && ini >= 0 && ini > minutosHora_(r.hasta)) fallos.push('no tiene visitas después de las ' + txt_(r.hasta));
+  if (num_(r.max_dia) > 0) {
+    const n = citasDelDia_(comercialId, fecha, salvoId).length;
+    if (n >= num_(r.max_dia)) fallos.push('ese día ya tiene ' + n + ' visitas y como mucho son ' + num_(r.max_dia));
+  }
+  return fallos;
 }
 
 /* Orden de Nando (02/11/2026): una visita dura como mínimo 1 h 45 min, y entre
@@ -7636,9 +7709,8 @@ function revisarCita_(comercialId, fecha, hora, punto, salvoId) {
   const avisos = [];
   fecha = txt_(fecha).slice(0, 10);
   if (!comercialId || !fecha) return {texto: '', detalle: []};
-  const bloq = bloqueosAgenda_()[txt_(comercialId)];
-  const dia = new Date(fecha + 'T12:00:00').getDay();
-  if (bloq && (bloq.dias || []).indexOf(dia) >= 0) avisos.push(txt_(bloq.nota) || 'Ese día está bloqueado para ese comercial.');
+  const reglas = reglasAgenda_(comercialId, fecha, hora, salvoId);
+  if (reglas.length) avisos.push('Sin su autorización no se puede: ' + reglas.join('; ') + '.');
   const ini = minutosHora_(hora);
   const detalle = [];
   if (ini >= 0) {
@@ -7664,6 +7736,27 @@ function revisarCita_(comercialId, fecha, hora, punto, salvoId) {
     }
   }
   return {texto: avisos.join(' '), detalle: detalle};
+}
+
+/** Correo al comercial para que autorice una cita que se sale de sus reglas. */
+function pedirAutorizacionCita_(u, cap, pend) {
+  try {
+    const com = leer_('USUARIOS').filter(function (x) { return String(x.id) === String(pend.comercial_id); })[0];
+    if (!com || !txt_(com.email)) return;
+    const cli = leer_('CLIENTES').filter(function (c) { return String(c.id) === String(cap.cliente_id); })[0] || {};
+    const sitio = [txt_(cli.direccion), txt_(cli.municipio)].filter(String).join(', ') || 'un cliente';
+    MailApp.sendEmail({to: txt_(com.email), name: 'CRM · ZERO WATTIOS',
+      subject: 'Autoriza una visita · ' + fechaLarga_(pend.fecha, pend.hora) + ' · ' + sitio,
+      htmlBody: '<div style="font-family:Arial,sans-serif;font-size:15px;color:#17191c;max-width:620px">' +
+        '<p>Hola ' + txt_(com.nombre) + ',</p><p><b>' + txt_(u.nombre) + '</b> quiere darte una visita que se sale de tus reglas de agenda:</p>' +
+        '<p style="margin:0 0 6px"><b>' + fechaLarga_(pend.fecha, pend.hora) + '</b> · ' + sitio + '</p>' +
+        '<p style="margin:0 0 14px;color:#8a520b">' + pend.fallos.join('; ') + '.</p>' +
+        '<p>La ficha está guardada <b>sin adjudicar</b>. Si la aceptas, adjudícatela en Captaciones («Adjudicar») o en la ficha del cliente. Si no, dile a ' +
+        txt_(u.nombre) + ' que busque otra hora.</p>' +
+        '<p style="margin:22px 0"><a href="' + WEB_CRM + '#cliente/' + txt_(cap.cliente_id) + '" style="background:#b4fa1e;color:#17191c;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:700">Abrir la ficha</a></p>' +
+        '<p style="color:#5b6159;font-size:12px">Aviso automático del CRM.</p></div>'});
+    registrar_(u, 'pedir_autorizacion_cita', 'CAPTACIONES', cap.id, pend.fallos.join('; '));
+  } catch (e) { /* sin correo: la ficha queda igualmente sin adjudicar y con la nota */ }
 }
 
 /** Para el aviso al guardar una captación. */
@@ -8396,12 +8489,13 @@ function accReagendarCita_(u, p) {
   const motivo = txt_(p.motivo);
   const nota = 'Reagendada del ' + fechaLarga_(cap.fecha, cap.hora_cita) + ' al ' + fechaLarga_(fecha, hora) +
     (motivo ? ' (' + motivo + ')' : '') + '.';
-  apuntarCambioCita_(u, cap, 'reagendada', {fecha: fecha, hora_cita: hora, motivo: motivo});
-  const r = accGuardarCaptacion_(u, {captacion: {id: cap.id, cliente_id: cap.cliente_id, fecha: fecha, hora_cita: hora,
-    estado_cita: p.confirmada ? 'confirmada' : 'pendiente', resultado: 'pendiente',
+  const r = accGuardarCaptacion_(u, {pedir_autorizacion: !!p.pedir_autorizacion, captacion: {id: cap.id, cliente_id: cap.cliente_id,
+    fecha: fecha, hora_cita: hora, estado_cita: p.confirmada ? 'confirmada' : 'pendiente', resultado: 'pendiente',
     notas: (txt_(cap.notas) ? txt_(cap.notas) + '\n' : '') + nota, _cambio_apuntado: true}});
+  if (!r.ok) return r;
+  apuntarCambioCita_(u, cap, 'reagendada', {fecha: fecha, hora_cita: hora, motivo: motivo});
   registrar_(u, 'reagendar_cita', 'CAPTACIONES', cap.id, nota);
-  return {ok: true, captacion: r.captacion, aviso_agenda: r.aviso_agenda || ''};
+  return {ok: true, captacion: r.captacion, aviso_agenda: r.aviso_agenda || '', pendiente_autorizacion: r.pendiente_autorizacion || ''};
 }
 
 /** Cancelar: la cita no se hace; queda el motivo para las estadísticas. */

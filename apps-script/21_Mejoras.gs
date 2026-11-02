@@ -60,7 +60,35 @@ function bloqueosAgenda_() {
   let b = {};
   try { b = JSON.parse(txt_(c.agenda_bloqueos) || '{}'); } catch (e) { b = {}; }
   if (!txt_(c.agenda_bloqueos)) b = {'U-000004': {dias: [5], nota: 'Viernes sin visitas (Nando)'}};
+  /* Reglas de Nando (02/11/2026): como mucho 3 visitas al día, los viernes
+     nada y ninguna después de las 17:30, salvo que él lo autorice. */
+  const n = b['U-000004'] = b['U-000004'] || {};
+  if (!n.dias) n.dias = [5];
+  if (n.max_dia === undefined) n.max_dia = 3;
+  if (n.hasta === undefined) n.hasta = '17:30';
   return b;
+}
+
+const NOMBRE_DIA_ = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+
+/**
+ * Las reglas fijas de la agenda de un comercial: días sin visitas, hora
+ * límite y máximo de visitas al día. Devuelve lo que no cumple (vacío si cumple).
+ */
+function reglasAgenda_(comercialId, fecha, hora, salvoId) {
+  const fallos = [];
+  fecha = txt_(fecha).slice(0, 10);
+  const r = bloqueosAgenda_()[txt_(comercialId)];
+  if (!r || !fecha) return fallos;
+  const dia = new Date(fecha + 'T12:00:00').getDay();
+  if ((r.dias || []).indexOf(dia) >= 0) fallos.push('los ' + NOMBRE_DIA_[dia] + ' no tiene visitas');
+  const ini = minutosHora_(hora);
+  if (txt_(r.hasta) && ini >= 0 && ini > minutosHora_(r.hasta)) fallos.push('no tiene visitas después de las ' + txt_(r.hasta));
+  if (num_(r.max_dia) > 0) {
+    const n = citasDelDia_(comercialId, fecha, salvoId).length;
+    if (n >= num_(r.max_dia)) fallos.push('ese día ya tiene ' + n + ' visitas y como mucho son ' + num_(r.max_dia));
+  }
+  return fallos;
 }
 
 /* Orden de Nando (02/11/2026): una visita dura como mínimo 1 h 45 min, y entre
@@ -128,9 +156,8 @@ function revisarCita_(comercialId, fecha, hora, punto, salvoId) {
   const avisos = [];
   fecha = txt_(fecha).slice(0, 10);
   if (!comercialId || !fecha) return {texto: '', detalle: []};
-  const bloq = bloqueosAgenda_()[txt_(comercialId)];
-  const dia = new Date(fecha + 'T12:00:00').getDay();
-  if (bloq && (bloq.dias || []).indexOf(dia) >= 0) avisos.push(txt_(bloq.nota) || 'Ese día está bloqueado para ese comercial.');
+  const reglas = reglasAgenda_(comercialId, fecha, hora, salvoId);
+  if (reglas.length) avisos.push('Sin su autorización no se puede: ' + reglas.join('; ') + '.');
   const ini = minutosHora_(hora);
   const detalle = [];
   if (ini >= 0) {
@@ -156,6 +183,27 @@ function revisarCita_(comercialId, fecha, hora, punto, salvoId) {
     }
   }
   return {texto: avisos.join(' '), detalle: detalle};
+}
+
+/** Correo al comercial para que autorice una cita que se sale de sus reglas. */
+function pedirAutorizacionCita_(u, cap, pend) {
+  try {
+    const com = leer_('USUARIOS').filter(function (x) { return String(x.id) === String(pend.comercial_id); })[0];
+    if (!com || !txt_(com.email)) return;
+    const cli = leer_('CLIENTES').filter(function (c) { return String(c.id) === String(cap.cliente_id); })[0] || {};
+    const sitio = [txt_(cli.direccion), txt_(cli.municipio)].filter(String).join(', ') || 'un cliente';
+    MailApp.sendEmail({to: txt_(com.email), name: 'CRM · ZERO WATTIOS',
+      subject: 'Autoriza una visita · ' + fechaLarga_(pend.fecha, pend.hora) + ' · ' + sitio,
+      htmlBody: '<div style="font-family:Arial,sans-serif;font-size:15px;color:#17191c;max-width:620px">' +
+        '<p>Hola ' + txt_(com.nombre) + ',</p><p><b>' + txt_(u.nombre) + '</b> quiere darte una visita que se sale de tus reglas de agenda:</p>' +
+        '<p style="margin:0 0 6px"><b>' + fechaLarga_(pend.fecha, pend.hora) + '</b> · ' + sitio + '</p>' +
+        '<p style="margin:0 0 14px;color:#8a520b">' + pend.fallos.join('; ') + '.</p>' +
+        '<p>La ficha está guardada <b>sin adjudicar</b>. Si la aceptas, adjudícatela en Captaciones («Adjudicar») o en la ficha del cliente. Si no, dile a ' +
+        txt_(u.nombre) + ' que busque otra hora.</p>' +
+        '<p style="margin:22px 0"><a href="' + WEB_CRM + '#cliente/' + txt_(cap.cliente_id) + '" style="background:#b4fa1e;color:#17191c;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:700">Abrir la ficha</a></p>' +
+        '<p style="color:#5b6159;font-size:12px">Aviso automático del CRM.</p></div>'});
+    registrar_(u, 'pedir_autorizacion_cita', 'CAPTACIONES', cap.id, pend.fallos.join('; '));
+  } catch (e) { /* sin correo: la ficha queda igualmente sin adjudicar y con la nota */ }
 }
 
 /** Para el aviso al guardar una captación. */

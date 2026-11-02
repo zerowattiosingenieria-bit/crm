@@ -73,12 +73,13 @@ function accReagendarCita_(u, p) {
   const motivo = txt_(p.motivo);
   const nota = 'Reagendada del ' + fechaLarga_(cap.fecha, cap.hora_cita) + ' al ' + fechaLarga_(fecha, hora) +
     (motivo ? ' (' + motivo + ')' : '') + '.';
-  apuntarCambioCita_(u, cap, 'reagendada', {fecha: fecha, hora_cita: hora, motivo: motivo});
-  const r = accGuardarCaptacion_(u, {captacion: {id: cap.id, cliente_id: cap.cliente_id, fecha: fecha, hora_cita: hora,
-    estado_cita: p.confirmada ? 'confirmada' : 'pendiente', resultado: 'pendiente',
+  const r = accGuardarCaptacion_(u, {pedir_autorizacion: !!p.pedir_autorizacion, captacion: {id: cap.id, cliente_id: cap.cliente_id,
+    fecha: fecha, hora_cita: hora, estado_cita: p.confirmada ? 'confirmada' : 'pendiente', resultado: 'pendiente',
     notas: (txt_(cap.notas) ? txt_(cap.notas) + '\n' : '') + nota, _cambio_apuntado: true}});
+  if (!r.ok) return r;
+  apuntarCambioCita_(u, cap, 'reagendada', {fecha: fecha, hora_cita: hora, motivo: motivo});
   registrar_(u, 'reagendar_cita', 'CAPTACIONES', cap.id, nota);
-  return {ok: true, captacion: r.captacion, aviso_agenda: r.aviso_agenda || ''};
+  return {ok: true, captacion: r.captacion, aviso_agenda: r.aviso_agenda || '', pendiente_autorizacion: r.pendiente_autorizacion || ''};
 }
 
 /** Cancelar: la cita no se hace; queda el motivo para las estadísticas. */
