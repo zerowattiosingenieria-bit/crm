@@ -77,6 +77,9 @@ const ESQUEMA = [
   "GASTOS" => ['id', 'operacion_id', 'categoria', 'proveedor', 'concepto', 'importe', 'iva_pct', 'fecha', 'estado_pago', 'fecha_pago', 'factura_proveedor', 'creado', 'creado_por', 'notas'],
   "SEGUIMIENTO" => ['id', 'cliente_id', 'operacion_id', 'usuario_id', 'fecha', 'canal', 'nota', 'proximo_paso', 'proxima_fecha', 'estado_resultante', 'origen', 'creado'],
   "CAPTACIONES" => ['id', 'cliente_id', 'captador_id', 'fecha', 'hora_cita', 'estado_cita', 'tecnologia', 'comercial_id', 'resultado', 'fecha_resultado', 'operacion_id', 'interes', 'notas', 'creado'],
+  /* 02/11/2026: cada cita reagendada o cancelada (estadísticas) y el histórico de cambios de cada lead. */
+  "CITAS_CAMBIOS" => ['id', 'captacion_id', 'cliente_id', 'captador_id', 'comercial_id', 'tipo', 'fecha_antes', 'hora_antes', 'fecha_nueva', 'hora_nueva', 'motivo', 'usuario_id', 'creado'],
+  "CAMBIOS" => ['id', 'fecha', 'usuario_id', 'cliente_id', 'entidad', 'entidad_id', 'campo', 'antes', 'despues'],
   "PARTES" => ['id', 'fecha', 'usuario_id', 'rol', 'visitas', 'puertas', 'fichas', 'sentadas', 'sentadas_detalle', 'ventas', 'importe_vendido', 'resumen', 'analisis', 'propuestas_aplicadas', 'estado', 'creado', 'modificado'],
   "NOMINAS" => ['id', 'usuario_id', 'periodo', 'bruto', 'dietas', 'comisiones', 'otros', 'bruto_total', 'irpf_pct', 'irpf', 'ss_pct', 'ss', 'neto', 'estado', 'fecha_pago', 'url', 'archivo_id', 'archivo_nombre', 'subida_por', 'subida_fecha', 'detalle', 'notas', 'creado'],
   "JORNADAS" => ['id', 'usuario_id', 'fecha', 'tipo', 'horas', 'dietas', 'comisiones', 'concepto', 'notas'],

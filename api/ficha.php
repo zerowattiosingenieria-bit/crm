@@ -89,7 +89,8 @@ function enlazadosDe_($clienteId): array {
 /* Cuántas cosas cuelgan de cada cliente, leyendo cada tabla una sola vez. */
 function conteoEnlazados_(): array {
   $r = [];
-  foreach (tablasDeCliente_() as $t) {
+  /* El histórico no cuenta como «cosas enlazadas»: no impide borrar una ficha. */
+  foreach (array_diff(tablasDeCliente_(), ['CAMBIOS', 'CITAS_CAMBIOS']) as $t) {
     foreach (leer_($t) as $x) {
       $k = txt_($x['cliente_id'] ?? '');
       if ($k === '') continue;

@@ -144,7 +144,10 @@ function acciones_(): array {
     /* Un cliente, una ficha (22_Ficha.gs → ficha.php) */
     'duplicados' => 'accDuplicados_',
     'fusionarClientes' => 'accFusionarClientes_',
-    'recordarCRM' => 'accRecordarCRM_', 'recordatorios' => 'accRecordatorios_'
+    'recordarCRM' => 'accRecordarCRM_', 'recordatorios' => 'accRecordatorios_',
+    /* Reagendar y cancelar citas, estadísticas e histórico del lead (estadisticas.php, historial.php) */
+    'reagendarCita' => 'accReagendarCita_', 'cancelarCita' => 'accCancelarCita_', 'estadisticas' => 'accEstadisticas_',
+    'historialCambios' => 'accHistorialCambios_'
   ];
 }
 
@@ -155,6 +158,7 @@ function despachar_($p): array {
   $p = is_array($p) ? $p : [];
   $accion = txt_($p['accion'] ?? '');
   if ($accion === 'ping') return ['ok' => true, 'version' => VERSION, 'servidor' => ahora_()];
+  asegurarEsquema_();
   empezarPeticion_($p, $accion);
   try {
     $r = atender_($p, $accion);
@@ -163,6 +167,21 @@ function despachar_($p): array {
   }
   cerrarPeticion_($r);
   return $r;
+}
+
+/**
+ * Si el ESQUEMA ha cambiado (despliegue nuevo con tablas o columnas nuevas),
+ * la primera petición crea lo que falta. Se mira con una huella guardada:
+ * una lectura de una propiedad por petición.
+ */
+function asegurarEsquema_(): void {
+  try {
+    $huella = md5(json_encode(ESQUEMA));
+    if (prop_('ESQUEMA_HUELLA') === $huella) return;
+    require_once __DIR__ . '/esquema.php';
+    instalarEsquema_();
+    setProp_('ESQUEMA_HUELLA', $huella);
+  } catch (Throwable $e) { error_log('CRM esquema: ' . $e->getMessage()); }
 }
 
 function atender_(array $p, string $accion): array {

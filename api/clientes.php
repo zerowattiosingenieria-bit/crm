@@ -85,6 +85,7 @@ function accGuardarCliente_(array $u, array $p): array {
     }
     if (txt_($cambios['estado'] ?? '') !== '' && !mismo_($cambios['estado'], $actual['estado'])) $cambios['fecha_estado'] = hoyISO_();
     $r = actualizar_('CLIENTES', $d['id'], $cambios);
+    apuntarHistorial_($u, 'CLIENTES', $d['id'], $d['id'], $actual, $cambios);
     registrar_($u, 'editar_cliente', 'CLIENTES', $d['id'], txt_($cambios['estado'] ?? '') !== '' ? $cambios['estado'] : '');
     /* Si al corregir el teléfono o la calle resulta que es otro cliente que ya
        estaba, se avisa (no se bloquea: dirección decide si se fusionan). */
@@ -115,6 +116,7 @@ function accGuardarCliente_(array $u, array $p): array {
   $nuevo['estado'] = txt_($nuevo['estado'] ?? '') !== '' ? $nuevo['estado'] : ($u['rol'] === 'captador' ? 'captado' : 'nuevo');
   $nuevo['fecha_estado'] = hoyISO_();
   $r = insertar_('CLIENTES', $nuevo);
+  apuntarHistorial_($u, 'CLIENTES', $r['id'], $r['id'], null, null, 'Ficha creada');
   registrar_($u, 'alta_cliente', 'CLIENTES', $r['id'], $r['nombre'] ?? '');
   return ['ok' => true, 'cliente' => clienteParaVer_($u, $r)];
 }
@@ -350,7 +352,10 @@ function accGuardarCaptacion_(array $u, array $p): array {
       if (in_array($k, ['id', 'nombre', 'comercial_id', 'captador_id', 'estado', 'origen'], true)) continue;
       if (in_array($k, ESQUEMA['CLIENTES'], true) && txt_($cli[$k]) === '' && txt_($d['cliente'][$k]) !== '') $relleno[$k] = $d['cliente'][$k];
     }
-    if (count($relleno)) actualizar_('CLIENTES', $cli['id'], $relleno);
+    if (count($relleno)) {
+      actualizar_('CLIENTES', $cli['id'], $relleno);
+      apuntarHistorial_($u, 'CLIENTES', $cli['id'], $cli['id'], $cli, $relleno);
+    }
   }
 
   $campos = ['fecha', 'hora_cita', 'estado_cita', 'tecnologia', 'comercial_id', 'resultado',
@@ -359,7 +364,10 @@ function accGuardarCaptacion_(array $u, array $p): array {
     $anterior = buscar1_('CAPTACIONES', fn($x) => mismo_($x['id'], $d['id']));
     $cambios = [];
     foreach ($campos as $c) if (array_key_exists($c, $d)) $cambios[$c] = $d[$c];
+    /* Cambio de día o cancelación por cualquier camino: cuenta para las estadísticas. */
+    if (empty($d['_cambio_apuntado'])) apuntarCambiosDeCaptacion_($u, $anterior, $anterior ? array_merge($anterior, $cambios) : null);
     $r = actualizar_('CAPTACIONES', $d['id'], $cambios);
+    if ($anterior) apuntarHistorial_($u, 'CAPTACIONES', $d['id'], $cli['id'], $anterior, $cambios);
     if ($anterior && txt_($cambios['resultado'] ?? '') !== '' && normal_($cambios['resultado']) !== normal_($anterior['resultado'])) {
       avisarCaptador_($r, $cli);
     }
@@ -393,6 +401,9 @@ function accGuardarCaptacion_(array $u, array $p): array {
   $nueva['fecha'] = txt_($nueva['fecha']) !== '' ? $nueva['fecha'] : hoyISO_();
   $nueva['resultado'] = txt_($nueva['resultado']) !== '' ? $nueva['resultado'] : 'pendiente';
   $r = insertar_('CAPTACIONES', $nueva);
+  $comNombre = txt_($r['comercial_id']) !== '' ? txt_((buscar1_('USUARIOS', fn($x) => mismo_($x['id'], $r['comercial_id'])) ?? [])['nombre'] ?? '') : '';
+  apuntarHistorial_($u, 'CAPTACIONES', $r['id'], $cli['id'], null, null, 'Cita nueva para el ' . fechaLarga_($r['fecha'], $r['hora_cita']) .
+    ($comNombre !== '' ? ' con ' . $comNombre : ''));
 
   $cambiosCliente = ['modificado' => ahora_(), 'modificado_por' => $u['id']];
   /* Una cita nueva no hace retroceder a un cliente que ya va por delante. */
@@ -405,7 +416,9 @@ function accGuardarCaptacion_(array $u, array $p): array {
   if (txt_($nueva['fecha']) !== '') { $cambiosCliente['proxima_accion'] = 'Sentada concertada'; $cambiosCliente['proxima_fecha'] = $nueva['fecha']; }
   actualizar_('CLIENTES', $cli['id'], $cambiosCliente);
   registrar_($u, 'alta_captacion', 'CAPTACIONES', $r['id'], $cli['nombre']);
-  return ['ok' => true, 'captacion' => $r, 'aviso_agenda' => choqueAgenda_($r), 'duplicado' => $avisoDup,
+  /* Dos captadores en la misma zona (menos de 200 m): correo a los dos y a dirección. */
+  $avisoZona = avisoZonaCaptacion_($r);
+  return ['ok' => true, 'captacion' => $r, 'aviso_agenda' => choqueAgenda_($r), 'duplicado' => $avisoDup, 'aviso_zona' => $avisoZona,
           'aviso_duplicado' => $avisoDup ? 'Este cliente ya estaba en el CRM (' . $avisoDup['etiqueta'] . ', ' . $avisoDup['id'] .
             '): la cita se ha apuntado en su ficha, sin crear otra.' : ''];
 }
