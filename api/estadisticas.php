@@ -383,16 +383,25 @@ function accCoordenadasZona_(array $u, array $p): array {
   $desde = sumarDias_(hoyISO_(), -DIAS_ZONA);
   $clientes = indexar_(leer_('CLIENTES'), 'id');
   $vistos = []; $pendientes = [];
+  /* Los que Google no sabe situar en el portal no se vuelven a preguntar en 30 días. */
+  $fallidos = leerProp_('zona_sin_coordenadas', []);
+  if (!is_array($fallidos)) $fallidos = [];
   foreach (leer_('CAPTACIONES') as $k) {
     $alta = trozo_($k['creado'] ?? '', 0, 10) ?: trozo_($k['fecha'] ?? '', 0, 10);
     $c = $clientes[txt_($k['cliente_id'])] ?? null;
     if (!$c || txt_($k['captador_id']) === '' || $alta === '' || $alta < $desde || isset($vistos[$c['id']]) || coordenadas_($c['coordenadas'] ?? '')) continue;
+    if (!empty($fallidos[txt_($c['id'])]) && diasEntre_($fallidos[txt_($c['id'])], hoyISO_()) < 30) continue;
     $vistos[$c['id']] = 1;
     $pendientes[] = $c;
   }
   $hechos = 0; $sin = 0;
   $tanda = array_slice($pendientes, 0, $limite);
-  foreach ($tanda as $c) { if (coordenadasCliente_($c)) $hechos++; else $sin++; dormir_(100); }
+  foreach ($tanda as $c) {
+    if (coordenadasCliente_($c)) $hechos++;
+    else { $sin++; $fallidos[txt_($c['id'])] = hoyISO_(); }
+    dormir_(100);
+  }
+  guardarProp_('zona_sin_coordenadas', $fallidos ?: new stdClass());
   registrar_($u, 'coordenadas_zona', 'CLIENTES', '', $hechos . ' de ' . count($tanda));
   return ['ok' => true, 'hechos' => $hechos, 'sin_precision' => $sin, 'quedan' => max(0, count($pendientes) - count($tanda))];
 }
