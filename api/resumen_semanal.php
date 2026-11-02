@@ -349,6 +349,8 @@ function vencidosDe_(array $u, string $hoy): array {
     foreach ($clientes as $c) {
       if (txt_($c['comercial_id']) !== $id) continue;
       if (in_array(normal_($c['estado']), ['ganado', 'perdido'], true)) continue;
+      /* La «Sentada concertada» automática y los que ya compraron no son seguimientos pendientes. */
+      if (normal_($c['proxima_accion']) === 'sentada concertada' || yaCompro_($c)) continue;
       $f = trozo_($c['proxima_fecha'], 0, 10);
       if ($f !== '' && strcmp($f, $hoy) < 0) $lista[] = ['fecha' => $f, 'tipo' => 'Seguimiento', 'nombre' => $c['nombre'],
         'texto' => txt_($c['proxima_accion']) ?: 'seguimiento'];
@@ -511,4 +513,17 @@ function avisoVencidos($soloA = null): array {
 function api_etiqueta_($v): string {
   $m = ['sentada' => 'sentada', 'potencial' => 'visita con potencial', 'venta' => 'venta'];
   return $m[normal_($v)] ?? txt_($v);
+}
+
+/** ¿Este cliente ya ha comprado? Operación firmada o más adelante, o una cita con venta. */
+function yaCompro_(array $c): bool {
+  static $v = null;
+  if (normal_($c['estado'] ?? '') === 'ganado') return true;
+  if ($v === null) {
+    $v = [];
+    foreach (leer_('OPERACIONES') as $o)
+      if (in_array(normal_($o['estado']), ['firmada', 'tramite', 'material', 'instalacion', 'instalada', 'legalizada', 'cerrada'], true)) $v[txt_($o['cliente_id'])] = 1;
+    foreach (leer_('CAPTACIONES') as $k) if (normal_($k['resultado']) === 'venta') $v[txt_($k['cliente_id'])] = 1;
+  }
+  return !empty($v[txt_($c['id'])]);
 }

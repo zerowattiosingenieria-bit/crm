@@ -224,6 +224,12 @@ function sincronizarCaptacionCliente_(array $u, ?array $cap, ?array $cli): void 
     $cambios['estado'] = $nuevo;
     $cambios['fecha_estado'] = hoyISO_();
   }
+  /* Con la visita hecha (o caída), la «Sentada concertada» automática deja de ser el próximo paso. */
+  if ($res !== '' && $res !== 'pendiente' && normal_($cli['proxima_accion'] ?? '') === 'sentada concertada' &&
+      strcmp(trozo_($cli['proxima_fecha'] ?? '', 0, 10), trozo_($cap['fecha'] ?? '', 0, 10) ?: hoyISO_()) <= 0) {
+    $cambios['proxima_accion'] = '';
+    $cambios['proxima_fecha'] = '';
+  }
   if (count($cambios)) {
     $cambios['modificado'] = ahora_();
     $cambios['modificado_por'] = $u['id'];

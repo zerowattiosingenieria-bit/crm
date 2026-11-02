@@ -415,7 +415,9 @@ function guardarCaptacionSinReglas_(array $u, array $p): array {
     if (empty($d['_cambio_apuntado'])) apuntarCambiosDeCaptacion_($u, $anterior, $anterior ? array_merge($anterior, $cambios) : null);
     $r = actualizar_('CAPTACIONES', $d['id'], $cambios);
     if ($anterior) apuntarHistorial_($u, 'CAPTACIONES', $d['id'], $cli['id'], $anterior, $cambios);
-    if ($anterior && txt_($cambios['resultado'] ?? '') !== '' && normal_($cambios['resultado']) !== normal_($anterior['resultado'])) {
+    /* Si el resultado lo pone el propio captador, no se le avisa a él mismo. */
+    if ($anterior && txt_($cambios['resultado'] ?? '') !== '' && normal_($cambios['resultado']) !== normal_($anterior['resultado']) &&
+        !mismo_($u['id'], $r['captador_id'] ?? '')) {
       avisarCaptador_($r, $cli);
     }
     sincronizarCaptacionCliente_($u, $r, buscar1_('CLIENTES', fn($c) => mismo_($c['id'], $cli['id'])));
