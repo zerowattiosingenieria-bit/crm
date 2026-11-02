@@ -134,7 +134,11 @@ function acciones_() {
     pedirCambios: accPedirCambios_,
     casarAuto: accCasarAuto_,
     alertasBanco: accAlertasBanco_,
-    catastro: accCatastro_
+    catastro: accCatastro_,
+
+    /* Un cliente, una ficha (22_Ficha.gs) */
+    duplicados: accDuplicados_,
+    fusionarClientes: accFusionarClientes_
   };
 }
 

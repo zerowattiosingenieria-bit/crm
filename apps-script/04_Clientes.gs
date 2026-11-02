@@ -82,12 +82,29 @@ function accGuardarCliente_(u, p) {
     if (cambios.estado && cambios.estado !== actual.estado) cambios.fecha_estado = hoyISO_();
     const r = actualizar_('CLIENTES', d.id, cambios);
     registrar_(u, 'editar_cliente', 'CLIENTES', d.id, cambios.estado || '');
-    return {ok: true, cliente: clienteParaVer_(u, r)};
+    /* Si al corregir el teléfono o la calle resulta que es otro cliente que ya
+       estaba, se avisa (no se bloquea: dirección decide si se fusionan). */
+    let avisoDup = null;
+    if (cambios.telefono !== undefined || cambios.direccion !== undefined) {
+      const dup = buscarDuplicado_(r, r.id);
+      if (dup) avisoDup = etiquetaDuplicado_(u, dup);
+    }
+    return {ok: true, cliente: clienteParaVer_(u, r), duplicado: avisoDup};
   }
 
   const nuevo = {creado: hoyISO_(), creado_por: u.id, modificado: ahora_(), modificado_por: u.id};
   campos.forEach(function (c) { if (d[c] !== undefined) nuevo[c] = d[c]; });
   if (!txt_(nuevo.nombre)) return {ok: false, error: 'El cliente necesita un nombre.'};
+  /* Un cliente, una ficha: si ya está por teléfono o dirección, no se crea
+     otro. Solo dirección puede forzarlo (dos viviendas del mismo dueño). */
+  const dup = buscarDuplicado_(nuevo);
+  if (dup && !(d.forzar && per.editarTodo)) {
+    const info = etiquetaDuplicado_(u, dup);
+    return {ok: false, duplicado: info,
+            error: 'Ya existe un cliente con ese ' + dup.por + ': ' + info.etiqueta + ' (' + info.id + ')' +
+                   (info.visible ? '. Ábrelo y apunta ahí lo nuevo.' : ', que lleva ' + (info.comercial || 'otra persona') +
+                   '. Pide a dirección que te lo pase.')};
+  }
   /* Quien da de alta se queda el cliente, salvo que un jefe diga otra cosa. */
   if (u.rol === 'comercial') nuevo.comercial_id = u.id;
   if (u.rol === 'captador') { nuevo.captador_id = u.id; nuevo.origen = nuevo.origen || 'captacion'; }
@@ -102,6 +119,12 @@ function accBorrarCliente_(u, p) {
   exigir_(u, 'editarTodo');
   const cli = leer_('CLIENTES').filter(function (c) { return String(c.id) === String(p.id); })[0];
   if (!cli) return {ok: false, error: 'No existe.'};
+  /* Borrar una ficha con cosas colgando dejaba apuntes y proyectos sueltos. */
+  const enl = enlazadosDe_(p.id);
+  const n = Object.keys(enl).reduce(function (a, k) { return a + enl[k]; }, 0);
+  if (n) return {ok: false, enlazados: enl,
+    error: 'Tiene ' + n + ' cosas enlazadas (' + Object.keys(enl).map(function (k) { return enl[k] + ' ' + k.toLowerCase(); }).join(', ') +
+           '). Si es un duplicado, fusiónalo con la ficha buena en vez de borrarlo.'};
   borrar_('CLIENTES', p.id);
   registrar_(u, 'borrar_cliente', 'CLIENTES', p.id, cli.nombre);
   return {ok: true};
@@ -178,7 +201,7 @@ function sincronizarEstadoCliente_(u, op) {
       modificado: ahora_(), modificado_por: u.id});
   }
   /* Si venía de una captación, se marca cómo acabó. */
-  const cap = leer_('CAPTACIONES').filter(function (c) { return String(c.cliente_id) === String(op.cliente_id); })[0];
+  const cap = captacionActual_(op.cliente_id, op.id);
   if (cap) {
     const res = nuevo === 'ganado' ? 'venta' : (nuevo === 'perdido' ? 'no_sentada' : 'sentada');
     if (normal_(cap.resultado) !== res) {
@@ -288,14 +311,35 @@ function accGuardarCaptacion_(u, p) {
   let clienteId = d.cliente_id;
 
   /* Un captador puede crear cliente y captación de una vez. */
+  let avisoDup = null;
+  let yaExistia = false;
   if (!clienteId && d.cliente) {
     const res = accGuardarCliente_(u, {cliente: d.cliente});
-    if (!res.ok) return res;
-    clienteId = res.cliente.id;
+    if (!res.ok && res.duplicado) {
+      /* Ya estaba: la cita se apunta en su ficha, no en una nueva. */
+      clienteId = res.duplicado.id;
+      avisoDup = res.duplicado;
+      yaExistia = true;
+    } else if (!res.ok) {
+      return res;
+    } else {
+      clienteId = res.cliente.id;
+    }
   }
   const cli = leer_('CLIENTES').filter(function (c) { return String(c.id) === String(clienteId); })[0];
   if (!cli) return {ok: false, error: 'Falta el cliente de la captación.'};
-  if (!veCliente_(u, cli)) return {ok: false, error: 'Ese cliente no es tuyo.'};
+  if (!yaExistia && !veCliente_(u, cli)) return {ok: false, error: 'Ese cliente no es tuyo.'};
+  if (yaExistia && d.id) return {ok: false, error: 'Ese cliente no es tuyo.'};
+  /* Lo que trae la ficha nueva y la vieja no tenía (m², gastos…) se aprovecha;
+     lo que ya estaba no se pisa. */
+  if (yaExistia) {
+    const relleno = {};
+    Object.keys(d.cliente).forEach(function (k) {
+      if (['id', 'nombre', 'comercial_id', 'captador_id', 'estado', 'origen'].indexOf(k) >= 0) return;
+      if (ESQUEMA.CLIENTES.indexOf(k) >= 0 && !txt_(cli[k]) && txt_(d.cliente[k])) relleno[k] = d.cliente[k];
+    });
+    if (Object.keys(relleno).length) actualizar_('CLIENTES', cli.id, relleno);
+  }
 
   const campos = ['fecha','hora_cita','estado_cita','tecnologia','comercial_id','resultado',
                   'fecha_resultado','operacion_id','interes','notas'];
@@ -307,6 +351,7 @@ function accGuardarCaptacion_(u, p) {
     if (anterior && txt_(cambios.resultado) && normal_(cambios.resultado) !== normal_(anterior.resultado)) {
       avisarCaptador_(r, cli);
     }
+    sincronizarCaptacionCliente_(u, r, leer_('CLIENTES').filter(function (c) { return String(c.id) === String(cli.id); })[0]);
 
     /* Adjudicar la captación a un comercial es lo que hace que ese comercial
        la vea: el cliente pasa a ser suyo. Si se quita, deja de verla. */
@@ -335,12 +380,20 @@ function accGuardarCaptacion_(u, p) {
   nueva.resultado = nueva.resultado || 'pendiente';
   const r = insertar_('CAPTACIONES', nueva);
 
-  const cambiosCliente = {estado: 'cita', fecha_estado: hoyISO_(), modificado: ahora_(), modificado_por: u.id};
+  const cambiosCliente = {modificado: ahora_(), modificado_por: u.id};
+  /* Una cita nueva no hace retroceder a un cliente que ya va por delante. */
+  if (['ganado', 'propuesta', 'negociando', 'sentada'].indexOf(normal_(cli.estado)) < 0) {
+    cambiosCliente.estado = 'cita';
+    cambiosCliente.fecha_estado = hoyISO_();
+  }
+  if (txt_(nueva.interes)) cambiosCliente.interes = nueva.interes;
   if (nueva.comercial_id) cambiosCliente.comercial_id = nueva.comercial_id;
   if (nueva.fecha) { cambiosCliente.proxima_accion = 'Sentada concertada'; cambiosCliente.proxima_fecha = nueva.fecha; }
   actualizar_('CLIENTES', cli.id, cambiosCliente);
   registrar_(u, 'alta_captacion', 'CAPTACIONES', r.id, cli.nombre);
-  return {ok: true, captacion: r, aviso_agenda: choqueAgenda_(r)};
+  return {ok: true, captacion: r, aviso_agenda: choqueAgenda_(r), duplicado: avisoDup,
+          aviso_duplicado: avisoDup ? 'Este cliente ya estaba en el CRM (' + avisoDup.etiqueta + ', ' + avisoDup.id +
+            '): la cita se ha apuntado en su ficha, sin crear otra.' : ''};
 }
 
 /**
