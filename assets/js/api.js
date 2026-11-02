@@ -5,10 +5,11 @@
  * no sabe responder.
  */
 
-/* Dirección de la aplicación web publicada. Se puede dejar vacía y
-   configurarla desde la pantalla de entrada; queda guardada en el
-   dispositivo. */
-const ENDPOINT_POR_DEFECTO = '';
+/* Dirección del servidor del CRM. Desde el 02/11/2026 el CRM vive en
+   crm.zerowattios.com (PHP + MySQL en IONOS). Allí mismo el servidor
+   cambia esta línea por '/api/' al desplegar; la copia de GitHub Pages
+   llama a la dirección completa. */
+const ENDPOINT_POR_DEFECTO = 'https://crm.zerowattios.com/api/';
 
 const K_ENDPOINT = 'zw.crm.endpoint';
 const K_TOKEN = 'zw.crm.token';
@@ -30,6 +31,13 @@ export const estado = {
   cargado: false
 };
 
+/* Los equipos que tenían guardada la dirección del Apps Script de antes
+   pasan solos al servidor nuevo: esa dirección ya no se usa. */
+try {
+  if (/^https:\/\/script\.google\.com\//.test(localStorage.getItem(K_ENDPOINT) || '')) {
+    localStorage.removeItem(K_ENDPOINT);
+  }
+} catch (e) { /* modo incógnito */ }
 export const endpoint = () => localStorage.getItem(K_ENDPOINT) || ENDPOINT_POR_DEFECTO;
 export const guardarEndpoint = url => localStorage.setItem(K_ENDPOINT, String(url || '').trim());
 export const token = () => localStorage.getItem(K_TOKEN) || '';

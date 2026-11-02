@@ -1,0 +1,295 @@
+<?php
+/**
+ * banco.php — Movimientos del banco.
+ *
+ * Se importa el extracto que baja el banco (CaixaBank y compañía) y el
+ * CRM lo clasifica solo. Sirve para dos cosas: ver de verdad qué entra y
+ * qué sale cada mes, y casar los cobros de los clientes con el dinero
+ * que ha llegado a la cuenta.
+ *
+ * (Traducción de 13_Banco.gs.)
+ */
+
+require_once __DIR__ . '/base.php';
+
+/* Palabras que aparecen en los conceptos del banco y qué significan. */
+const REGLAS_BANCO = [
+  /* Primero los movimientos entre cuentas propias: el dinero no sale de la
+     empresa, solo cambia de sitio, y si cuenta como gasto la estructura y los
+     impuestos salen inflados. */
+  ['categoria' => 'traspaso',         'claves' => ['traspaso para imp', 'traspaso entre cuentas',
+                                                   'traspaso a impuestos',
+                                                   'zero wattios', 'zero watios']],
+  ['categoria' => 'nominas',          'claves' => ['nomina', 'nóminas', 'nominas', 'retribucion auton',
+                                                   'retribución autón']],
+  ['categoria' => 'seguridad_social', 'claves' => ['tgss', 'cotizacion', 'seg social', 'seguridad social']],
+  ['categoria' => 'impuestos',        'claves' => ['aeat', 'hacienda', 'tributaria', 'iva ', 'irpf', 'modelo 3',
+                                                   'impuesto', 'tributos', 'ayto', 'ayuntamiento']],
+  ['categoria' => 'telefonia',        'claves' => ['digi', 'movistar', 'vodafone', 'orange', 'jazztel', 'telefonica',
+                                                   'yoigo', 'pepephone', 'telec']],
+  ['categoria' => 'ropa_epi',         'claves' => ['uniforme', 'ropa corpora', 'ropa de tra', 'bordados', 'decathlon',
+                                                   'workwear', 'epi', 'zara ', 'hm es']],
+  ['categoria' => 'marketing',        'claves' => ['vistaprint', 'serigrafia', 'persoregala', 'rotulacion',
+                                                   'publicidad', 'imprenta', 'regalo']],
+  ['categoria' => 'administracion',   'claves' => ['constituci', 'administracion dep', 'notaria', 'registro mercantil',
+                                                   'gestoria', 'asesoria']],
+  ['categoria' => 'montaje',          'claves' => ['greenfield', 'montaje', 'instalacion subcontrat']],
+  ['categoria' => 'proveedor',        'claves' => ['pago factura', 'pago oferta', 'pago ofert', 'pago pedido',
+                                                   'facturas abonadas', 'abono factura', 'proveedor',
+                                                   'pago presupuesto', 'presupu', 'pago proforma', 'proforma',
+                                                   'pago fianza', 'pago a cuenta', 'segundo pago', 'pago pendiente',
+                                                   'paga factura', 'pago cee', 'pago cite', 'pago 40',
+                                                   'pago 50', 'pago 60', 'pago 25', 'pago 75', 'domusat', 'obramat', 'sumsol', 'seissolar',
+                                                   'sunpower', 'lassolar', 'soyrenovable', 'polarstock',
+                                                   'rober gas', 'robert gas', 'profo',
+                                                   'leroy', 'bricomart', 'saltoki', 'escoda', 'suministros',
+                                                   'sun', 'solar', 'hanersun', 'solax', 'almacen']],
+  ['categoria' => 'servicios',        'claves' => ['jibble', 'google', 'microsoft', 'adobe', 'zoom', 'openai',
+                                                   'anthropic', 'canva', 'dominio', 'hosting', 'www.', 'suscripcion']],
+  ['categoria' => 'seguros',          'claves' => ['seguro', 'mapfre', 'allianz', 'axa', 'generali', 'legalitas',
+                                                   'asist.', 'mutua', 'pago mes enero le']],
+  ['categoria' => 'banco',            'claves' => ['comision', 'mantenimiento', 'intereses', 'v.negocios',
+                                                   'cuota t.', 'tarjeta cuota', 'p.serv', 'trf. ajena',
+                                                   'devolucion ajuste']],
+  /* Recibo periódico domiciliado del que solo llega el número de contrato. */
+  ['categoria' => 'financiacion',     'claves' => ['prestamo', 'leasing', 'renting', 'cuota prestamo', 'amortizacion',
+                                                   '8126000462718']],
+  ['categoria' => 'transporte',       'claves' => ['repsol', 'cepsa', 'galp', 'shell', 'bp ', 'gasolinera', 'peaje',
+                                                   'parking', 'autopista', 'renfe', 'iberia', 'combustible']],
+  ['categoria' => 'dietas',           'claves' => ['restaurante', 'cafeteria', 'bar ', 'hotel', 'menu', 'obm ',
+                                                   'dietas', 'dolmen', 'faro de', 'marbore', 'bermellon']]
+];
+
+function categoriaBanco_($concepto, $importe): string {
+  $c = normal_($concepto);
+  foreach (REGLAS_BANCO as $r) {
+    foreach ($r['claves'] as $clave) {
+      if (strpos($c, $clave) !== false) return $r['categoria'];
+    }
+  }
+  if (num_($importe) > 0) {
+    return preg_match('/(transferencia|transf|traspaso|ingreso|abono|su favor)/', $c)
+      ? 'cobro_cliente' : 'otros_ingresos';
+  }
+  return 'otros_gastos';
+}
+
+/* Coste fijo de tener la empresa abierta: lo que se paga haya o no obra.
+   El material y el montaje NO entran aquí, porque son coste de la
+   instalación, ni tampoco lo que todavía está sin clasificar. */
+const CATEGORIAS_ESTRUCTURA = ['nominas', 'seguridad_social', 'servicios', 'seguros',
+                               'banco', 'financiacion', 'transporte', 'dietas', 'telefonia',
+                               'ropa_epi', 'marketing', 'administracion'];
+/* Los impuestos salen aparte: el IVA no es un coste, es dinero que pasa por
+   la cuenta, y meterlo en el coste fijo desvirtúa el punto de equilibrio. */
+const CATEGORIAS_IMPUESTOS = ['impuestos'];
+
+/* Cuando el extracto no dice de qué cuenta viene, se supone la principal. */
+const CUENTA_POR_DEFECTO = 'CaixaBank';
+
+/** Importa movimientos ya troceados por el navegador. */
+function accImportarBanco_(array $u, array $p): array {
+  exigir_($u, 'finanzas');
+  $filas = $p['movimientos'] ?? [];
+  if (!is_array($filas) || !count($filas)) return ['ok' => false, 'error' => 'No ha llegado ningún movimiento.'];
+  $cuenta = txt_($p['cuenta'] ?? '') ?: CUENTA_POR_DEFECTO;
+  $pref = normal_($cuenta) === normal_(CUENTA_POR_DEFECTO) ? '' : normal_($cuenta) . '|';
+
+  /* El saldo entra en la clave: dos apuntes iguales el mismo día son dos
+     movimientos distintos y el saldo suele separarlos. Pero un cargo, su
+     devolución y el mismo cargo otra vez dejan el saldo igual las dos veces,
+     y los dos son de verdad. Por eso se cuentan las repeticiones: se compara
+     cuántas veces aparece cada apunte en el extracto contra cuántas hay ya
+     guardadas, y solo entra lo que sobra. Reimportar el mismo archivo sigue
+     sin duplicar nada. */
+  $guardadas = [];
+  foreach (leer_('BANCO') as $m) {
+    $base = preg_replace('/#\d+$/', '', txt_($m['clave']));
+    $guardadas[$base] = ($guardadas[$base] ?? 0) + 1;
+  }
+
+  $nuevos = [];
+  $entrantes = [];
+  $repetidos = 0;
+  foreach ($filas as $f) {
+    if (!is_array($f)) continue;
+    $fecha = txt_($f['fecha'] ?? '');
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) continue;
+    $importe = num_($f['importe'] ?? '');
+    $concepto = txt_($f['concepto'] ?? '');
+    /* La cuenta principal no lleva prefijo, para que las claves guardadas
+       antes de que existieran varias cuentas sigan valiendo y reimportar su
+       extracto no duplique nada. */
+    $base = $pref . $fecha . '|' . normal_($concepto) . '|' .
+            txt_(redondear_($importe, 2)) . '|' . txt_(redondear_(num_($f['saldo'] ?? ''), 2));
+    $vez = ($entrantes[$base] ?? 0) + 1;
+    $entrantes[$base] = $vez;
+    if ($vez <= ($guardadas[$base] ?? 0)) { $repetidos++; continue; }
+    $clave = $vez > 1 ? $base . '#' . $vez : $base;
+    $nuevos[] = [
+      'cuenta' => $cuenta,
+      'fecha' => $fecha, 'concepto' => $concepto, 'importe' => redondear_($importe, 2),
+      'saldo' => redondear_(num_($f['saldo'] ?? ''), 2),
+      'tipo' => $importe >= 0 ? 'ingreso' : 'gasto',
+      'categoria' => categoriaBanco_($concepto, $importe), 'manual' => 'no',
+      'operacion_id' => '', 'cobro_id' => '', 'gasto_id' => '', 'conciliado' => 'no',
+      'notas' => '', 'clave' => $clave, 'creado' => ahora_()
+    ];
+  }
+
+  if (count($nuevos)) insertarLote_('BANCO', $nuevos);
+  registrar_($u, 'importar_banco', 'BANCO', '', $cuenta . ': ' . count($nuevos) . ' nuevos, ' .
+             $repetidos . ' repetidos');
+  return ['ok' => true, 'cuenta' => $cuenta, 'nuevos' => count($nuevos), 'repetidos' => $repetidos,
+          'total' => count(leer_('BANCO'))];
+}
+
+/** Los movimientos y las cuentas que salen de ellos. */
+function accBanco_(array $u, array $p): array {
+  exigir_($u, 'finanzas');
+  $todos = ordenar_(leer_('BANCO'), fn($a, $b) => comparar_(txt_($b['fecha']), txt_($a['fecha'])));
+  $desde = txt_($p['desde'] ?? '') ?: '';
+  $hasta = txt_($p['hasta'] ?? '') ?: '';
+  $lista = array_values(array_filter($todos, function ($m) use ($desde, $hasta) {
+    return ($desde === '' || txt_($m['fecha']) >= $desde) && ($hasta === '' || txt_($m['fecha']) <= $hasta);
+  }));
+
+  $porMes = [];
+  $porCategoria = [];
+  foreach ($lista as $m) {
+    $mes = mesDe_(txt_($m['fecha']));
+    if (!isset($porMes[$mes])) $porMes[$mes] = ['mes' => $mes, 'ingresos' => 0, 'gastos' => 0, 'estructura' => 0,
+                                                 'impuestos' => 0, 'neto' => 0];
+    $imp = num_($m['importe']);
+    if ($imp >= 0) $porMes[$mes]['ingresos'] = redondear_($porMes[$mes]['ingresos'] + $imp, 2);
+    else {
+      $porMes[$mes]['gastos'] = redondear_($porMes[$mes]['gastos'] - $imp, 2);
+      if (in_array(txt_($m['categoria']), CATEGORIAS_ESTRUCTURA, true)) {
+        $porMes[$mes]['estructura'] = redondear_($porMes[$mes]['estructura'] - $imp, 2);
+      }
+      if (in_array(txt_($m['categoria']), CATEGORIAS_IMPUESTOS, true)) {
+        $porMes[$mes]['impuestos'] = redondear_($porMes[$mes]['impuestos'] - $imp, 2);
+      }
+    }
+    $porMes[$mes]['neto'] = redondear_($porMes[$mes]['ingresos'] - $porMes[$mes]['gastos'], 2);
+
+    $k = txt_($m['categoria']) ?: 'otros_gastos';
+    if (!isset($porCategoria[$k])) $porCategoria[$k] = ['categoria' => $k, 'importe' => 0, 'movimientos' => 0];
+    $porCategoria[$k]['importe'] = redondear_($porCategoria[$k]['importe'] + abs($imp), 2);
+    $porCategoria[$k]['movimientos'] += 1;
+  }
+
+  ksort($porMes, SORT_STRING);
+  $meses = array_values($porMes);
+  /* Los meses cerrados dicen cuánto cuesta de verdad tener la empresa abierta. */
+  $mesActual = mesDe_(hoyISO_());
+  $cerrados = array_slice(array_values(array_filter($meses, fn($m) => $m['mes'] < $mesActual)), -6);
+  $sumaEstructura = 0;
+  foreach ($cerrados as $m) $sumaEstructura += $m['estructura'];
+  $estructuraReal = count($cerrados) ? redondear_($sumaEstructura / count($cerrados), 2) : 0;
+
+  /* El saldo es el del último apunte de CADA cuenta; sumar el último de todos
+     daría el de una sola y la tesorería saldría corta. */
+  $porCuenta = [];
+  foreach ($todos as $m) {
+    $c = txt_($m['cuenta']) ?: CUENTA_POR_DEFECTO;
+    if (!isset($porCuenta[$c])) $porCuenta[$c] = ['cuenta' => $c, 'saldo' => num_($m['saldo']), 'fecha' => txt_($m['fecha']),
+                                                   'movimientos' => 0];
+    $porCuenta[$c]['movimientos'] += 1;
+  }
+  $cuentas = ordenar_(array_values($porCuenta), fn($a, $b) => $b['saldo'] <=> $a['saldo']);
+  $saldoTotal = 0;
+  foreach ($cuentas as $c) $saldoTotal += $c['saldo'];
+
+  $ultimo = $todos[0] ?? [];
+  $sinConciliar = array_values(array_filter($lista, function ($m) {
+    return num_($m['importe']) > 0 && normal_($m['conciliado']) !== 'si'; }));
+
+  return ['ok' => true,
+    'movimientos' => $lista,
+    'meses' => $meses,
+    'categorias' => ordenar_(array_values($porCategoria), fn($a, $b) => $b['importe'] <=> $a['importe']),
+    'cuentas' => $cuentas,
+    'saldo' => redondear_($saldoTotal, 2), 'fecha_saldo' => txt_($ultimo['fecha'] ?? ''),
+    'estructura_real' => $estructuraReal,
+    'estructura_config' => configNum_('coste_estructura_mes', 0),
+    'ingresos_sin_casar' => count($sinConciliar),
+    'total' => count($todos)];
+}
+
+/** Cambia la categoría de un movimiento o lo casa con un cobro. */
+function accGuardarMovimiento_(array $u, array $p): array {
+  exigir_($u, 'finanzas');
+  $d = $p['movimiento'] ?? [];
+  if (!is_array($d)) $d = [];
+  $cambios = [];
+  foreach (['categoria', 'notas', 'operacion_id', 'conciliado'] as $c) {
+    if (array_key_exists($c, $d)) $cambios[$c] = $d[$c];
+  }
+  /* Si alguien cambia la categoría a mano, mandan sus manos. */
+  if (array_key_exists('categoria', $d)) $cambios['manual'] = 'si';
+
+  /* Casar con un cobro deja el cobro marcado con la fecha del banco. */
+  if (txt_($d['cobro_id'] ?? '') !== '') {
+    $m = buscar1_('BANCO', fn($x) => mismo_($x['id'], $d['id'] ?? ''));
+    $cobro = buscar1_('COBROS', fn($c) => mismo_($c['id'], $d['cobro_id']));
+    if ($m && $cobro) {
+      actualizar_('COBROS', $cobro['id'], ['fecha_cobro' => txt_($m['fecha']), 'estado' => 'cobrado',
+        'notas' => txt_($cobro['notas']) . ' · casado con el banco']);
+      $cambios['cobro_id'] = $cobro['id'];
+      $cambios['operacion_id'] = $cobro['operacion_id'];
+      $cambios['conciliado'] = 'si';
+      $cambios['categoria'] = 'cobro_cliente';
+    }
+  }
+
+  $r = actualizar_('BANCO', $d['id'] ?? '', $cambios);
+  registrar_($u, 'editar_movimiento', 'BANCO', $d['id'] ?? '', txt_($cambios['categoria'] ?? ''));
+  return ['ok' => true, 'movimiento' => $r];
+}
+
+/** Crea el gasto de la instalación a partir de un movimiento del banco. */
+function accGastoDesdeBanco_(array $u, array $p): array {
+  exigir_($u, 'finanzas');
+  $m = buscar1_('BANCO', fn($x) => mismo_($x['id'], $p['id'] ?? ''));
+  if (!$m) return ['ok' => false, 'error' => 'Ese movimiento ya no está.'];
+  if (num_($m['importe']) >= 0) return ['ok' => false, 'error' => 'Ese movimiento es un ingreso, no un gasto.'];
+
+  $gasto = insertar_('GASTOS', [
+    'operacion_id' => txt_($p['operacion_id'] ?? ''), 'categoria' => txt_($p['categoria'] ?? '') ?: 'otro',
+    'proveedor' => txt_($p['proveedor'] ?? '') ?: txt_($m['concepto']),
+    'concepto' => txt_($p['concepto'] ?? '') ?: txt_($m['concepto']),
+    'importe' => abs(num_($m['importe'])), 'iva_pct' => num_($p['iva_pct'] ?? '') ?: 21,
+    'fecha' => txt_($m['fecha']), 'estado_pago' => 'pagado', 'fecha_pago' => txt_($m['fecha']),
+    'factura_proveedor' => '', 'creado' => ahora_(), 'creado_por' => $u['id'],
+    'notas' => 'Creado desde el movimiento bancario ' . $m['id']
+  ]);
+  actualizar_('BANCO', $m['id'], ['gasto_id' => $gasto['id'], 'conciliado' => 'si',
+    'operacion_id' => txt_($p['operacion_id'] ?? '')]);
+  registrar_($u, 'gasto_desde_banco', 'GASTOS', $gasto['id'], $m['concepto']);
+  return ['ok' => true, 'gasto' => $gasto];
+}
+
+/**
+ * Vuelve a pasar las reglas por los movimientos que nadie ha tocado a mano.
+ * Sirve cuando se afinan las reglas y ya hay extractos importados.
+ */
+function accReclasificarBanco_(array $u, array $p): array {
+  exigir_($u, 'finanzas');
+  $cambiados = 0;
+  foreach (leer_('BANCO') as $m) {
+    if (normal_($m['manual']) === 'si') continue;
+    $nueva = categoriaBanco_(txt_($m['concepto']), num_($m['importe']));
+    if ($nueva !== txt_($m['categoria'])) { actualizar_('BANCO', $m['id'], ['categoria' => $nueva]); $cambiados++; }
+  }
+  registrar_($u, 'reclasificar_banco', 'BANCO', '', $cambiados . ' movimientos');
+  return ['ok' => true, 'cambiados' => $cambiados];
+}
+
+/** Pone como coste de estructura lo que dice el banco. */
+function accAjustarEstructura_(array $u, array $p): array {
+  exigir_($u, 'config');
+  $valor = redondear_(num_($p['valor'] ?? ''), 2);
+  accGuardarConfig_($u, ['config' => ['coste_estructura_mes' => $valor]]);
+  return ['ok' => true, 'valor' => $valor];
+}
