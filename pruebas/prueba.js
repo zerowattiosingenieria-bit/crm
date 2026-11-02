@@ -1567,7 +1567,7 @@ comprobar('el ping no se apunta', logAhora().length === antes);
 const lecturas = ['misEquipos','datos','buscar','proyecto','descargarArchivo','proyectosPendientes',
   'cifras','tareas','finanzas','partes','resumen','equipo','analitica','alertas','nominas','nominaDias',
   'descargarNomina','vacaciones','mapa','usuarios','registro','directorio','directorioFicha','puertas',
-  'banco','copias','descargarCopia','agendaHuecos','comprobarCita','alertasBanco','catastro','duplicados'];
+  'banco','copias','descargarCopia','agendaHuecos','comprobarCita','alertasBanco','catastro','duplicados','estadisticas','historialCambios'];
 const malClasificadas = Object.keys(acciones_()).filter(a => a !== 'salir' &&
   (tipoDePeticion_(a) === 'consulta') !== lecturas.includes(a));
 comprobar('cada acción está clasificada como consulta o modificación', malClasificadas.length === 0,
@@ -1879,6 +1879,94 @@ comprobar('no repite lo mismo el mismo día', correosEnviados().length === 0, co
 comprobar('lo avisado sale de la cola', leerProp_(K_COLA_RECORD, []).length === 0);
 comprobar('el fin de semana no sale nada', enviarRecordatorios_({hoy: '2030-05-11', tarde: true, simular: true}).correos.length === 0);
 vaciarCorreos();
+}
+
+console.log('\n== Reagendar, cancelar, estadísticas y misma zona ==');
+{
+vaciarCorreos();
+const U = n => leer_('USUARIOS').filter(x => x.usuario === n)[0];
+const hoy = hoyISO_();
+const T = n => '6' + String(20000000 + n).slice(-8);
+const nueva = (ses, n, extra) => despachar_({accion: 'guardarCaptacion', token: ses.token,
+  captacion: Object.assign({cliente: Object.assign({nombre: 'Titular ' + n, telefono: T(n), direccion: 'Calle Zona ' + n, municipio: 'Boadilla del Monte'}, extra || {}),
+    fecha: sumarDias_(hoy, 3), hora_cita: '11:00', estado_cita: 'confirmada', comercial_id: U('rober').id}, {})});
+const a = nueva(sesiones.sandra, 1, {coordenadas: '40.405000,-3.875000'});
+comprobar('una ficha con coordenadas se mete', a.ok && !a.aviso_zona, a.error || a.aviso_zona);
+vaciarCorreos();
+const b = nueva(sesiones.abraham || entrar('abraham'), 2, {coordenadas: '40.406000,-3.875500'});
+comprobar('otra de otro captador a 120 m avisa en pantalla', b.ok && /Sandra/.test(b.aviso_zona) && /m\)/.test(b.aviso_zona), b.aviso_zona);
+const cz = correosEnviados().filter(c => /misma zona/.test(c.subject))[0] || {};
+comprobar('y manda un correo a los dos captadores y a dirección', cz.to && cz.to.includes(U('sandra').email) &&
+  cz.to.includes(U('abraham').email) && cz.to.includes(U('fernando').email), cz.to);
+comprobar('el correo no lleva teléfonos ni nombres de clientes', cz.htmlBody && !cz.htmlBody.includes(T(1)) && !/Titular/.test(cz.htmlBody), '');
+vaciarCorreos();
+const c = nueva(sesiones.sandra, 3, {coordenadas: '40.405100,-3.875100'});
+comprobar('una ficha del mismo captador cerca no avisa de nada nuevo a él solo', c.ok, c.error);
+comprobar('la pareja ya avisada no vuelve a mandar correo', correosEnviados().filter(x => /misma zona/.test(x.subject)).length <= 1);
+const lejos = nueva(entrar('abraham'), 4, {coordenadas: '40.420000,-3.875000'});
+comprobar('a 1,6 km no avisa', lejos.ok && !lejos.aviso_zona, lejos.aviso_zona);
+
+/* Reagendar */
+const id = a.captacion.id;
+const r1 = despachar_({accion: 'reagendarCita', token: sesiones.sandra.token, id, fecha: sumarDias_(hoy, 6), hora_cita: '18:00', motivo: 'Le surgió un viaje'});
+const capA = () => leer_('CAPTACIONES').filter(x => x.id === id)[0];
+comprobar('la captadora reagenda su cita', r1.ok && capA().fecha === sumarDias_(hoy, 6) && capA().hora_cita === '18:00', r1.error);
+comprobar('queda pendiente de confirmar y con la nota corta', capA().estado_cita === 'pendiente' && /Reagendada del/.test(capA().notas), capA().notas);
+comprobar('y se guarda el cambio para las estadísticas', leer_('CITAS_CAMBIOS').filter(x => x.captacion_id === id && x.tipo === 'reagendada').length === 1);
+comprobar('otro captador no puede reagendarla', despachar_({accion: 'reagendarCita', token: entrar('abraham').token, id, fecha: sumarDias_(hoy, 7)}).ok === false);
+comprobar('sin fecha no se reagenda', despachar_({accion: 'reagendarCita', token: sesiones.sandra.token, id}).ok === false);
+/* Cambiar el día editando la cita también cuenta */
+despachar_({accion: 'guardarCaptacion', token: sesiones.fernando.token, captacion: {id, cliente_id: a.captacion.cliente_id, fecha: sumarDias_(hoy, 8)}});
+comprobar('cambiar el día desde la ficha también cuenta como reagendada', leer_('CITAS_CAMBIOS').filter(x => x.captacion_id === id && x.tipo === 'reagendada').length === 2);
+/* Cancelar */
+const cn = despachar_({accion: 'cancelarCita', token: sesiones.sandra.token, id: b.captacion.id, motivo: 'no_interesa'});
+comprobar('cancelar con motivo', !cn.ok, 'Sandra no puede cancelar la de Abraham');
+const cn2 = despachar_({accion: 'cancelarCita', token: entrar('abraham').token, id: b.captacion.id, motivo: 'no_interesa', detalle: 'Ha vendido la casa'});
+const capB = leer_('CAPTACIONES').filter(x => x.id === b.captacion.id)[0];
+comprobar('el captador cancela la suya con motivo', cn2.ok && capB.resultado === 'cancelada' && /Ya no le interesa: Ha vendido la casa/.test(capB.notas), cn2.error);
+comprobar('se apunta una sola cancelación', leer_('CITAS_CAMBIOS').filter(x => x.captacion_id === b.captacion.id && x.tipo === 'cancelada').length === 1);
+comprobar('no se cancela dos veces', despachar_({accion: 'cancelarCita', token: entrar('abraham').token, id: b.captacion.id, motivo: 'otro'}).ok === false);
+/* Estadísticas */
+const es = despachar_({accion: 'estadisticas', token: sesiones.sandra.token});
+const mes = (es.periodos || []).filter(p => p.clave === 'mes')[0] || {};
+const filaS = (mes.captadores || []).filter(x => x.id === U('sandra').id)[0] || {};
+const filaA = (mes.captadores || []).filter(x => x.id === U('abraham').id)[0] || {};
+comprobar('la captadora ve las estadísticas', es.ok && es.periodos.length === 5, es.error);
+comprobar('y las de su compañero', filaA.citas >= 2 && filaA.canceladas >= 1, filaA);
+comprobar('cuenta sus citas y su reagendada', filaS.citas >= 2 && filaS.reagendadas >= 2 && filaS.yo === true, filaS);
+comprobar('el grupo suma a todos', mes.grupo.citas >= filaS.citas + filaA.citas, mes.grupo);
+comprobar('sin importes ni clientes', !JSON.stringify(es).match(/importe|total|"nombre":"Titular/), '');
+comprobar('a la captadora no le salen los comerciales', !mes.comerciales);
+const esD = despachar_({accion: 'estadisticas', token: sesiones.fernando.token});
+comprobar('dirección ve también los comerciales y las ventas', esD.ok && esD.periodos[2].comerciales && esD.ventas.meses.length === 12 &&
+  esD.ventas.trimestres.length === 4 && esD.ventas.semanas.length === 8, esD.error);
+comprobar('la serie trae los últimos 14 días', esD.serie.length === 14 && esD.serie[13].fecha === hoy);
+vaciarCorreos();
+}
+
+console.log('\n== Histórico de cambios del lead ==');
+{
+const U = n => leer_('USUARIOS').filter(x => x.usuario === n)[0];
+const nuevo = despachar_({accion: 'guardarCaptacion', token: sesiones.sandra.token,
+  captacion: {cliente: {nombre: 'Histórico Prueba', telefono: '699112233', direccion: 'Calle Historia 9', municipio: 'Las Rozas', dni: '12345678Z'},
+    fecha: sumarDias_(hoyISO_(), 4), hora_cita: '10:00', comercial_id: U('rober').id}});
+const cid = nuevo.captacion.cliente_id;
+despachar_({accion: 'guardarCliente', token: sesiones.sandra.token, cliente: {id: cid, telefono: '699112244', m2: 210, dni: '87654321X'}});
+despachar_({accion: 'reagendarCita', token: sesiones.sandra.token, id: nuevo.captacion.id, fecha: sumarDias_(hoyISO_(), 9), hora_cita: '12:00', motivo: 'No estaba el marido'});
+despachar_({accion: 'guardarCaptacion', token: entrar('rober').token, captacion: {id: nuevo.captacion.id, cliente_id: cid, resultado: 'sentada'}});
+const hs = despachar_({accion: 'historialCambios', token: sesiones.sandra.token, cliente_id: cid});
+const de = (campo) => (hs.cambios || []).filter(x => x.campo === campo);
+comprobar('el lead tiene su histórico', hs.ok && hs.cambios.length >= 6, hs.error || (hs.cambios || []).length);
+comprobar('sale el alta de la ficha y de la cita', de('alta').length === 2);
+comprobar('el teléfono: cómo estaba, cómo queda y quién', de('telefono')[0] && de('telefono')[0].antes === '699112233' &&
+  de('telefono')[0].despues === '699112244' && de('telefono')[0].quien === 'Sandra', de('telefono')[0]);
+comprobar('el DNI se apunta sin el número', de('dni')[0] && !JSON.stringify(hs).includes('87654321') && !JSON.stringify(hs).includes('12345678'), de('dni')[0]);
+comprobar('el reagendado: día, hora y motivo', de('fecha').length >= 1 && de('hora_cita').length >= 1 && de('motivo').some(x => /marido/.test(x.despues)));
+comprobar('las notas solo con lo añadido', de('notas').every(x => !x.antes), de('notas'));
+comprobar('el resultado lo pone el comercial, con nombre legible', de('resultado')[0] && de('resultado')[0].quien === 'Rober' &&
+  /sentada/i.test(de('resultado')[0].despues), de('resultado')[0]);
+comprobar('lo más nuevo arriba', hs.cambios[0].fecha >= hs.cambios[hs.cambios.length - 1].fecha);
+comprobar('otro captador no ve el histórico', despachar_({accion: 'historialCambios', token: entrar('abraham').token, cliente_id: cid}).ok === false);
 }
 
 console.log('\n' + (fallos ? 'FALLAN ' + fallos + ' de ' + pruebas : 'Todo correcto: ' + pruebas + ' comprobaciones'));
