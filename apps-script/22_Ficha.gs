@@ -65,9 +65,9 @@ function etiquetaDuplicado_(u, dup) {
   };
 }
 
-function nombreUsuario_(id) {
+function nombreUsuario_(id, usuarios) {
   if (!txt_(id)) return '';
-  const x = leer_('USUARIOS').filter(function (v) { return String(v.id) === String(id); })[0];
+  const x = (usuarios || leer_('USUARIOS')).filter(function (v) { return String(v.id) === String(id); })[0];
   return x ? txt_(x.nombre) : '';
 }
 
@@ -79,10 +79,19 @@ function tablasDeCliente_() {
 }
 
 function enlazadosDe_(clienteId) {
+  return conteoEnlazados_()[String(clienteId)] || {};
+}
+
+/* Cuántas cosas cuelgan de cada cliente, leyendo cada tabla una sola vez. */
+function conteoEnlazados_() {
   const r = {};
   tablasDeCliente_().forEach(function (t) {
-    const n = leer_(t).filter(function (x) { return String(x.cliente_id) === String(clienteId); }).length;
-    if (n) r[t] = n;
+    leer_(t).forEach(function (x) {
+      const k = String(x.cliente_id || '');
+      if (!k) return;
+      r[k] = r[k] || {};
+      r[k][t] = (r[k][t] || 0) + 1;
+    });
   });
   return r;
 }
@@ -95,10 +104,14 @@ function accDuplicados_(u, p) {
   const add = function (k, c, por) { if (!k) return; (grupos[por + '|' + k] = grupos[por + '|' + k] || []).push(c); };
   C.forEach(function (c) {
     add(telefono9_(c.telefono), c, 'teléfono');
-    add(direccionClave_(c.direccion) && (direccionClave_(c.direccion) + '|' + normal_(c.municipio)), c, 'dirección');
+    /* Por calle sin mirar el municipio: muchas fichas viejas no lo tienen.
+       Si son de pueblos distintos, se ve en la lista y no se fusionan. */
+    add(direccionClave_(c.direccion), c, 'dirección');
   });
   const vistos = {};
   const lista = [];
+  const cuenta = conteoEnlazados_();
+  const U = leer_('USUARIOS');
   Object.keys(grupos).forEach(function (k) {
     const g = grupos[k];
     if (g.length < 2) return;
@@ -107,8 +120,8 @@ function accDuplicados_(u, p) {
     vistos[clave] = 1;
     lista.push({por: k.split('|')[0], clientes: g.map(function (c) {
       return {id: c.id, nombre: c.nombre, direccion: c.direccion, municipio: c.municipio, telefono: c.telefono,
-              estado: c.estado, comercial: nombreUsuario_(c.comercial_id), creado: c.creado,
-              enlazados: enlazadosDe_(c.id)};
+              estado: c.estado, comercial: nombreUsuario_(c.comercial_id, U), creado: c.creado,
+              enlazados: cuenta[String(c.id)] || {}};
     })});
   });
   return {ok: true, grupos: lista};
