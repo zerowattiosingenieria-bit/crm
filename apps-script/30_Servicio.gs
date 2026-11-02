@@ -8,7 +8,7 @@
  *     de la empresa, en las mismas carpetas de siempre.
  *   - Correo: códigos de entrada, avisos y resúmenes salen de esta cuenta.
  *   - Mapas: geocodificar direcciones y tiempos en coche.
- *   - El espejo: cada noche vuelca TODAS las tablas del CRM a esta hoja de
+ *   - El espejo: cada hora vuelca TODAS las tablas del CRM a esta hoja de
  *     cálculo, y la copia de los viernes sigue dejando el Excel en Drive.
  *
  * Las peticiones llegan por doPost con {accion:'servicio', servicio:'...',
@@ -229,8 +229,9 @@ function ticCrm() {
 }
 
 /**
- * Deja los disparadores del CRM en MySQL: el espejo cada noche a las 03:00
- * y el tic cada 10 minutos. Quita los de antes (resumen, copia, puertas,
+ * Deja los disparadores del CRM en MySQL: el espejo cada hora (orden de
+ * Nando, 02/11/2026: si IONOS cae, como mucho se pierde una hora) y el tic
+ * cada 10 minutos. Quita los de antes (resumen, copia, puertas,
  * recordatorios), que ahora los hace el servidor: si no, saldría todo doble.
  */
 function instalarDisparadoresEspejo() {
@@ -239,7 +240,7 @@ function instalarDisparadoresEspejo() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (fuera.indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t);
   });
-  ScriptApp.newTrigger('espejoDesdeServidor').timeBased().everyDays(1).atHour(3).nearMinute(10).create();
+  ScriptApp.newTrigger('espejoDesdeServidor').timeBased().everyHours(1).create();
   ScriptApp.newTrigger('ticCrm').timeBased().everyMinutes(10).create();
   return true;
 }
