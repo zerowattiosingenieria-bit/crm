@@ -90,7 +90,7 @@ function pendientesCRM_(hoy) {
       const falta = [];
       if (String(txt_(c.telefono)).replace(/\D/g, '').length < 9) falta.push('teléfono');
       if (!txt_(c.direccion)) falta.push('dirección');
-      if (!num_(c.gasto_luz_mes) && !num_(c.gasto_combustible)) falta.push('lo que gasta');
+      /* El gasto no: en la puerta casi nunca se sabe y lo confirma el comercial con la factura. */
       if (falta.length) add(k.captador_id, 'ficha|' + k.id + '|' + falta.join(','),
         'A la ficha de ' + (nombre(c) || 'un cliente') + ' le falta: ' + falta.join(', ') + '.',
         'Ficha del cliente › Falta por meter.');
@@ -106,7 +106,7 @@ function pendientesCRM_(hoy) {
         'Ficha › Proyecto › Enviar la propuesta › «Ya se lo he enviado».');
     }
     if (normal_(pr.estado) === 'faltan_datos' && desdeYa(txt_(pr.modificado)) && diasEntre_(txt_(pr.modificado).slice(0, 10), hoy) >= 2) {
-      add(c.comercial_id, 'faltan|' + pr.id, 'El proyecto de ' + nombre(c) + ' sigue parado: falta ' + txt_(pr.faltan) + '.',
+      add(c.comercial_id, 'faltan|' + pr.id, 'El proyecto de ' + nombre(c) + ' sigue parado: falta ' + (function (f) { return f.length > 110 ? f.slice(0, 107) + '…' : f; })(txt_(pr.faltan)) + '.',
         'Ficha › Proyecto: súbelo ahí y vuelve solo a la cola.');
     }
   });
