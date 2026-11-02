@@ -37,7 +37,9 @@ const foto = (pag, n) => pag.screenshot({path: path.join(SALIDA, n + '.png'), fu
   const cid = await p.evaluate(async () => { const A = await import('/assets/js/api.js'); return A.estado.clientes[0].id; });
   await ir(p, 'visita/' + cid); await foto(p, 'nando_visita_movil');
   await ir(p, 'cliente/' + cid, 1500);
-  await p.click('text=+ Cita').catch(e => errores.push('nando · sin botón + Cita'));
+  await p.click('button:has-text("+ Apuntar")').catch(e => errores.push('nando · sin botón + Apuntar'));
+  await p.waitForTimeout(400);
+  await p.click('text=Una cita').catch(e => errores.push('nando · sin la opción Una cita'));
   await p.waitForTimeout(1500); await foto(p, 'nando_nueva_cita');
   await p.keyboard.press('Escape');
   await ir(p, 'agenda', 1800); await foto(p, 'nando_agenda');

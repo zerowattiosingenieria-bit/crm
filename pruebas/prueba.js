@@ -1567,7 +1567,7 @@ comprobar('el ping no se apunta', logAhora().length === antes);
 const lecturas = ['misEquipos','datos','buscar','proyecto','descargarArchivo','proyectosPendientes',
   'cifras','tareas','finanzas','partes','resumen','equipo','analitica','alertas','nominas','nominaDias',
   'descargarNomina','vacaciones','mapa','usuarios','registro','directorio','directorioFicha','puertas',
-  'banco','copias','descargarCopia','agendaHuecos','comprobarCita','alertasBanco','catastro'];
+  'banco','copias','descargarCopia','agendaHuecos','comprobarCita','alertasBanco','catastro','duplicados'];
 const malClasificadas = Object.keys(acciones_()).filter(a => a !== 'salir' &&
   (tipoDePeticion_(a) === 'consulta') !== lecturas.includes(a));
 comprobar('cada acción está clasificada como consulta o modificación', malClasificadas.length === 0,
@@ -1779,6 +1779,58 @@ comprobar('y al hacerlo lo marca cobrado', cas.ok &&
 comprobar('un comercial no puede', despachar_({accion: 'casarAuto', token: sesiones.nando.token}).ok === false);
 const al = despachar_({accion: 'alertasBanco', token: sesiones.fernando.token});
 comprobar('las alertas del banco responden', al.ok && Array.isArray(al.duplicados), al.error);
+}
+
+console.log('\n== Un cliente, una ficha ==');
+{
+const T = (n) => '6' + String(10000000 + n).slice(-8);
+const a = despachar_({accion: 'guardarCliente', token: sesiones.nando.token,
+  cliente: {nombre: 'Prueba Duplicado', telefono: T(4242), direccion: 'Calle Gerifalte, 77', municipio: 'Las Rozas'}});
+comprobar('se da de alta un cliente nuevo', a.ok, a.error);
+const b = despachar_({accion: 'guardarCliente', token: sesiones.nando.token,
+  cliente: {nombre: 'Otro nombre', telefono: '+34 ' + T(4242)}});
+comprobar('el mismo teléfono no crea otra ficha', b.ok === false && b.duplicado && b.duplicado.id === a.cliente.id, b);
+const b2 = despachar_({accion: 'guardarCliente', token: sesiones.rober.token,
+  cliente: {nombre: 'Otro', direccion: 'C/ Gerifalte 77', municipio: 'Las Rozas'}});
+comprobar('la misma casa escrita distinto tampoco, y a otro comercial no le enseña quién es',
+  b2.ok === false && b2.duplicado && b2.duplicado.visible === false && !/Prueba/.test(b2.error), b2);
+const cap = despachar_({accion: 'guardarCaptacion', token: sesiones.sandra.token,
+  captacion: {cliente: {nombre: 'Lead repetido', telefono: T(4242), m2: 180}, fecha: '2030-05-06', hora_cita: '11:00', interes: 9}});
+comprobar('una cita de un cliente que ya estaba se apunta en su ficha', cap.ok && cap.captacion.cliente_id === a.cliente.id &&
+  /ya estaba/.test(cap.aviso_duplicado), cap);
+const cliA = () => leer_('CLIENTES').filter(c => c.id === a.cliente.id)[0];
+comprobar('y aprovecha lo que la ficha vieja no tenía', Number(cliA().m2) === 180, cliA().m2);
+comprobar('el interés de la cita pasa al cliente (un solo dato)', Number(cliA().interes) === 9, cliA().interes);
+comprobar('y el cliente queda con la cita', cliA().estado === 'cita', cliA().estado);
+despachar_({accion: 'guardarCaptacion', token: sesiones.nando.token,
+  captacion: {id: cap.captacion.id, cliente_id: a.cliente.id, resultado: 'sentada'}});
+comprobar('al marcar la sentada, el cliente pasa a sentada', cliA().estado === 'sentada', cliA().estado);
+/* Dos citas: manda la última */
+const cap2 = despachar_({accion: 'guardarCaptacion', token: sesiones.nando.token,
+  captacion: {cliente_id: a.cliente.id, fecha: '2030-06-10', hora_cita: '10:00'}});
+comprobar('una cita nueva no hace retroceder al cliente', cliA().estado === 'sentada', cliA().estado);
+comprobar('la cita que manda es la última', captacionActual_(a.cliente.id).id === cap2.captacion.id);
+/* Fusionar */
+const forz = despachar_({accion: 'guardarCliente', token: sesiones.fernando.token,
+  cliente: {nombre: 'Prueba Duplicado (bis)', telefono: T(4242), email: 'bis@x.es', perfil: 'Quiere batería'}, });
+comprobar('ni dirección crea el duplicado sin forzarlo', forz.ok === false);
+const dupl = despachar_({accion: 'guardarCliente', token: sesiones.fernando.token,
+  cliente: {nombre: 'Prueba Duplicado (bis)', telefono: T(4242), email: 'bis@x.es', perfil: 'Quiere batería', forzar: true}});
+comprobar('dirección sí puede forzarlo', dupl.ok, dupl.error);
+despachar_({accion: 'guardarSeguimiento', token: sesiones.fernando.token,
+  seguimiento: {cliente_id: dupl.cliente.id, canal: 'llamada', nota: 'Llamada en la ficha repetida'}});
+const lst = despachar_({accion: 'duplicados', token: sesiones.fernando.token});
+comprobar('dirección ve los duplicados', lst.ok && lst.grupos.some(g => g.clientes.some(c => c.id === dupl.cliente.id)), lst.error);
+comprobar('un comercial no', despachar_({accion: 'duplicados', token: sesiones.nando.token}).ok === false);
+const bor = despachar_({accion: 'borrarCliente', token: sesiones.fernando.token, id: dupl.cliente.id});
+comprobar('no se borra una ficha con cosas enlazadas', bor.ok === false && bor.enlazados && bor.enlazados.SEGUIMIENTO === 1, bor);
+const fu = despachar_({accion: 'fusionarClientes', token: sesiones.fernando.token, origen: dupl.cliente.id, destino: a.cliente.id});
+comprobar('al fusionar pasan los apuntes', fu.ok && fu.movidos.SEGUIMIENTO === 1 &&
+  leer_('SEGUIMIENTO').some(x => x.cliente_id === a.cliente.id && /repetida/.test(x.nota)), fu);
+comprobar('se rellenan los datos que faltaban y se juntan las notas', cliA().email === 'bis@x.es' && /batería/.test(cliA().perfil), cliA());
+comprobar('y la ficha repetida desaparece', !leer_('CLIENTES').some(c => c.id === dupl.cliente.id));
+comprobar('un comercial no puede fusionar', despachar_({accion: 'fusionarClientes', token: sesiones.nando.token,
+  origen: a.cliente.id, destino: a.cliente.id}).ok === false);
 }
 
 console.log('\n' + (fallos ? 'FALLAN ' + fallos + ' de ' + pruebas : 'Todo correcto: ' + pruebas + ' comprobaciones'));
