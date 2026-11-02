@@ -6,6 +6,7 @@ import {tarjeta, tabla, kpi, kpis, etiquetaEstado, marca, ventanaFormulario, avi
         filtros} from '../ui.js';
 import {gastoAnual} from './clientes.js';
 import {estadoLead} from './leads.js';
+import {avisoDuplicadoVivo} from './ficha-cliente.js';
 
 function nuevaCaptacion(refrescar, ir) {
   const comerciales = api.estado.usuarios
@@ -14,6 +15,7 @@ function nuevaCaptacion(refrescar, ir) {
      cita no le cuadra al comercial (1 h 45 min por visita más el coche). */
   const ayudas = h('div', {estilo: {marginTop: '8px'}});
   const revision = h('div');
+  const dupCaja = h('div', {estilo: {gridColumn: '1 / -1'}});
   const vf = ventanaFormulario({
     titulo: 'Nueva ficha de captación',
     ancha: true,
@@ -69,7 +71,7 @@ function nuevaCaptacion(refrescar, ir) {
         }
       };
       const r = await api.guardarCaptacion(captacion);
-      aviso('Ficha de captación guardada.');
+      aviso(r.aviso_duplicado || 'Ficha de captación guardada.');
       await refrescar();
       if (r.aviso_agenda) aviso('Ojo con la cita: ' + r.aviso_agenda, 'error');
       if (r.captacion && r.captacion.cliente_id) ir('cliente/' + r.captacion.cliente_id);
@@ -77,6 +79,10 @@ function nuevaCaptacion(refrescar, ir) {
     extra: h('div', ayudas, revision)
   });
   const f = vf.formulario;
+  f.nodo.prepend(dupCaja);
+  poner(dupCaja, avisoDuplicadoVivo(f, {
+    textoCita: 'No pasa nada: guarda y la cita se apunta en su ficha, sin crear otra.',
+    alAbrir: id => { vf.ventana.cerrar(); ir('cliente/' + id); }}));
   const ctl = id => f.nodos[id] && f.nodos[id].control;
   const ponerSiVacio = (id, v) => { if (v != null && v !== '' && ctl(id) && !txt(ctl(id).value)) ctl(id).value = v; };
   const estadoAyuda = h('span.nota');

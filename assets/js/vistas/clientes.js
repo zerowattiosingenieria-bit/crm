@@ -9,6 +9,8 @@ import {tarjeta, tabla, kpi, kpis, etiquetaEstado, marca, ventanaFormulario, ven
 import {editorOperacion, tarjetaOperacion} from './operaciones.js';
 import {panelProyecto} from './proyecto.js';
 import {panelFicha} from './ficha.js';
+import {avisoDuplicadoVivo, ventanaYaExiste, duplicadoLocal, faltaPorMeter, menuApuntar, panelHistorial,
+        panelCitas, sucesosDe, ventanaRepetidos, CAMPOS_VIVIENDA, CAMPOS_CONTACTO} from './ficha-cliente.js';
 
 /* ---------- campos del formulario de cliente ---------- */
 export const camposCliente = () => [
@@ -62,19 +64,46 @@ const camposAsignacion = () => api.puede('editarTodo') ? [
    opciones: api.estado.usuarios.filter(u => u.rol === 'captador').map(u => [u.id, u.nombre])}
 ] : [];
 
-export function editorCliente(cliente, alTerminar) {
-  return ventanaFormulario({
-    titulo: cliente && cliente.id ? 'Editar ' + cliente.nombre : 'Nuevo cliente',
-    ancha: true,
-    campos: camposCliente().concat(camposAsignacion()),
+/* Un solo formulario de cliente para todo; `solo` lo recorta a una parte
+   (contacto, vivienda…) para no tener que bajar por cuarenta campos. */
+export function editorCliente(cliente, alTerminar, {solo, titulo, ir} = {}) {
+  let campos = camposCliente().concat(camposAsignacion());
+  if (solo) {
+    campos = campos.filter(x => !x.separador && solo.includes(x.id));
+  }
+  const extra = h('div');
+  let vf;
+  const guardar = async (datos, forzar) => {
+    if (cliente && cliente.id) datos.id = cliente.id;
+    if (forzar) datos.forzar = true;
+    const r = await api.guardarCliente(datos);
+    aviso('Cliente guardado.');
+    if (r.duplicado) aviso('Ojo: con ese ' + r.duplicado.por + ' ya hay otra ficha (' + r.duplicado.etiqueta + ', ' +
+      r.duplicado.id + '). Dirección puede fusionarlas desde Clientes › Fichas repetidas.', 'error');
+    await alTerminar(r.cliente);
+  };
+  vf = ventanaFormulario({
+    titulo: titulo || (cliente && cliente.id ? 'Editar ' + etiquetaCliente(cliente) : 'Nuevo cliente'),
+    ancha: !solo || solo.length > 6,
+    campos,
     valores: cliente || {estado: 'nuevo', periodo_combustible: 'al año', municipio: ''},
+    extra,
     alGuardar: async datos => {
-      if (cliente && cliente.id) datos.id = cliente.id;
-      const r = await api.guardarCliente(datos);
-      aviso('Cliente guardado.');
-      await alTerminar(r.cliente);
+      try { await guardar(datos); }
+      catch (e) {
+        if (ventanaYaExiste(e, {ir, forzar: async () => { await guardar(datos, true); vf.ventana.cerrar(); }})) {
+          const err = new Error('No guardado: ese cliente ya existe.'); throw err;
+        }
+        throw e;
+      }
     }
   });
+  if (!solo || solo.includes('telefono') || solo.includes('direccion')) {
+    /* Arriba del todo, que se vea en cuanto se escribe el teléfono. */
+    vf.formulario.nodo.prepend(avisoDuplicadoVivo(vf.formulario, {salvoId: cliente && cliente.id,
+      alAbrir: ir ? id => { vf.ventana.cerrar(); ir('cliente/' + id); } : null}));
+  }
+  return vf;
 }
 
 /* ---------- gasto anual estimado ---------- */
@@ -218,8 +247,10 @@ export async function vistaClientes({ir, refrescar}) {
       .concat(api.opciones('estadosOperacion'))},
     {id: 'visita', tipo: 'select', opciones: [['', 'Todas las visitas'],
       ['sin_confirmar', 'Con visita sin confirmar']]},
+    ...(api.puede('editarTodo') ? [{tipo: 'boton', et: '⧉ Fichas repetidas',
+     accion: () => ventanaRepetidos({ir, refrescar})}] : []),
     {tipo: 'boton', et: '+ Nuevo cliente', clase: 'primario',
-     accion: () => editorCliente(null, async c => { await refrescar(); ir('cliente/' + c.id); })}
+     accion: () => editorCliente(null, async c => { await refrescar(); ir('cliente/' + c.id); }, {ir})}
   ], v => { Object.assign(estado, v); pinta(); });
 
   const contenedor = h('div');
@@ -322,8 +353,29 @@ export async function vistaCliente({id, ir, refrescar}) {
   const ops = api.operacionesDe(c.id);
   const seg = api.seguimientoDe(c.id);
   const contactos = seg.filter(s => txt(s.origen) !== 'comentario');
-  const cap = api.captacionDe(c.id);
+  const citas = api.captacionesDe(c.id);
   const total = suma(ops, 'total');
+
+  const pestanas = h('.pestanas');
+  const panel = h('div');
+  const botones = {};
+  const abrir = clave => { if (botones[clave]) botones[clave].click(); };
+
+  /* Todo lo que se apunta sale de aquí y vuelve a esta misma ficha. */
+  const acc = {
+    contacto: () => nuevoSeguimiento(c, refrescar),
+    comentario: () => editarComentario(c, async () => { await refrescar(); }),
+    cita: () => import('./citas.js').then(m => m.nuevaCita({refrescar, clienteId: c.id})),
+    instalacion: () => editorOperacion(null, c, async () => { await refrescar(); }),
+    visita: () => { location.hash = '#visita/' + c.id; },
+    contactoDatos: () => editorCliente(c, async () => { await refrescar(); },
+      {solo: CAMPOS_CONTACTO, titulo: 'Contacto y dirección · ' + etiquetaCliente(c), ir}),
+    vivienda: () => editorCliente(c, async () => { await refrescar(); },
+      {solo: CAMPOS_VIVIENDA, titulo: 'Vivienda y consumo · ' + etiquetaCliente(c), ir}),
+    todo: () => editorCliente(c, async () => { await refrescar(); }, {ir})
+  };
+  const apuntar = () => menuApuntar(c, {contacto: acc.contacto, comentario: acc.comentario, cita: acc.cita,
+    instalacion: acc.instalacion, visita: acc.visita});
 
   const cabecera = h('.cabecera-ficha',
     h('.quien',
@@ -337,46 +389,36 @@ export async function vistaCliente({id, ir, refrescar}) {
         txt(c.origen) ? marca(api.etiquetaCatalogo('origenes', c.origen)) : null,
         num(c.interes) ? marca('Interés ' + num(c.interes) + '/10',
           num(c.interes) >= 8 ? 'bien' : (num(c.interes) <= 4 ? 'mal' : 'aviso')) : null,
-        h('span.nota', 'Alta ' + fechaCorta(c.creado)))),
+        h('span.nota', c.id + ' · alta ' + fechaCorta(c.creado)))),
     h('.acciones',
       txt(c.telefono) ? h('a.btn', {href: telHref(c.telefono)}, '☎ Llamar') : null,
       txt(c.telefono) ? h('a.btn', {href: waHref(c.telefono), target: '_blank'}, 'WhatsApp') : null,
       txt(c.coordenadas) || txt(c.direccion)
-        ? h('a.btn', {href: mapsHref(destinoDe(c)), target: '_blank'}, '◎ Ver en el mapa')
+        ? h('a.btn', {href: comoLlegarHref(destinoDe(c)), target: '_blank', rel: 'noopener'}, '🚗 Ir')
         : null,
-      txt(c.coordenadas) || txt(c.direccion)
-        ? h('a.btn.lima', {href: comoLlegarHref(destinoDe(c)), target: '_blank', rel: 'noopener'},
-            '🚗 Ir en coche')
-        : null,
-      h('button.btn', {onclick: () => editorCliente(c, async () => { await refrescar(); })}, 'Editar'),
-      h('button.btn', {onclick: () => editarComentario(c, async () => { await refrescar(); })},
-        '✎ Comentario'),
-      h('button.btn.lima', {onclick: () => nuevoSeguimiento(c, refrescar)}, '+ Apuntar contacto'),
-      h('button.btn', {onclick: () => { location.hash = '#visita/' + c.id; }}, '📋 Modo visita'),
-      h('button.btn', {onclick: () => import('./citas.js').then(m => m.nuevaCita({refrescar, clienteId: c.id}))}, '+ Cita'),
-      h('button.btn.primario', {onclick: () => editorOperacion(null, c, async () => { await refrescar(); })},
-        '+ Instalación')));
+      h('button.btn', {onclick: acc.visita}, '📋 Modo visita'),
+      h('button.btn.primario', {onclick: apuntar}, '+ Apuntar')));
 
-  const pestanas = h('.pestanas');
-  const panel = h('div');
   const tabs = [
-    ['Resumen', () => panelResumen(c, ops, seg, refrescar)],
-    ['Instalaciones (' + ops.length + ')', () => panelOperaciones(c, ops, refrescar)],
-    ['Seguimiento (' + seg.length + ')', () => panelSeguimiento(c, seg, refrescar)],
-    ['Vivienda y consumo', () => panelVivienda(c)],
-    ['Ficha de dimensionado', () => panelFicha(c)],
-    ['Proyecto', () => panelProyecto(c)],
-    ...(cap ? [['Captación', () => panelCaptacion(cap)]] : [])
+    ['resumen', 'Resumen', () => panelResumen(c, ops, seg, refrescar, {acc, abrir, ir})],
+    ['historial', 'Historial (' + sucesosDe(c).length + ')', () => panelHistorial(c, {apuntar})],
+    ['citas', 'Citas (' + citas.length + ')', () => panelCitas(c, {refrescar, nuevaCita: acc.cita})],
+    ['vivienda', 'Vivienda y consumo', () => panelVivienda(c, acc.vivienda)],
+    ['dimensionado', 'Ficha de dimensionado', () => panelFicha(c)],
+    ['proyecto', 'Proyecto', () => panelProyecto(c)],
+    ['instalaciones', 'Instalaciones (' + ops.length + ')', () => panelOperaciones(c, ops, refrescar, acc.instalacion)]
   ];
-  tabs.forEach(([nombre, pinta], i) => {
+  tabs.forEach(([clave, nombre, pinta], i) => {
     const b = h('button', {onclick: () => {
       pestanas.querySelectorAll('button').forEach(x => x.classList.remove('activa'));
       b.classList.add('activa');
       poner(panel, pinta());
     }}, nombre);
+    botones[clave] = b;
     if (!i) { b.classList.add('activa'); poner(panel, pinta()); }
     pestanas.appendChild(b);
   });
+  botones.apuntar = {click: apuntar};
 
   return h('div',
     h('button.btn.plano', {estilo: {marginBottom: '8px'}, onclick: () => ir('clientes')}, '← Clientes'),
@@ -396,8 +438,21 @@ export async function vistaCliente({id, ir, refrescar}) {
 
 const dato = (et, v) => h('.dato', h('.et', et), h('.v', v === '' || v === null || v === undefined ? '—' : v));
 
-function panelResumen(c, ops, seg, refrescar) {
-  return h('.doble',
+function panelResumen(c, ops, seg, refrescar, {acc, abrir, ir}) {
+  const falta = faltaPorMeter(c, {editarContacto: acc.contactoDatos, editarVivienda: acc.vivienda,
+    irA: k => k === 'apuntar' ? acc.contacto() : abrir(k)});
+  const dup = duplicadoLocal(c, c.id);
+  return h('div',
+    dup ? h('.aviso-duplicado', {estilo: {marginBottom: '12px'}},
+      h('b', '⚠ Posible ficha repetida: '), 'mismo ' + dup.por + ' que ' + etiquetaCliente(dup.cliente) + ' (' + dup.cliente.id + ').',
+      h('.acciones', {estilo: {marginTop: '6px'}},
+        h('button.btn.mini', {onclick: () => ir('cliente/' + dup.cliente.id)}, 'Ver la otra'),
+        api.puede('editarTodo') ? h('button.btn.mini', {onclick: () => ventanaRepetidos({ir, refrescar})}, 'Fusionar') : null,
+        api.puede('editarTodo') ? null : h('span.nota', 'Avisa a dirección para que las fusione.'))) : null,
+    falta.length ? tarjeta('Falta por meter (' + falta.length + ')', h('.acciones',
+      falta.map(([et, fn]) => h('button.btn.mini', {onclick: fn}, '+ ' + et))),
+      {subtitulo: 'Pulsa y se abre justo donde va. Con esto la propuesta sale sin pedir nada más.'}) : null,
+    h('.doble',
     tarjeta('Datos de contacto', h('div',
       dato('Nombre', c.nombre),
       dato('DNI', c.dni),
@@ -415,20 +470,21 @@ function panelResumen(c, ops, seg, refrescar) {
       dato('Coordenadas', txt(c.coordenadas)
         ? h('a', {href: mapsHref(c.coordenadas), target: '_blank'}, c.coordenadas) : ''),
       dato('Comercial', api.nombrePersona(c.comercial_id)),
-      dato('Captador', txt(c.captador_id) ? api.nombrePersona(c.captador_id) : ''))),
+      dato('Captador', txt(c.captador_id) ? api.nombrePersona(c.captador_id) : '')),
+      {acciones: [h('button.btn.mini', {onclick: acc.contactoDatos}, 'Editar'),
+                  h('button.btn.mini.plano', {onclick: acc.todo, title: 'Todos los datos del cliente'}, 'Todo')]}),
     h('div',
       tarjetaComentarios(c, refrescar),
       tarjeta('Perfil y notas', h('div',
         h('p', txt(c.perfil) || h('span.nota', 'Sin perfil apuntado.')),
         txt(c.otros) ? h('p.nota', c.otros) : null)),
-      tarjeta('Últimos movimientos',
-        seg.length ? h('ul.linea-tiempo', seg.slice(0, 5).map(s =>
-          h('li', h('.cuando', fechaCorta(s.fecha) + ' · ' + api.etiquetaCatalogo('canales', s.canal) +
-              ' · ' + api.nombrePersona(s.usuario_id)),
-            h('.que', s.nota),
-            txt(s.proximo_paso) ? h('.nota', '→ ' + s.proximo_paso +
-              (txt(s.proxima_fecha) ? ' (' + fechaCorta(s.proxima_fecha) + ')' : '')) : null)))
-          : h('.vacio', 'Todavía no hay contactos apuntados.'))));
+      tarjeta('Últimos movimientos', (() => {
+        const ev = sucesosDe(c).filter(e => e.fecha <= hoyISO()).slice(0, 5);
+        return ev.length ? h('ul.linea-tiempo', ev.map(e => h('li',
+          h('.cuando', fechaCorta(e.fecha) + ' · ' + e.titulo),
+          e.texto ? h('.que', e.texto) : null, e.pie ? h('.nota', e.pie) : null)))
+          : h('.vacio', 'Todavía no hay nada apuntado.');
+      })(), {acciones: [h('button.btn.mini', {onclick: () => abrir('historial')}, 'Ver todo')]}))));
 }
 
 function tarjetaComentarios(c, refrescar) {
@@ -442,8 +498,12 @@ function tarjetaComentarios(c, refrescar) {
       '✎ Tu comentario')]});
 }
 
-function panelVivienda(c) {
-  return h('.doble',
+function panelVivienda(c, editar) {
+  return h('div',
+    h('.acciones', {estilo: {marginBottom: '10px'}},
+      h('button.btn.primario', {onclick: editar}, 'Editar vivienda y consumo'),
+      h('span.nota', 'Son los mismos datos que usa la ficha de dimensionado: se cambian aquí o allí y se ven en los dos sitios.')),
+    h('.doble',
     tarjeta('La vivienda', h('div',
       dato('Tipo', c.tipo_vivienda), dato('Régimen', c.regimen),
       dato('Superficie', num(c.m2) ? miles(c.m2) + ' m²' : ''),
@@ -458,24 +518,13 @@ function panelVivienda(c) {
       dato('CUPS', c.cups),
       dato('Potencia contratada', num(c.potencia_contratada) ? c.potencia_contratada + ' kW' : ''),
       h('.dato', h('.et', 'Gasto energético anual'),
-        h('.v', h('b', {estilo: {fontSize: '17px'}}, eur(gastoAnual(c))))))));
+        h('.v', h('b', {estilo: {fontSize: '17px'}}, eur(gastoAnual(c)))))))));
 }
 
-function panelOperaciones(c, ops, refrescar) {
-  if (!ops.length) return h('.vacio', 'Este cliente no tiene ninguna instalación registrada.');
-  return h('div', ops.map(o => tarjetaOperacion(o, c, refrescar)));
-}
-
-function panelCaptacion(cap) {
-  return tarjeta('Ficha de captación', h('div',
-    dato('Captador', api.nombrePersona(cap.captador_id)),
-    dato('Fecha de la visita', fechaLarga(cap.fecha) + (txt(cap.hora_cita) ? ' a las ' + cap.hora_cita : '')),
-    dato('Estado de la cita', api.etiquetaCatalogo('estadosCita', cap.estado_cita)),
-    dato('Tecnología', cap.tecnologia),
-    dato('Comercial asignado', txt(cap.comercial_id) ? api.nombrePersona(cap.comercial_id) : ''),
-    dato('Resultado', api.etiquetaCatalogo('resultadosCaptacion', cap.resultado)),
-    dato('Interés', num(cap.interes) ? num(cap.interes) + '/10' : ''),
-    dato('Notas', cap.notas)));
+function panelOperaciones(c, ops, refrescar, nueva) {
+  const boton = h('.acciones', {estilo: {marginBottom: '10px'}}, h('button.btn.primario', {onclick: nueva}, '+ Instalación'));
+  if (!ops.length) return h('div', boton, h('.vacio', 'Este cliente no tiene ninguna instalación registrada.'));
+  return h('div', boton, ops.map(o => tarjetaOperacion(o, c, refrescar)));
 }
 
 /* ---------- seguimiento ---------- */
