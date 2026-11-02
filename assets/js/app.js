@@ -389,8 +389,8 @@ async function arrancar() {
   try {
     const q = new URLSearchParams(location.search);
     const srv = (q.get('srv') || '').trim();
-    if (/^https:\/\/script\.google\.com\//.test(srv)) {
-      api.guardarEndpoint(srv);
+    if (srv) {
+      api.guardarEndpoint(srv);   /* las del Apps Script antiguo se descartan solas */
       q.delete('srv');
       const limpia = location.pathname + (q.toString() ? '?' + q : '') + (location.hash || '');
       history.replaceState(null, '', limpia);

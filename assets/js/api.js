@@ -38,8 +38,20 @@ try {
     localStorage.removeItem(K_ENDPOINT);
   }
 } catch (e) { /* modo incógnito */ }
-export const endpoint = () => localStorage.getItem(K_ENDPOINT) || ENDPOINT_POR_DEFECTO;
-export const guardarEndpoint = url => localStorage.setItem(K_ENDPOINT, String(url || '').trim());
+/* Nunca se vuelve a usar el Apps Script como servidor, aunque venga de un
+   marcador antiguo con ?srv=…, de otra pestaña abierta o se teclee a mano. */
+const esViejo_ = url => /script\.google(usercontent)?\.com/i.test(String(url || ''));
+export const endpoint = () => {
+  let e = '';
+  try { e = localStorage.getItem(K_ENDPOINT) || ''; } catch (x) { /* sin almacenamiento */ }
+  if (esViejo_(e)) { try { localStorage.removeItem(K_ENDPOINT); } catch (x) { /* nada */ } e = ''; }
+  return e || ENDPOINT_POR_DEFECTO;
+};
+export const guardarEndpoint = url => {
+  const u = String(url || '').trim();
+  if (!u || esViejo_(u)) { localStorage.removeItem(K_ENDPOINT); return; }
+  localStorage.setItem(K_ENDPOINT, u);
+};
 export const token = () => localStorage.getItem(K_TOKEN) || '';
 
 export function guardarSesion(t, usuario) {
