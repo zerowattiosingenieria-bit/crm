@@ -187,7 +187,7 @@ export async function vistaOperaciones({ir, refrescar}) {
   const est = {texto: '', estado: '', tipo: '', persona: ''};
 
   const f = filtros([
-    {id: 'texto', et: 'Buscar por cliente, referencia, municipio…'},
+    {id: 'texto', et: 'Buscar por dirección, cliente, referencia, municipio…'},
     {id: 'estado', tipo: 'select', opciones: [['', 'Todos los estados']].concat(api.opciones('estadosOperacion'))},
     {id: 'tipo', tipo: 'select', opciones: [['', 'Todos los tipos']].concat(api.opciones('tiposOperacion'))},
     ...(api.esDireccion() ? [{id: 'persona', tipo: 'select',
@@ -203,7 +203,7 @@ export async function vistaOperaciones({ir, refrescar}) {
       if (est.tipo && txt(o.tipo) !== est.tipo) return false;
       if (est.persona && txt(o.comercial_id) !== est.persona) return false;
       if (!q) return true;
-      return [c.nombre, c.municipio, o.referencia, o.id, o.panel_modelo, o.aero_modelo]
+      return [c.nombre, c.direccion, c.municipio, o.referencia, o.id, o.panel_modelo, o.aero_modelo]
         .some(x => normal(x).includes(q));
     }).sort((a, b) => txt(b.fecha_firma || b.creado).localeCompare(txt(a.fecha_firma || a.creado)));
 
@@ -213,9 +213,12 @@ export async function vistaOperaciones({ir, refrescar}) {
     const t = tabla([
       {clave: 'referencia', et: 'Referencia', pinta: o => h('div', h('b', txt(o.referencia) || o.id),
         h('div.nota', api.etiquetaCatalogo('tiposOperacion', o.tipo)))},
-      {clave: 'cliente', et: 'Cliente', valor: o => (api.cliente(o.cliente_id) || {}).nombre || '—',
+      /* Dirección primero y debajo el nombre, como se nombra a los clientes en todo el CRM. */
+      {clave: 'cliente', et: 'Dirección · cliente', valor: o => { const c = api.cliente(o.cliente_id) || {};
+         return [txt(c.direccion), txt(c.nombre)].filter(Boolean).join(' · ') || '—'; },
        pinta: o => { const c = api.cliente(o.cliente_id) || {};
-         return h('div', h('b', c.nombre || '—'), h('div.nota', txt(c.municipio))); }},
+         return h('div', h('b', txt(c.direccion) || txt(c.nombre) || '—'),
+           h('div.nota', [txt(c.direccion) ? txt(c.nombre) : '', txt(c.municipio)].filter(Boolean).join(' · '))); }},
       {clave: 'estado', et: 'Estado', pinta: o => etiquetaEstado(o.estado,
         api.etiquetaCatalogo('estadosOperacion', o.estado))},
       {clave: 'total', et: 'Importe', num: true, valor: o => num(o.total), pinta: o => eur(o.total)},
