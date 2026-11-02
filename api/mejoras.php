@@ -65,7 +65,55 @@ function bloqueosAgenda_(): array {
   $b = deJson_(txt_($c['agenda_bloqueos'] ?? '') ?: '{}', []);
   if (!is_array($b)) $b = [];
   if (txt_($c['agenda_bloqueos'] ?? '') === '') $b = ['U-000004' => ['dias' => [5], 'nota' => 'Viernes sin visitas (Nando)']];
+  /* Reglas de Nando (02/11/2026): como mucho 3 visitas al día, los viernes
+     nada y ninguna después de las 17:30, salvo que él lo autorice. */
+  $n = is_array($b['U-000004'] ?? null) ? $b['U-000004'] : [];
+  if (!isset($n['dias'])) $n['dias'] = [5];
+  if (!array_key_exists('max_dia', $n)) $n['max_dia'] = 3;
+  if (!array_key_exists('hasta', $n)) $n['hasta'] = '17:30';
+  $b['U-000004'] = $n;
   return $b;
+}
+
+const NOMBRE_DIA_ = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+
+/** Las reglas fijas de la agenda de un comercial. Devuelve lo que no cumple (vacío si cumple). */
+function reglasAgenda_($comercialId, $fecha, $hora, $salvoId = ''): array {
+  $fallos = [];
+  $fecha = trozo_($fecha, 0, 10);
+  $r = bloqueosAgenda_()[txt_($comercialId)] ?? null;
+  if (!$r || $fecha === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) return $fallos;
+  $dia = (int)(new DateTime($fecha . 'T12:00:00', tz_()))->format('w');
+  if (in_array($dia, array_map('intval', is_array($r['dias'] ?? null) ? $r['dias'] : []), true)) $fallos[] = 'los ' . NOMBRE_DIA_[$dia] . ' no tiene visitas';
+  $ini = minutosHora_($hora);
+  if (txt_($r['hasta'] ?? '') !== '' && $ini >= 0 && $ini > minutosHora_($r['hasta'])) $fallos[] = 'no tiene visitas después de las ' . txt_($r['hasta']);
+  if (num_($r['max_dia'] ?? 0) > 0) {
+    $n = count(citasDelDia_($comercialId, $fecha, $salvoId));
+    if ($n >= num_($r['max_dia'])) $fallos[] = 'ese día ya tiene ' . $n . ' visitas y como mucho son ' . num_($r['max_dia']);
+  }
+  return $fallos;
+}
+
+/** Correo al comercial para que autorice una cita que se sale de sus reglas. */
+function pedirAutorizacionCita_(array $u, array $cap, array $pend): void {
+  try {
+    $com = buscar1_('USUARIOS', fn($x) => mismo_($x['id'], $pend['comercial_id']));
+    if (!$com || txt_($com['email']) === '') return;
+    $cli = buscar1_('CLIENTES', fn($c) => mismo_($c['id'], $cap['cliente_id'])) ?? [];
+    $sitio = implode(', ', array_filter([txt_($cli['direccion'] ?? ''), txt_($cli['municipio'] ?? '')], fn($s) => $s !== '')) ?: 'un cliente';
+    $web = defined('WEB_CRM') ? WEB_CRM : 'https://crm.zerowattios.com/';
+    correo_(['to' => txt_($com['email']), 'name' => 'CRM · ZERO WATTIOS',
+      'subject' => 'Autoriza una visita · ' . fechaLarga_($pend['fecha'], $pend['hora']) . ' · ' . $sitio,
+      'htmlBody' => '<div style="font-family:Arial,sans-serif;font-size:15px;color:#17191c;max-width:620px">' .
+        '<p>Hola ' . htmlspecialchars(txt_($com['nombre'])) . ',</p><p><b>' . htmlspecialchars(txt_($u['nombre'])) . '</b> quiere darte una visita que se sale de tus reglas de agenda:</p>' .
+        '<p style="margin:0 0 6px"><b>' . fechaLarga_($pend['fecha'], $pend['hora']) . '</b> · ' . htmlspecialchars($sitio) . '</p>' .
+        '<p style="margin:0 0 14px;color:#8a520b">' . htmlspecialchars(implode('; ', $pend['fallos'])) . '.</p>' .
+        '<p>La ficha está guardada <b>sin adjudicar</b>. Si la aceptas, adjudícatela en Captaciones («Adjudicar») o en la ficha del cliente. Si no, dile a ' .
+        htmlspecialchars(txt_($u['nombre'])) . ' que busque otra hora.</p>' .
+        '<p style="margin:22px 0"><a href="' . $web . '#cliente/' . txt_($cap['cliente_id']) . '" style="background:#b4fa1e;color:#17191c;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:700">Abrir la ficha</a></p>' .
+        '<p style="color:#5b6159;font-size:12px">Aviso automático del CRM.</p></div>']);
+    registrar_($u, 'pedir_autorizacion_cita', 'CAPTACIONES', $cap['id'], implode('; ', $pend['fallos']));
+  } catch (Throwable $e) { /* sin correo: la ficha queda igualmente sin adjudicar y con la nota */ }
 }
 
 /* Orden de Nando (02/11/2026): una visita dura como mínimo 1 h 45 min, y entre
@@ -135,12 +183,8 @@ function revisarCita_($comercialId, $fecha, $hora, $punto, $salvoId = ''): array
   $avisos = [];
   $fecha = trozo_($fecha, 0, 10);
   if (txt_($comercialId) === '' || $fecha === '') return ['texto' => '', 'detalle' => []];
-  $bloq = bloqueosAgenda_()[txt_($comercialId)] ?? null;
-  $dia = -1;
-  try { $dia = (int)(new DateTime($fecha . 'T12:00:00', tz_()))->format('w'); } catch (Throwable $e) { $dia = -1; }   // getDay() de una fecha inválida es NaN
-  if ($bloq && in_array($dia, array_map('intval', is_array($bloq['dias'] ?? null) ? $bloq['dias'] : []), true)) {
-    $avisos[] = txt_($bloq['nota'] ?? '') ?: 'Ese día está bloqueado para ese comercial.';
-  }
+  $reglas = reglasAgenda_($comercialId, $fecha, $hora, $salvoId);
+  if ($reglas) $avisos[] = 'Sin su autorización no se puede: ' . implode('; ', $reglas) . '.';
   $ini = minutosHora_($hora);
   $detalle = [];
   if ($ini >= 0) {

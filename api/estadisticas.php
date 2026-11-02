@@ -81,12 +81,13 @@ function accReagendarCita_(array $u, array $p): array {
   $motivo = txt_($p['motivo'] ?? '');
   $nota = 'Reagendada del ' . fechaLarga_($cap['fecha'], $cap['hora_cita']) . ' al ' . fechaLarga_($fecha, $hora) .
     ($motivo !== '' ? ' (' . $motivo . ')' : '') . '.';
-  apuntarCambioCita_($u, $cap, 'reagendada', ['fecha' => $fecha, 'hora_cita' => $hora, 'motivo' => $motivo]);
-  $r = accGuardarCaptacion_($u, ['captacion' => ['id' => $cap['id'], 'cliente_id' => $cap['cliente_id'], 'fecha' => $fecha, 'hora_cita' => $hora,
-    'estado_cita' => !empty($p['confirmada']) ? 'confirmada' : 'pendiente', 'resultado' => 'pendiente',
+  $r = accGuardarCaptacion_($u, ['pedir_autorizacion' => !empty($p['pedir_autorizacion']), 'captacion' => ['id' => $cap['id'], 'cliente_id' => $cap['cliente_id'],
+    'fecha' => $fecha, 'hora_cita' => $hora, 'estado_cita' => !empty($p['confirmada']) ? 'confirmada' : 'pendiente', 'resultado' => 'pendiente',
     'notas' => (txt_($cap['notas']) !== '' ? txt_($cap['notas']) . "\n" : '') . $nota, '_cambio_apuntado' => true]]);
+  if (empty($r['ok'])) return $r;
+  apuntarCambioCita_($u, $cap, 'reagendada', ['fecha' => $fecha, 'hora_cita' => $hora, 'motivo' => $motivo]);
   registrar_($u, 'reagendar_cita', 'CAPTACIONES', $cap['id'], $nota);
-  return ['ok' => true, 'captacion' => $r['captacion'] ?? null, 'aviso_agenda' => $r['aviso_agenda'] ?? ''];
+  return ['ok' => true, 'captacion' => $r['captacion'] ?? null, 'aviso_agenda' => $r['aviso_agenda'] ?? '', 'pendiente_autorizacion' => $r['pendiente_autorizacion'] ?? ''];
 }
 
 function accCancelarCita_(array $u, array $p): array {

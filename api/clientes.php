@@ -320,7 +320,54 @@ function accGuardarSeguimiento_(array $u, array $p): array {
 
 /* ---------- captaciones ---------- */
 
+/**
+ * Reglas fijas de la agenda de cada comercial (Nando, 02/11/2026: como mucho
+ * 3 visitas al día, los viernes no y nunca después de las 17:30, salvo que
+ * él lo autorice). Son regla para los captadores: si la cita no las cumple,
+ * no se le adjudica; se puede guardar sin adjudicar y le llega un correo
+ * para que la acepte él (adjudicándosela).
+ */
 function accGuardarCaptacion_(array $u, array $p): array {
+  $d = is_array($p['captacion'] ?? null) ? $p['captacion'] : [];
+  $pendiente = null;
+  if (($u['rol'] ?? '') === 'captador') {
+    $ant = txt_($d['id'] ?? '') !== '' ? buscar1_('CAPTACIONES', fn($x) => mismo_($x['id'], $d['id'])) : null;
+    $val = fn($k, $def) => array_key_exists($k, $d) ? txt_($d[$k]) : ($ant ? txt_($ant[$k] ?? '') : $def);
+    $toca = !$ant;
+    if ($ant) foreach (['fecha', 'hora_cita', 'comercial_id'] as $k) if (array_key_exists($k, $d) && txt_($d[$k]) !== txt_($ant[$k] ?? '')) $toca = true;
+    $com = $val('comercial_id', '');
+    $fe = $val('fecha', '') ?: ($ant ? '' : hoyISO_());
+    $ho = $val('hora_cita', '');
+    $res = normal_($val('resultado', 'pendiente'));
+    if ($toca && $com !== '' && $fe !== '' && !in_array($res, ['cancelada', 'no_sentada', 'venta', 'sentada'], true)) {
+      $fallos = reglasAgenda_($com, $fe, $ho, $d['id'] ?? '');
+      if ($fallos) {
+        $quien = txt_((buscar1_('USUARIOS', fn($x) => mismo_($x['id'], $com)) ?? [])['nombre'] ?? '') ?: 'ese comercial';
+        if (empty($p['pedir_autorizacion']) && empty($d['pedir_autorizacion'])) {
+          return ['ok' => false, 'requiere_autorizacion' => true, 'comercial' => $quien, 'motivos' => $fallos,
+                  'error' => 'A ' . $quien . ' no se le puede dar esa cita sin su autorización: ' . implode('; ', $fallos) . '.'];
+        }
+        /* Queda sin adjudicar hasta que él la acepte. */
+        $notas = $val('notas', '');
+        $d['comercial_id'] = '';
+        $d['notas'] = ($notas !== '' ? $notas . "\n" : '') . 'Pendiente de que ' . $quien . ' autorice la visita del ' .
+          fechaLarga_($fe, $ho) . ' (' . implode('; ', $fallos) . ').';
+        $pendiente = ['comercial_id' => $com, 'nombre' => $quien, 'fallos' => $fallos, 'fecha' => $fe, 'hora' => $ho];
+      }
+    }
+  }
+  $p['captacion'] = $d;
+  $r = guardarCaptacionSinReglas_($u, $p);
+  if ($pendiente && !empty($r['ok']) && !empty($r['captacion'])) {
+    /* El cliente sí pasa a su cartera, para que lo vea y pueda aceptar la cita. */
+    actualizar_('CLIENTES', $r['captacion']['cliente_id'], ['comercial_id' => $pendiente['comercial_id'], 'modificado' => ahora_(), 'modificado_por' => $u['id']]);
+    pedirAutorizacionCita_($u, $r['captacion'], $pendiente);
+    $r['pendiente_autorizacion'] = 'Guardada sin adjudicar: le ha llegado un correo a ' . $pendiente['nombre'] . ' para que la autorice.';
+  }
+  return $r;
+}
+
+function guardarCaptacionSinReglas_(array $u, array $p): array {
   $d = is_array($p['captacion'] ?? null) ? $p['captacion'] : [];
   $clienteId = $d['cliente_id'] ?? '';
 
