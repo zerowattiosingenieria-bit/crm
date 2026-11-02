@@ -9,6 +9,7 @@ import {vistaAgenda} from './vistas/agenda.js';
 import {vistaClientes, vistaCliente} from './vistas/clientes.js';
 import {vistaOperaciones} from './vistas/operaciones.js';
 import {vistaCaptaciones} from './vistas/captaciones.js';
+import {vistaEstadisticas} from './vistas/estadisticas.js';
 import {vistaMapa} from './vistas/mapa.js';
 import {vistaDirectorio} from './vistas/directorio.js';
 import {vistaContabilidad, vistaFacturas, vistaGastos, vistaCobros} from './vistas/finanzas.js';
@@ -38,6 +39,7 @@ const VISTAS = {
   cliente:      {titulo: 'Ficha de cliente',   pinta: vistaCliente},
   operaciones:  {titulo: 'Instalaciones',      pinta: vistaOperaciones},
   captaciones:  {titulo: 'Captaciones',        pinta: vistaCaptaciones},
+  estadisticas: {titulo: 'Estadísticas',       pinta: vistaEstadisticas},
   mapa:         {titulo: 'Mapa de clientes',   pinta: vistaMapa,          permiso: 'direccion'},
   directorio:   {titulo: 'Directorio y puertas', pinta: vistaDirectorio,  permiso: 'directorio'},
   contabilidad: {titulo: 'Contabilidad',       pinta: vistaContabilidad,  permiso: 'finanzas'},
@@ -77,6 +79,7 @@ function menuDe(rol) {
       {id: 'tablero', et: 'Mi tablero', ico: '◑'},
       {id: 'agenda', et: 'Agenda', ico: '◷'},
       {id: 'captaciones', et: 'Mis captaciones', ico: '⚑'},
+      {id: 'estadisticas', et: 'Estadísticas del equipo', ico: '▥'},
       {id: 'clientes', et: 'Mis clientes', ico: '☰'},
       {id: 'parte', et: 'Parte del día', ico: '✓'},
       {grupo: 'Lo mío'},
@@ -96,6 +99,7 @@ function menuDe(rol) {
       {id: 'clientes', et: 'Mis clientes', ico: '☰'},
       {id: 'operaciones', et: 'Mis instalaciones', ico: '⚡'},
       {id: 'captaciones', et: 'Captaciones', ico: '⚑'},
+      {id: 'estadisticas', et: 'Estadísticas', ico: '▥'},
       {id: 'parte', et: 'Parte del día', ico: '✓'},
       {id: 'directorio', et: 'Directorio', ico: '🗂'},
       {grupo: 'Lo mío'},
@@ -114,6 +118,7 @@ function menuDe(rol) {
     {id: 'clientes', et: 'Clientes', ico: '☰'},
     {id: 'operaciones', et: 'Instalaciones', ico: '⚡'},
     {id: 'captaciones', et: 'Captaciones', ico: '⚑'},
+    {id: 'estadisticas', et: 'Estadísticas', ico: '▥'},
     {id: 'mapa', et: 'Mapa', ico: '◎'},
     {id: 'directorio', et: 'Directorio y puertas', ico: '🗂'},
     {grupo: 'Dinero'},
@@ -148,9 +153,9 @@ function rutaActual() {
    abajo del menú y queda guardado en ese aparato. */
 const K_MENU = 'zw.crm.menuSimple';
 const MENU_CORTO = {
-  captador: ['hoy', 'agenda', 'captaciones', 'clientes', 'parte', 'perfil'],
+  captador: ['hoy', 'agenda', 'captaciones', 'estadisticas', 'clientes', 'parte', 'perfil'],
   comercial: ['hoy', 'agenda', 'clientes', 'operaciones', 'parte', 'perfil'],
-  otro: ['hoy', 'panel', 'tablero', 'agenda', 'clientes', 'operaciones', 'captaciones', 'cobros', 'banco', 'perfil']
+  otro: ['hoy', 'panel', 'tablero', 'agenda', 'clientes', 'operaciones', 'captaciones', 'estadisticas', 'cobros', 'banco', 'perfil']
 };
 const menuCorto = () => { try { return localStorage.getItem(K_MENU) === '1'; } catch (e) { return false; } };
 

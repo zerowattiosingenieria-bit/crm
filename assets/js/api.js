@@ -335,3 +335,7 @@ export const alertasBanco = () => pedir('alertasBanco', {});
 export const catastro = datos => pedir('catastro', datos);
 export const llaveServicio = (usuario_id, nota) => pedir('llaveServicio', {usuario_id, nota});
 export const revocarLlaves = usuario_id => pedir('revocarLlaves', {usuario_id});
+export const reagendarCita = datos => pedir('reagendarCita', datos);
+export const cancelarCita = datos => pedir('cancelarCita', datos);
+export const estadisticas = hoy => pedir('estadisticas', hoy ? {hoy} : {});
+export const historialCambios = cliente_id => pedir('historialCambios', {cliente_id});
