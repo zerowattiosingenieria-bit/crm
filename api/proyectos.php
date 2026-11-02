@@ -23,7 +23,7 @@ require_once __DIR__ . '/google.php';
 /* Constantes que en Apps Script viven en 14_ResumenSemanal.gs; aquí se
    definen solo si resumen_semanal.php no las ha definido antes. */
 if (!defined('LOGO_CORREO')) define('LOGO_CORREO', 'https://zerowattiosingenieria-bit.github.io/crm/assets/img/logo-h96.png');
-if (!defined('WEB_CRM')) define('WEB_CRM', 'https://zerowattiosingenieria-bit.github.io/crm/');
+if (!defined('WEB_CRM')) define('WEB_CRM', 'https://crm.zerowattios.com/');
 
 const CLASES_ARCHIVO = ['foto', 'documento', 'proyecto', 'direccion', 'factura_luz', 'factura_gas',
                         'aceptacion', 'dni'];

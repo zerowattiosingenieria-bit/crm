@@ -18,7 +18,7 @@
 require_once __DIR__ . '/base.php';
 require_once __DIR__ . '/google.php';
 
-if (!defined('WEB_CRM')) define('WEB_CRM', 'https://zerowattiosingenieria-bit.github.io/crm/');
+if (!defined('WEB_CRM')) define('WEB_CRM', 'https://crm.zerowattios.com/');
 
 /* ---------- llave de servicio ---------- */
 

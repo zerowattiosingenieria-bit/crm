@@ -51,7 +51,7 @@ function numeroSemana_($fechaISO): int {
 /* ---------- el correo ---------- */
 
 if (!defined('LOGO_CORREO')) define('LOGO_CORREO', 'https://zerowattiosingenieria-bit.github.io/crm/assets/img/logo-h96.png');
-if (!defined('WEB_CRM')) define('WEB_CRM', 'https://zerowattiosingenieria-bit.github.io/crm/');
+if (!defined('WEB_CRM')) define('WEB_CRM', 'https://crm.zerowattios.com/');
 
 function cajaHtml_($titulo, $valor, $pie = ''): string {
   return '<td style="padding:6px">' .

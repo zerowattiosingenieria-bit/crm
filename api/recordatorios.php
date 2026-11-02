@@ -21,7 +21,7 @@
 require_once __DIR__ . '/base.php';
 require_once __DIR__ . '/google.php';
 /* WEB_CRM la define también resumen_semanal.php; por si este módulo se carga solo (cron.php). */
-if (!defined('WEB_CRM')) define('WEB_CRM', 'https://zerowattiosingenieria-bit.github.io/crm/');
+if (!defined('WEB_CRM')) define('WEB_CRM', 'https://crm.zerowattios.com/');
 
 const K_COLA_RECORD = 'recordatorios_cola';
 const K_ENVIADOS_RECORD = 'recordatorios_enviados';
@@ -105,7 +105,7 @@ function pendientesCRM_(string $hoy): array {
       $falta = [];
       if (strlen(preg_replace('/\D/', '', txt_($c['telefono']))) < 9) $falta[] = 'teléfono';
       if (txt_($c['direccion']) === '') $falta[] = 'dirección';
-      if (!num_($c['gasto_luz_mes']) && !num_($c['gasto_combustible'])) $falta[] = 'lo que gasta';
+      /* El gasto no: en la puerta casi nunca se sabe y lo confirma el comercial con la factura. */
       if (count($falta)) $add($k['captador_id'], 'ficha|' . $k['id'] . '|' . implode(',', $falta),
         'A la ficha de ' . ($nombre($c) ?: 'un cliente') . ' le falta: ' . implode(', ', $falta) . '.',
         'Ficha del cliente › Falta por meter.');
@@ -121,7 +121,7 @@ function pendientesCRM_(string $hoy): array {
         'Ficha › Proyecto › Enviar la propuesta › «Ya se lo he enviado».');
     }
     if (normal_($pr['estado']) === 'faltan_datos' && $desdeYa(txt_($pr['modificado'])) && diasEntre_(trozo_($pr['modificado'], 0, 10), $hoy) >= 2) {
-      $add($c['comercial_id'], 'faltan|' . $pr['id'], 'El proyecto de ' . $nombre($c) . ' sigue parado: falta ' . txt_($pr['faltan']) . '.',
+      $add($c['comercial_id'], 'faltan|' . $pr['id'], 'El proyecto de ' . $nombre($c) . ' sigue parado: falta ' . (mb_strlen(txt_($pr['faltan'])) > 110 ? mb_substr(txt_($pr['faltan']), 0, 107) . '…' : txt_($pr['faltan'])) . '.',
         'Ficha › Proyecto: súbelo ahí y vuelve solo a la cola.');
     }
   }
