@@ -70,7 +70,7 @@ comprobar('Sandra solo ve lo que ha captado',
   dSandra.clientes.length);
 comprobar('el comercial no recibe gastos', dNando.gastos.length === 0);
 comprobar('el comercial no recibe facturas', dNando.facturas.length === 0);
-comprobar('el comercial sí ve los cobros de sus operaciones', dNando.cobros.length > 0, dNando.cobros.length);
+comprobar('el comercial ya no ve los cobros (solo dirección, 30/10)', dNando.cobros.length === 0, dNando.cobros.length);
 comprobar('el administrador sí recibe gastos y facturas',
   dAdmin.gastos.length > 0 && dAdmin.facturas.length > 0);
 
@@ -114,9 +114,10 @@ const op = despachar_({accion: 'guardarOperacion', token: sesiones.nando.token,
 comprobar('se crea la operación', op.ok === true, op.error);
 comprobar('el total suma los importes', op.operacion.total === 27980, op.operacion.total);
 comprobar('la base descuenta el IVA', Math.abs(op.operacion.base - 27980 / 1.21) < 0.02, op.operacion.base);
-comprobar('se generan los tres cobros 50/25/25', op.cobros.length === 3, op.cobros.length);
+const cobrosOp = leer_('COBROS').filter(c => c.operacion_id === op.operacion.id);
+comprobar('se generan los tres cobros 50/25/25', cobrosOp.length === 3, cobrosOp.length);
 comprobar('los cobros suman el total',
-  Math.abs(op.cobros.reduce((a, c) => a + num_(c.importe), 0) - 27980) < 0.05);
+  Math.abs(cobrosOp.reduce((a, c) => a + num_(c.importe), 0) - 27980) < 0.05);
 const cliTrasFirma = leer_('CLIENTES').filter(c => c.id === alta.cliente.id)[0];
 comprobar('al firmar, el cliente pasa a ganado', cliTrasFirma.estado === 'ganado', cliTrasFirma.estado);
 
@@ -406,9 +407,19 @@ comprobar('se crea la operación de prueba', opSync.ok === true);
 const subida2 = despachar_({accion: 'guardarOperacion', token: sesiones.nando.token,
   operacion: {id: opSync.operacion.id, cliente_id: alta.cliente.id, tipo: 'fv',
               importe_fv: 12990, forma_pago: 'contado', iva_pct: 21}});
-comprobar('al subir el importe se rehacen los cobros',
-  Math.abs(subida2.cobros.reduce((a, c) => a + num_(c.importe), 0) - 12990) < 0.05,
-  subida2.cobros.map(c => c.importe));
+const cobrosSync = leer_('COBROS').filter(c => c.operacion_id === opSync.operacion.id);
+comprobar('al subir el importe se rehacen los cobros automáticos',
+  Math.abs(cobrosSync.reduce((a, c) => a + num_(c.importe), 0) - 12990) < 0.05,
+  cobrosSync.map(c => c.importe));
+/* 02/11: si hay un cobro puesto a mano (hito de Finlight), no se toca nada. */
+insertar_('COBROS', {operacion_id: opSync.operacion.id, concepto: 'finlight', importe: 6495,
+  fecha_prevista: hoyISO_(), estado: 'previsto', notas: 'Hito 1 Finlight'});
+const antesMano = leer_('COBROS').filter(c => c.operacion_id === opSync.operacion.id).map(c => c.id).join();
+despachar_({accion: 'guardarOperacion', token: sesiones.fernando.token,
+  operacion: {id: opSync.operacion.id, cliente_id: alta.cliente.id, tipo: 'fv', importe_fv: 13990,
+              forma_pago: 'contado', iva_pct: 21}});
+comprobar('con un cobro a mano, cambiar el importe no rehace ni borra cobros',
+  leer_('COBROS').filter(c => c.operacion_id === opSync.operacion.id).map(c => c.id).join() === antesMano);
 
 console.log('\n== Copia de seguridad ==');
 const copia = copiaSeguridad();
@@ -1556,7 +1567,7 @@ comprobar('el ping no se apunta', logAhora().length === antes);
 const lecturas = ['misEquipos','datos','buscar','proyecto','descargarArchivo','proyectosPendientes',
   'cifras','tareas','finanzas','partes','resumen','equipo','analitica','alertas','nominas','nominaDias',
   'descargarNomina','vacaciones','mapa','usuarios','registro','directorio','directorioFicha','puertas',
-  'banco','copias','descargarCopia'];
+  'banco','copias','descargarCopia','agendaHuecos','comprobarCita','alertasBanco','catastro'];
 const malClasificadas = Object.keys(acciones_()).filter(a => a !== 'salir' &&
   (tipoDePeticion_(a) === 'consulta') !== lecturas.includes(a));
 comprobar('cada acción está clasificada como consulta o modificación', malClasificadas.length === 0,
@@ -1701,6 +1712,73 @@ hP.datos.forEach((f, i) => { if (i) f.length = Math.min(f.length, hP.datos[0].le
 asegurarProyectos_();
 comprobar('una hoja PROYECTOS vieja recibe enviado y enviado_por',
   hP.datos[0].slice(-2).join(',') === 'enviado,enviado_por', hP.datos[0].slice(-3));
+}
+
+
+console.log('\n== Mejoras 02/11/2026 ==');
+{
+/* Llave de servicio para los agentes */
+const ag = despachar_({accion: 'guardarUsuario', token: sesiones.superadmin.token,
+  usuario: {nombre: 'Agentes Claude', usuario: 'agentes', rol: 'agente', activo: 'si', email: 'x@x.es'}});
+const idAg = ag.usuario ? ag.usuario.id : (leer_('USUARIOS').filter(x => x.usuario === 'agentes')[0] || {}).id;
+comprobar('se da de alta un usuario agente', !!idAg, ag.error);
+comprobar('un administrador no puede sacar llaves',
+  despachar_({accion: 'llaveServicio', token: sesiones.fernando.token, usuario_id: idAg}).ok === false);
+comprobar('no se dan llaves a un usuario normal',
+  despachar_({accion: 'llaveServicio', token: sesiones.superadmin.token,
+    usuario_id: leer_('USUARIOS').filter(x => x.usuario === 'nando')[0].id}).ok === false);
+const llave = despachar_({accion: 'llaveServicio', token: sesiones.superadmin.token, usuario_id: idAg});
+comprobar('el superadmin saca la llave del agente', llave.ok && !!llave.token, llave.error);
+/* Aunque lleve horas parada, la llave sigue valiendo. */
+const hS = SpreadsheetApp.openById().getSheetByName('SESIONES');
+const fila = hS.datos.findIndex(f => f[0] === llave.token);
+hS.datos[fila][hS.datos[0].indexOf('ultimo_uso')] = '2026-01-01 08:00:00';
+const conLlave = despachar_({accion: 'datos', token: llave.token});
+comprobar('la llave no cae por inactividad y ve todo', conLlave.ok === true && conLlave.clientes.length > 0, conLlave.error);
+comprobar('pero no toca usuarios ni ajustes', despachar_({accion: 'guardarUsuario', token: llave.token, usuario: {id: idAg, nombre: 'x'}}).ok === false &&
+  despachar_({accion: 'guardarConfig', token: llave.token, config: {iva_pct: 10}}).ok === false);
+const rev = despachar_({accion: 'revocarLlaves', token: sesiones.superadmin.token, usuario_id: idAg});
+comprobar('se puede revocar', rev.ok && rev.revocadas === 1 &&
+  despachar_({accion: 'datos', token: llave.token}).ok === false, rev);
+
+/* Agenda: 1 h 45 min por visita y aviso de choques */
+const cliA = leer_('CLIENTES').filter(c => c.comercial_id)[0];
+const comA = cliA.comercial_id;
+const fechaA = '2030-03-12';   // un martes
+insertar_('CAPTACIONES', {cliente_id: cliA.id, comercial_id: comA, fecha: fechaA, hora_cita: '10:00', resultado: 'pendiente'});
+const c1 = despachar_({accion: 'comprobarCita', token: sesiones.fernando.token, comercial_id: comA,
+  fecha: fechaA, hora: '11:00', direccion: 'Calle Falsa 1, Madrid'});
+comprobar('una cita a la hora siguiente avisa de que no da tiempo', /No le da tiempo/.test(c1.aviso) && c1.duracion_min === 105, c1);
+const c2 = despachar_({accion: 'comprobarCita', token: sesiones.fernando.token, comercial_id: comA,
+  fecha: fechaA, hora: '13:30', direccion: 'Calle Falsa 1, Madrid'});
+comprobar('con 1 h 45 min y el coche, cuadra', c2.aviso === '', c2);
+const c3 = despachar_({accion: 'comprobarCita', token: sesiones.fernando.token, comercial_id: 'U-000004',
+  fecha: '2030-03-15', hora: '10:00', direccion: 'Calle Falsa 1, Madrid'});
+comprobar('los viernes de Nando avisan', /Viernes/.test(c3.aviso), c3);
+const hu = despachar_({accion: 'agendaHuecos', token: sesiones.nando.token, desde: fechaA, hasta: fechaA});
+comprobar('los huecos dicen la fuente y la duración', hu.ok && hu.fuente === 'trello' && hu.duracion_min === 105, hu.error);
+
+/* Pedir cambios al ingeniero */
+const cliN = leer_('CLIENTES').filter(c => c.comercial_id === leer_('USUARIOS').filter(x => x.usuario === 'nando')[0].id)[0];
+const pc = despachar_({accion: 'pedirCambios', token: sesiones.nando.token, cliente_id: cliN.id,
+  texto: 'Quitar la batería y poner 10 placas'});
+comprobar('el comercial pide cambios y el proyecto vuelve a pedido', pc.ok && pc.proyecto.estado === 'pedido' &&
+  /CAMBIOS PEDIDOS/.test(pc.proyecto.descripcion), pc.error);
+
+/* Banco: casado automático */
+const opB = leer_('OPERACIONES')[0];
+const cobB = insertar_('COBROS', {operacion_id: opB.id, concepto: 'final', importe: 4321.77,
+  fecha_prevista: hoyISO_(), estado: 'previsto', notas: 'prueba'});
+insertar_('BANCO', {cuenta: 'CaixaBank', fecha: hoyISO_(), concepto: 'TRANSF CLIENTE', importe: 4321.77,
+  saldo: 1, tipo: 'ingreso', categoria: 'otros', conciliado: 'no', clave: 'x'});
+const sim = despachar_({accion: 'casarAuto', token: sesiones.fernando.token, simular: true});
+comprobar('el casado automático propone el cobro del mismo importe', sim.ok && sim.casados.some(x => x.cobro === cobB.id), sim);
+const cas = despachar_({accion: 'casarAuto', token: sesiones.fernando.token});
+comprobar('y al hacerlo lo marca cobrado', cas.ok &&
+  leer_('COBROS').filter(c => c.id === cobB.id)[0].estado === 'cobrado', cas);
+comprobar('un comercial no puede', despachar_({accion: 'casarAuto', token: sesiones.nando.token}).ok === false);
+const al = despachar_({accion: 'alertasBanco', token: sesiones.fernando.token});
+comprobar('las alertas del banco responden', al.ok && Array.isArray(al.duplicados), al.error);
 }
 
 console.log('\n' + (fallos ? 'FALLAN ' + fallos + ' de ' + pruebas : 'Todo correcto: ' + pruebas + ' comprobaciones'));
