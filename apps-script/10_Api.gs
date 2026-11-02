@@ -168,6 +168,13 @@ function despachar_(p) {
   /* Peticiones del servidor de crm.zerowattios.com (Drive, correo, mapas,
      espejo): van con su llave y no pasan por sesiones ni registro. */
   if (esPeticionDeServicio_(p)) return atenderServicio_(p);
+  /* Desde el cambio a crm.zerowattios.com (propiedad CRM_MIGRADO = si) esta
+     hoja es solo el espejo: aquí ya no se lee ni se escribe nada. Solo se
+     dejan las copias, para poder sacar la última antes de mudarse. */
+  if (PROPS.getProperty('CRM_MIGRADO') === 'si' &&
+      ['copiaAhora', 'descargarCopia', 'copias'].indexOf(accion) < 0) {
+    return {ok: false, error: 'El CRM se ha mudado a https://crm.zerowattios.com — entra desde ahí.'};
+  }
   empezarPeticion_(p, accion);
   let r;
   try {
