@@ -20,7 +20,7 @@ no recibe nada (tampoco la cuenta de comercial de Nando, que usa su correo).
 - **Lo que se queda a medias** (solo en el correo de la tarde): visita ya
   pasada sin resultado, sentada sin proyecto pedido a los 2 días, propuesta
   lista sin marcar como enviada a los 2 días, proyecto parado por falta de
-  datos 2 días, ficha de captación sin teléfono, dirección o gasto, y el
+  datos 2 días, ficha de captación sin teléfono o dirección, y el
   parte del día anterior sin mandar.
 - **Cuándo:** lunes a viernes hacia las 13:30 y las 19:30, un solo correo por
   persona y nada si no hay nada. Lo mismo no se repite antes de 3 días.
