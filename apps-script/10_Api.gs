@@ -139,7 +139,11 @@ function acciones_() {
     /* Un cliente, una ficha (22_Ficha.gs) */
     duplicados: accDuplicados_,
     fusionarClientes: accFusionarClientes_,
-    recordarCRM: accRecordarCRM_, recordatorios: accRecordatorios_
+    recordarCRM: accRecordarCRM_, recordatorios: accRecordatorios_,
+
+    /* Reagendar y cancelar citas, estadísticas (24_Estadisticas.gs) */
+    reagendarCita: accReagendarCita_, cancelarCita: accCancelarCita_, estadisticas: accEstadisticas_,
+    historialCambios: accHistorialCambios_
   };
 }
 

@@ -85,7 +85,8 @@ function enlazadosDe_(clienteId) {
 /* Cuántas cosas cuelgan de cada cliente, leyendo cada tabla una sola vez. */
 function conteoEnlazados_() {
   const r = {};
-  tablasDeCliente_().forEach(function (t) {
+  /* El histórico no cuenta como «cosas enlazadas»: no impide borrar una ficha. */
+  tablasDeCliente_().filter(function (t) { return ['CAMBIOS', 'CITAS_CAMBIOS'].indexOf(t) < 0; }).forEach(function (t) {
     leer_(t).forEach(function (x) {
       const k = String(x.cliente_id || '');
       if (!k) return;

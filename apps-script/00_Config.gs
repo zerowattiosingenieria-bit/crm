@@ -154,6 +154,15 @@ const ESQUEMA = {
     'tecnologia','comercial_id','resultado','fecha_resultado','operacion_id',
     'interes','notas','creado'],
 
+  /* Cada vez que una cita se reagenda o se cancela (02/11/2026): para saber
+     cuántas se aplazan y cuántas se caen, por captador y por fechas. */
+  CITAS_CAMBIOS: ['id','captacion_id','cliente_id','captador_id','comercial_id','tipo',
+    'fecha_antes','hora_antes','fecha_nueva','hora_nueva','motivo','usuario_id','creado'],
+
+  /* Histórico de cambios de cada lead: qué campo, cómo estaba, cómo queda,
+     quién y cuándo (02/11/2026). */
+  CAMBIOS: ['id','fecha','usuario_id','cliente_id','entidad','entidad_id','campo','antes','despues'],
+
   PARTES: ['id','fecha','usuario_id','rol','visitas','puertas','fichas',
     'sentadas','sentadas_detalle','ventas','importe_vendido',
     'resumen','analisis','propuestas_aplicadas','estado','creado','modificado'],

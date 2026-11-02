@@ -81,6 +81,7 @@ function accGuardarCliente_(u, p) {
     });
     if (cambios.estado && cambios.estado !== actual.estado) cambios.fecha_estado = hoyISO_();
     const r = actualizar_('CLIENTES', d.id, cambios);
+    apuntarHistorial_(u, 'CLIENTES', d.id, d.id, actual, cambios);
     registrar_(u, 'editar_cliente', 'CLIENTES', d.id, cambios.estado || '');
     /* Si al corregir el teléfono o la calle resulta que es otro cliente que ya
        estaba, se avisa (no se bloquea: dirección decide si se fusionan). */
@@ -111,6 +112,7 @@ function accGuardarCliente_(u, p) {
   nuevo.estado = nuevo.estado || (u.rol === 'captador' ? 'captado' : 'nuevo');
   nuevo.fecha_estado = hoyISO_();
   const r = insertar_('CLIENTES', nuevo);
+  apuntarHistorial_(u, 'CLIENTES', r.id, r.id, null, null, 'Ficha creada');
   registrar_(u, 'alta_cliente', 'CLIENTES', r.id, r.nombre);
   return {ok: true, cliente: clienteParaVer_(u, r)};
 }
@@ -338,7 +340,10 @@ function accGuardarCaptacion_(u, p) {
       if (['id', 'nombre', 'comercial_id', 'captador_id', 'estado', 'origen'].indexOf(k) >= 0) return;
       if (ESQUEMA.CLIENTES.indexOf(k) >= 0 && !txt_(cli[k]) && txt_(d.cliente[k])) relleno[k] = d.cliente[k];
     });
-    if (Object.keys(relleno).length) actualizar_('CLIENTES', cli.id, relleno);
+    if (Object.keys(relleno).length) {
+      actualizar_('CLIENTES', cli.id, relleno);
+      apuntarHistorial_(u, 'CLIENTES', cli.id, cli.id, cli, relleno);
+    }
   }
 
   const campos = ['fecha','hora_cita','estado_cita','tecnologia','comercial_id','resultado',
@@ -347,7 +352,10 @@ function accGuardarCaptacion_(u, p) {
     const anterior = leer_('CAPTACIONES').filter(function (x) { return String(x.id) === String(d.id); })[0];
     const cambios = {};
     campos.forEach(function (c) { if (d[c] !== undefined) cambios[c] = d[c]; });
+    /* Cambio de día o cancelación por cualquier camino: cuenta para las estadísticas. */
+    if (!d._cambio_apuntado) apuntarCambiosDeCaptacion_(u, anterior, Object.assign({}, anterior, cambios));
     const r = actualizar_('CAPTACIONES', d.id, cambios);
+    if (anterior) apuntarHistorial_(u, 'CAPTACIONES', d.id, cli.id, anterior, cambios);
     if (anterior && txt_(cambios.resultado) && normal_(cambios.resultado) !== normal_(anterior.resultado)) {
       avisarCaptador_(r, cli);
     }
@@ -379,6 +387,8 @@ function accGuardarCaptacion_(u, p) {
   nueva.fecha = nueva.fecha || hoyISO_();
   nueva.resultado = nueva.resultado || 'pendiente';
   const r = insertar_('CAPTACIONES', nueva);
+  apuntarHistorial_(u, 'CAPTACIONES', r.id, cli.id, null, null, 'Cita nueva para el ' + fechaLarga_(r.fecha, r.hora_cita) +
+    (txt_(r.comercial_id) ? ' con ' + ((leer_('USUARIOS').filter(function (x) { return String(x.id) === String(r.comercial_id); })[0] || {}).nombre || '') : ''));
 
   const cambiosCliente = {modificado: ahora_(), modificado_por: u.id};
   /* Una cita nueva no hace retroceder a un cliente que ya va por delante. */
@@ -391,7 +401,9 @@ function accGuardarCaptacion_(u, p) {
   if (nueva.fecha) { cambiosCliente.proxima_accion = 'Sentada concertada'; cambiosCliente.proxima_fecha = nueva.fecha; }
   actualizar_('CLIENTES', cli.id, cambiosCliente);
   registrar_(u, 'alta_captacion', 'CAPTACIONES', r.id, cli.nombre);
-  return {ok: true, captacion: r, aviso_agenda: choqueAgenda_(r), duplicado: avisoDup,
+  /* Dos captadores en la misma zona (menos de 200 m): correo a los dos y a dirección. */
+  const avisoZona = avisoZonaCaptacion_(r);
+  return {ok: true, captacion: r, aviso_agenda: choqueAgenda_(r), duplicado: avisoDup, aviso_zona: avisoZona,
           aviso_duplicado: avisoDup ? 'Este cliente ya estaba en el CRM (' + avisoDup.etiqueta + ', ' + avisoDup.id +
             '): la cita se ha apuntado en su ficha, sin crear otra.' : ''};
 }

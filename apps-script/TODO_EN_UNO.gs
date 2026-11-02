@@ -171,6 +171,15 @@ const ESQUEMA = {
     'tecnologia','comercial_id','resultado','fecha_resultado','operacion_id',
     'interes','notas','creado'],
 
+  /* Cada vez que una cita se reagenda o se cancela (02/11/2026): para saber
+     cuántas se aplazan y cuántas se caen, por captador y por fechas. */
+  CITAS_CAMBIOS: ['id','captacion_id','cliente_id','captador_id','comercial_id','tipo',
+    'fecha_antes','hora_antes','fecha_nueva','hora_nueva','motivo','usuario_id','creado'],
+
+  /* Histórico de cambios de cada lead: qué campo, cómo estaba, cómo queda,
+     quién y cuándo (02/11/2026). */
+  CAMBIOS: ['id','fecha','usuario_id','cliente_id','entidad','entidad_id','campo','antes','despues'],
+
   PARTES: ['id','fecha','usuario_id','rol','visitas','puertas','fichas',
     'sentadas','sentadas_detalle','ventas','importe_vendido',
     'resumen','analisis','propuestas_aplicadas','estado','creado','modificado'],
@@ -608,7 +617,7 @@ const PREFIJO = {
   GASTOS:'G', SEGUIMIENTO:'S', CAPTACIONES:'CA', PARTES:'P', NOMINAS:'N', JORNADAS:'J',
   BANCO:'B', VACACIONES:'V', SESIONES:'SE', LOG:'L',
   DIRECTORIO:'D', DIR_VISITAS:'DV', PUERTAS:'PU', EQUIPOS:'EQ',
-  PROYECTOS:'PR', ARCHIVOS:'AR', TAREAS:'T'
+  PROYECTOS:'PR', ARCHIVOS:'AR', TAREAS:'T', CITAS_CAMBIOS:'CC', CAMBIOS:'CB'
 };
 
 /** Identificador corto, legible y único: C-000412. */
@@ -1828,6 +1837,7 @@ function accGuardarCliente_(u, p) {
     });
     if (cambios.estado && cambios.estado !== actual.estado) cambios.fecha_estado = hoyISO_();
     const r = actualizar_('CLIENTES', d.id, cambios);
+    apuntarHistorial_(u, 'CLIENTES', d.id, d.id, actual, cambios);
     registrar_(u, 'editar_cliente', 'CLIENTES', d.id, cambios.estado || '');
     /* Si al corregir el teléfono o la calle resulta que es otro cliente que ya
        estaba, se avisa (no se bloquea: dirección decide si se fusionan). */
@@ -1858,6 +1868,7 @@ function accGuardarCliente_(u, p) {
   nuevo.estado = nuevo.estado || (u.rol === 'captador' ? 'captado' : 'nuevo');
   nuevo.fecha_estado = hoyISO_();
   const r = insertar_('CLIENTES', nuevo);
+  apuntarHistorial_(u, 'CLIENTES', r.id, r.id, null, null, 'Ficha creada');
   registrar_(u, 'alta_cliente', 'CLIENTES', r.id, r.nombre);
   return {ok: true, cliente: clienteParaVer_(u, r)};
 }
@@ -2085,7 +2096,10 @@ function accGuardarCaptacion_(u, p) {
       if (['id', 'nombre', 'comercial_id', 'captador_id', 'estado', 'origen'].indexOf(k) >= 0) return;
       if (ESQUEMA.CLIENTES.indexOf(k) >= 0 && !txt_(cli[k]) && txt_(d.cliente[k])) relleno[k] = d.cliente[k];
     });
-    if (Object.keys(relleno).length) actualizar_('CLIENTES', cli.id, relleno);
+    if (Object.keys(relleno).length) {
+      actualizar_('CLIENTES', cli.id, relleno);
+      apuntarHistorial_(u, 'CLIENTES', cli.id, cli.id, cli, relleno);
+    }
   }
 
   const campos = ['fecha','hora_cita','estado_cita','tecnologia','comercial_id','resultado',
@@ -2094,7 +2108,10 @@ function accGuardarCaptacion_(u, p) {
     const anterior = leer_('CAPTACIONES').filter(function (x) { return String(x.id) === String(d.id); })[0];
     const cambios = {};
     campos.forEach(function (c) { if (d[c] !== undefined) cambios[c] = d[c]; });
+    /* Cambio de día o cancelación por cualquier camino: cuenta para las estadísticas. */
+    if (!d._cambio_apuntado) apuntarCambiosDeCaptacion_(u, anterior, Object.assign({}, anterior, cambios));
     const r = actualizar_('CAPTACIONES', d.id, cambios);
+    if (anterior) apuntarHistorial_(u, 'CAPTACIONES', d.id, cli.id, anterior, cambios);
     if (anterior && txt_(cambios.resultado) && normal_(cambios.resultado) !== normal_(anterior.resultado)) {
       avisarCaptador_(r, cli);
     }
@@ -2126,6 +2143,8 @@ function accGuardarCaptacion_(u, p) {
   nueva.fecha = nueva.fecha || hoyISO_();
   nueva.resultado = nueva.resultado || 'pendiente';
   const r = insertar_('CAPTACIONES', nueva);
+  apuntarHistorial_(u, 'CAPTACIONES', r.id, cli.id, null, null, 'Cita nueva para el ' + fechaLarga_(r.fecha, r.hora_cita) +
+    (txt_(r.comercial_id) ? ' con ' + ((leer_('USUARIOS').filter(function (x) { return String(x.id) === String(r.comercial_id); })[0] || {}).nombre || '') : ''));
 
   const cambiosCliente = {modificado: ahora_(), modificado_por: u.id};
   /* Una cita nueva no hace retroceder a un cliente que ya va por delante. */
@@ -2138,7 +2157,9 @@ function accGuardarCaptacion_(u, p) {
   if (nueva.fecha) { cambiosCliente.proxima_accion = 'Sentada concertada'; cambiosCliente.proxima_fecha = nueva.fecha; }
   actualizar_('CLIENTES', cli.id, cambiosCliente);
   registrar_(u, 'alta_captacion', 'CAPTACIONES', r.id, cli.nombre);
-  return {ok: true, captacion: r, aviso_agenda: choqueAgenda_(r), duplicado: avisoDup,
+  /* Dos captadores en la misma zona (menos de 200 m): correo a los dos y a dirección. */
+  const avisoZona = avisoZonaCaptacion_(r);
+  return {ok: true, captacion: r, aviso_agenda: choqueAgenda_(r), duplicado: avisoDup, aviso_zona: avisoZona,
           aviso_duplicado: avisoDup ? 'Este cliente ya estaba en el CRM (' + avisoDup.etiqueta + ', ' + avisoDup.id +
             '): la cita se ha apuntado en su ficha, sin crear otra.' : ''};
 }
@@ -4146,7 +4167,11 @@ function acciones_() {
     /* Un cliente, una ficha (22_Ficha.gs) */
     duplicados: accDuplicados_,
     fusionarClientes: accFusionarClientes_,
-    recordarCRM: accRecordarCRM_, recordatorios: accRecordatorios_
+    recordarCRM: accRecordarCRM_, recordatorios: accRecordatorios_,
+
+    /* Reagendar y cancelar citas, estadísticas (24_Estadisticas.gs) */
+    reagendarCita: accReagendarCita_, cancelarCita: accCancelarCita_, estadisticas: accEstadisticas_,
+    historialCambios: accHistorialCambios_
   };
 }
 
@@ -7148,7 +7173,7 @@ const PREFIJOS_MODIFICACION = /^(guardar|borrar|importar|entregar|subir|ajustar|
 const OTRAS_MODIFICACIONES = {
   estadoProyecto: 1, estadoTarea: 1, reanalizar: 1, geocodificar: 1,
   gastoDesdeBanco: 1, copiaAhora: 1, enviadoProyecto: 1, resumenSemanalAhora: 1, avisoPuertas: 1,
-  probarResumen: 1, llaveServicio: 1, revocarLlaves: 1, pedirCambios: 1, casarAuto: 1, fusionarClientes: 1, recordarCRM: 1, recordatorios: 1
+  probarResumen: 1, llaveServicio: 1, revocarLlaves: 1, pedirCambios: 1, casarAuto: 1, fusionarClientes: 1, recordarCRM: 1, recordatorios: 1, reagendarCita: 1
 };
 
 /* Nombres de parámetro que nunca se apuntan, ni sueltos ni dentro de otro. */
@@ -7924,7 +7949,8 @@ function enlazadosDe_(clienteId) {
 /* Cuántas cosas cuelgan de cada cliente, leyendo cada tabla una sola vez. */
 function conteoEnlazados_() {
   const r = {};
-  tablasDeCliente_().forEach(function (t) {
+  /* El histórico no cuenta como «cosas enlazadas»: no impide borrar una ficha. */
+  tablasDeCliente_().filter(function (t) { return ['CAMBIOS', 'CITAS_CAMBIOS'].indexOf(t) < 0; }).forEach(function (t) {
     leer_(t).forEach(function (x) {
       const k = String(x.cliente_id || '');
       if (!k) return;
@@ -8288,6 +8314,522 @@ function instalarRecordatorios() {
   ScriptApp.newTrigger('recordatoriosCRM').timeBased().everyDays(1).atHour(19).nearMinute(30).create();
   Logger.log('Recordatorios del CRM: todos los días hacia las 13:30 y las 19:30 (los fines de semana no sale nada).');
   return true;
+}
+
+
+/* ==========================================================================
+   24_Estadisticas.gs
+   ========================================================================== */
+
+/**
+ * CRM · ZERO WATTIOS
+ * 24_Estadisticas.gs — Citas reagendadas y canceladas, estadísticas de
+ * captación y ventas, y aviso de captadores en la misma zona (02/11/2026).
+ *
+ * Orden de Nando:
+ *  - Un botón para reagendar un lead y otro para cancelarlo. Cada cambio se
+ *    guarda (CITAS_CAMBIOS) para saber cuántas citas se cancelan o se
+ *    aplazan.
+ *  - Conteo diario, semanal, mensual, trimestral y anual por captador y del
+ *    grupo: citas sacadas, reagendadas, canceladas, sentadas y ventas, y
+ *    cuántas citas hacen falta para cerrar una venta.
+ *  - Los captadores ven los números de sus compañeros (sin importes: el
+ *    dinero solo lo ve dirección).
+ *  - Si dos captadores sacan leads a menos de 200 m, correo a los dos y a
+ *    dirección.
+ */
+
+const ESTADOS_OP_VENTA = ['firmada', 'tramite', 'material', 'instalacion', 'instalada', 'legalizada', 'cerrada'];
+const METROS_ZONA = 200;
+const DIAS_ZONA = 90;
+const K_AVISOS_ZONA = 'avisos_zona';
+
+const MOTIVOS_CANCELACION = [
+  ['no_interesa', 'Ya no le interesa'],
+  ['no_contesta', 'No contesta / no abre'],
+  ['no_decide', 'No está quien decide'],
+  ['ya_tiene', 'Ya lo tiene o lo ha contratado con otro'],
+  ['no_viable', 'No es viable (vivienda, tejado, comunidad…)'],
+  ['precio', 'Por el precio / no puede pagarlo'],
+  ['otro', 'Otro motivo']
+];
+
+/* ---------- reagendar y cancelar ---------- */
+
+function captacionVisible_(u, id) {
+  const cap = leer_('CAPTACIONES').filter(function (x) { return String(x.id) === String(id); })[0];
+  if (!cap) throw new Error('No existe esa cita.');
+  const cli = leer_('CLIENTES').filter(function (c) { return String(c.id) === String(cap.cliente_id); })[0];
+  if (!cli) throw new Error('Falta el cliente de la cita.');
+  const per = permisos_(u);
+  if (!per.editarTodo && !veCliente_(u, cli) && String(cap.captador_id) !== String(u.id) &&
+      String(cap.comercial_id) !== String(u.id)) throw new Error('Esa cita no es tuya.');
+  return {cap: cap, cli: cli};
+}
+
+/** Apunta un cambio de cita para las estadísticas. */
+function apuntarCambioCita_(u, cap, tipo, datos) {
+  datos = datos || {};
+  return insertar_('CITAS_CAMBIOS', {
+    captacion_id: cap.id, cliente_id: cap.cliente_id, captador_id: txt_(cap.captador_id),
+    comercial_id: txt_(cap.comercial_id), tipo: tipo,
+    fecha_antes: txt_(cap.fecha).slice(0, 10), hora_antes: txt_(cap.hora_cita),
+    fecha_nueva: txt_(datos.fecha), hora_nueva: txt_(datos.hora_cita),
+    motivo: txt_(datos.motivo).slice(0, 200), usuario_id: u ? u.id : '', creado: ahora_()
+  });
+}
+
+function fechaLarga_(f, hora) {
+  return txt_(f).slice(0, 10).split('-').reverse().join('/') + (txt_(hora) ? ' ' + txt_(hora) : '');
+}
+
+/** Reagendar: nueva fecha y hora, y queda apuntado para las estadísticas. */
+function accReagendarCita_(u, p) {
+  const fecha = txt_(p.fecha).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return {ok: false, error: 'Pon la nueva fecha de la cita.'};
+  const v = captacionVisible_(u, p.id);
+  const cap = v.cap;
+  if (['venta', 'sentada'].indexOf(normal_(cap.resultado)) >= 0) return {ok: false, error: 'Esa cita ya se hizo: no se puede reagendar.'};
+  const hora = txt_(p.hora_cita) || txt_(cap.hora_cita);
+  if (fecha === txt_(cap.fecha).slice(0, 10) && hora === txt_(cap.hora_cita)) return {ok: false, error: 'Es la misma fecha y hora que ya tenía.'};
+  const motivo = txt_(p.motivo);
+  const nota = 'Reagendada del ' + fechaLarga_(cap.fecha, cap.hora_cita) + ' al ' + fechaLarga_(fecha, hora) +
+    (motivo ? ' (' + motivo + ')' : '') + '.';
+  apuntarCambioCita_(u, cap, 'reagendada', {fecha: fecha, hora_cita: hora, motivo: motivo});
+  const r = accGuardarCaptacion_(u, {captacion: {id: cap.id, cliente_id: cap.cliente_id, fecha: fecha, hora_cita: hora,
+    estado_cita: p.confirmada ? 'confirmada' : 'pendiente', resultado: 'pendiente',
+    notas: (txt_(cap.notas) ? txt_(cap.notas) + '\n' : '') + nota, _cambio_apuntado: true}});
+  registrar_(u, 'reagendar_cita', 'CAPTACIONES', cap.id, nota);
+  return {ok: true, captacion: r.captacion, aviso_agenda: r.aviso_agenda || ''};
+}
+
+/** Cancelar: la cita no se hace; queda el motivo para las estadísticas. */
+function accCancelarCita_(u, p) {
+  const v = captacionVisible_(u, p.id);
+  const cap = v.cap;
+  if (normal_(cap.resultado) === 'cancelada') return {ok: false, error: 'Esa cita ya estaba cancelada.'};
+  if (['venta', 'sentada'].indexOf(normal_(cap.resultado)) >= 0) return {ok: false, error: 'Esa cita ya se hizo: no se puede cancelar.'};
+  const cat = {};
+  MOTIVOS_CANCELACION.forEach(function (m) { cat[m[0]] = m[1]; });
+  const motivo = cat[normal_(p.motivo)] || txt_(p.motivo) || 'Sin motivo';
+  const detalle = txt_(p.detalle);
+  const texto = motivo + (detalle ? ': ' + detalle : '');
+  apuntarCambioCita_(u, cap, 'cancelada', {motivo: texto});
+  const r = accGuardarCaptacion_(u, {captacion: {id: cap.id, cliente_id: cap.cliente_id, resultado: 'cancelada',
+    fecha_resultado: hoyISO_(), notas: (txt_(cap.notas) ? txt_(cap.notas) + '\n' : '') +
+      'Cancelada el ' + fechaLarga_(hoyISO_()) + ': ' + texto + '.', _cambio_apuntado: true}});
+  registrar_(u, 'cancelar_cita', 'CAPTACIONES', cap.id, texto);
+  return {ok: true, captacion: r.captacion};
+}
+
+/**
+ * Si se cambia la cita por otro camino (editar la ficha, el agente que
+ * copia Trello…), también cuenta: cambio de día = reagendada; resultado
+ * cancelada = cancelada.
+ */
+function apuntarCambiosDeCaptacion_(u, anterior, nueva) {
+  if (!anterior || !nueva) return;
+  const fA = txt_(anterior.fecha).slice(0, 10), fN = txt_(nueva.fecha).slice(0, 10);
+  if (fA && fN && fA !== fN && ['venta', 'sentada', 'cancelada'].indexOf(normal_(anterior.resultado)) < 0) {
+    apuntarCambioCita_(u, anterior, 'reagendada', {fecha: fN, hora_cita: txt_(nueva.hora_cita)});
+  }
+  if (normal_(nueva.resultado) === 'cancelada' && normal_(anterior.resultado) !== 'cancelada') {
+    apuntarCambioCita_(u, anterior, 'cancelada', {motivo: ''});
+  }
+}
+
+/* ---------- estadísticas ---------- */
+
+function isoDeFecha_(d) {
+  return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+}
+
+/** Los cortes de tiempo: hoy, semana (lunes a hoy), mes, trimestre y año. */
+function periodosEstadistica_(hoy) {
+  const d = fecha_(hoy);
+  const lunes = new Date(d.getTime()); lunes.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  const tri = Math.floor(d.getMonth() / 3);
+  return [
+    {clave: 'dia', titulo: 'Hoy', desde: hoy, hasta: hoy},
+    {clave: 'semana', titulo: 'Esta semana', desde: isoDeFecha_(lunes), hasta: hoy},
+    {clave: 'mes', titulo: 'Este mes', desde: hoy.slice(0, 8) + '01', hasta: hoy},
+    {clave: 'trimestre', titulo: (tri + 1) + 'º trimestre', desde: hoy.slice(0, 5) + ('0' + (tri * 3 + 1)).slice(-2) + '-01', hasta: hoy},
+    {clave: 'anio', titulo: 'Año ' + hoy.slice(0, 4), desde: hoy.slice(0, 4) + '-01-01', hasta: hoy}
+  ];
+}
+
+/**
+ * Cuenta todo lo que hace falta para las estadísticas. Cada cosa se cuenta
+ * el día en que pasa: la cita, el día que se mete; la cancelación y el
+ * cambio de fecha, el día que se apuntan; la sentada, el día de la visita;
+ * la venta, el día de la firma.
+ */
+function sucesosEstadistica_() {
+  const clientes = indexar_(leer_('CLIENTES'), 'id');
+  const caps = leer_('CAPTACIONES');
+  const cambios = leer_('CITAS_CAMBIOS');
+  const sucesos = [];   // {tipo, fecha, captador_id, comercial_id}
+  const canceladaCon = {};
+  cambios.forEach(function (x) {
+    const f = txt_(x.creado).slice(0, 10);
+    if (!f) return;
+    if (normal_(x.tipo) === 'cancelada') canceladaCon[String(x.captacion_id)] = 1;
+    sucesos.push({tipo: normal_(x.tipo), fecha: f, captador_id: txt_(x.captador_id), comercial_id: txt_(x.comercial_id)});
+  });
+  const captadorDeCliente = {};
+  caps.forEach(function (k) {
+    const alta = txt_(k.creado).slice(0, 10) || txt_(k.fecha).slice(0, 10);
+    const capt = txt_(k.captador_id);
+    if (capt && !captadorDeCliente[String(k.cliente_id)]) captadorDeCliente[String(k.cliente_id)] = capt;
+    if (alta) sucesos.push({tipo: 'cita', fecha: alta, captador_id: capt, comercial_id: txt_(k.comercial_id)});
+    const res = normal_(k.resultado);
+    /* Las canceladas de antes de que existiera el botón también cuentan. */
+    if (res === 'cancelada' && !canceladaCon[String(k.id)]) {
+      const f = txt_(k.fecha_resultado).slice(0, 10) || txt_(k.fecha).slice(0, 10);
+      if (f) sucesos.push({tipo: 'cancelada', fecha: f, captador_id: capt, comercial_id: txt_(k.comercial_id)});
+    }
+    if (['sentada', 'potencial', 'venta'].indexOf(res) >= 0) {
+      const f = txt_(k.fecha).slice(0, 10) || txt_(k.fecha_resultado).slice(0, 10);
+      if (f) sucesos.push({tipo: 'sentada', fecha: f, captador_id: capt, comercial_id: txt_(k.comercial_id)});
+    }
+  });
+  leer_('OPERACIONES').forEach(function (o) {
+    if (ESTADOS_OP_VENTA.indexOf(normal_(o.estado)) < 0) return;
+    const f = (txt_(o.fecha_firma) || txt_(o.fecha_contrato) || txt_(o.creado)).slice(0, 10);
+    if (!f) return;
+    const cli = clientes[String(o.cliente_id)] || {};
+    sucesos.push({tipo: 'venta', fecha: f,
+      captador_id: txt_(o.captador_id) || txt_(cli.captador_id) || captadorDeCliente[String(o.cliente_id)] || '',
+      comercial_id: txt_(o.comercial_id) || txt_(cli.comercial_id)});
+  });
+  return sucesos;
+}
+
+function cifrasVacias_() { return {citas: 0, reagendadas: 0, canceladas: 0, sentadas: 0, ventas: 0}; }
+
+function cerrarCifras_(c) {
+  c.pct_canceladas = c.citas ? Math.round(c.canceladas * 1000 / c.citas) / 10 : 0;
+  c.pct_reagendadas = c.citas ? Math.round(c.reagendadas * 1000 / c.citas) / 10 : 0;
+  c.citas_por_venta = c.ventas ? Math.round(c.citas * 10 / c.ventas) / 10 : null;
+  return c;
+}
+
+function contarPeriodo_(sucesos, desde, hasta, campo, ids) {
+  const total = cifrasVacias_();
+  const por = {};
+  ids.forEach(function (id) { por[id] = cifrasVacias_(); });
+  const clave = {cita: 'citas', reagendada: 'reagendadas', cancelada: 'canceladas', sentada: 'sentadas', venta: 'ventas'};
+  sucesos.forEach(function (s) {
+    if (s.fecha < desde || s.fecha > hasta || !clave[s.tipo]) return;
+    total[clave[s.tipo]]++;
+    const quien = s[campo];
+    if (quien && por[quien]) por[quien][clave[s.tipo]]++;
+  });
+  Object.keys(por).forEach(function (k) { cerrarCifras_(por[k]); });
+  return {total: cerrarCifras_(total), por: por};
+}
+
+/**
+ * Las estadísticas que ve todo el mundo: por captador y del grupo, en cada
+ * periodo, más las ventas por semana, mes, trimestre y año y la serie de
+ * los últimos 14 días. Solo números: nada de importes ni de clientes.
+ */
+function accEstadisticas_(u, p) {
+  const hoy = /^\d{4}-\d{2}-\d{2}$/.test(txt_(p.hoy)) ? txt_(p.hoy) : hoyISO_();
+  const usuarios = leer_('USUARIOS').filter(function (x) { return normal_(x.activo) === 'si'; });
+  const captadores = usuarios.filter(function (x) { return normal_(x.rol) === 'captador'; });
+  const comerciales = usuarios.filter(function (x) { return normal_(x.rol) === 'comercial'; });
+  const sucesos = sucesosEstadistica_();
+  const idsCapt = captadores.map(function (x) { return String(x.id); });
+  const idsCom = comerciales.map(function (x) { return String(x.id); });
+  const verComerciales = permisos_(u).alcance === 'todo';
+
+  const periodos = periodosEstadistica_(hoy).map(function (per) {
+    const capt = contarPeriodo_(sucesos, per.desde, per.hasta, 'captador_id', idsCapt);
+    const out = {clave: per.clave, titulo: per.titulo, desde: per.desde, hasta: per.hasta,
+      grupo: capt.total,
+      captadores: captadores.map(function (x) {
+        return Object.assign({id: x.id, nombre: x.nombre, yo: String(x.id) === String(u.id)}, capt.por[String(x.id)]);
+      }).sort(function (a, b) { return b.citas - a.citas || b.ventas - a.ventas; })};
+    if (verComerciales) {
+      const com = contarPeriodo_(sucesos, per.desde, per.hasta, 'comercial_id', idsCom);
+      out.comerciales = comerciales.map(function (x) {
+        return Object.assign({id: x.id, nombre: x.nombre}, com.por[String(x.id)]);
+      });
+    }
+    return out;
+  });
+
+  /* Últimos 14 días, del grupo y de cada captador: citas, canceladas y reagendadas. */
+  const dias = [];
+  for (let i = 13; i >= 0; i--) dias.push(sumarDias_(hoy, -i));
+  const serie = dias.map(function (f) {
+    const c = contarPeriodo_(sucesos, f, f, 'captador_id', idsCapt);
+    const fila = {fecha: f, citas: c.total.citas, canceladas: c.total.canceladas, reagendadas: c.total.reagendadas,
+                  ventas: c.total.ventas, por: {}};
+    idsCapt.forEach(function (id) { fila.por[id] = c.por[id].citas; });
+    return fila;
+  });
+
+  /* Ventas cerradas: las últimas 8 semanas, los meses del año, los trimestres y los años. */
+  const ventas = sucesos.filter(function (s) { return s.tipo === 'venta'; });
+  const lunesDe = function (f) { const d = fecha_(f); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return isoDeFecha_(d); };
+  const semanas = [];
+  let l = lunesDe(hoy);
+  for (let i = 0; i < 8; i++) { semanas.unshift(l); l = sumarDias_(l, -7); }
+  const anio = hoy.slice(0, 4);
+  const ventasPor = {
+    semanas: semanas.map(function (s) {
+      return {desde: s, ventas: ventas.filter(function (v) { return v.fecha >= s && v.fecha <= sumarDias_(s, 6); }).length};
+    }),
+    meses: ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'].map(function (m) {
+      return {mes: anio + '-' + m, ventas: ventas.filter(function (v) { return v.fecha.slice(0, 7) === anio + '-' + m; }).length};
+    }),
+    trimestres: [1, 2, 3, 4].map(function (t) {
+      return {trimestre: t, ventas: ventas.filter(function (v) {
+        return v.fecha.slice(0, 4) === anio && Math.floor((Number(v.fecha.slice(5, 7)) - 1) / 3) + 1 === t; }).length};
+    }),
+    anios: (function () {
+      const m = {};
+      ventas.forEach(function (v) { const a = v.fecha.slice(0, 4); m[a] = (m[a] || 0) + 1; });
+      return Object.keys(m).sort().map(function (a) { return {anio: a, ventas: m[a]}; });
+    })()
+  };
+
+  /* Citas que hacen falta para una venta: con lo de los últimos 12 meses, que un mes suelto engaña. */
+  const doce = contarPeriodo_(sucesos, sumarDias_(hoy, -365), hoy, 'captador_id', idsCapt);
+
+  return {ok: true, hoy: hoy, periodos: periodos, serie: serie, ventas: ventasPor,
+          ultimo_ano: {grupo: doce.total, captadores: captadores.map(function (x) {
+            return Object.assign({id: x.id, nombre: x.nombre, yo: String(x.id) === String(u.id)}, doce.por[String(x.id)]);
+          })},
+          captadores: captadores.map(function (x) { return {id: x.id, nombre: x.nombre}; }),
+          motivos_cancelacion: MOTIVOS_CANCELACION};
+}
+
+/* ---------- dos captadores en la misma zona ---------- */
+
+function metrosEntre_(a, b) {
+  const R = 6371000, rad = Math.PI / 180;
+  const dLat = (b[0] - a[0]) * rad, dLon = (b[1] - a[1]) * rad;
+  const x = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(a[0] * rad) * Math.cos(b[0] * rad) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+/** Coordenadas del cliente; si no tiene y la dirección lleva número, se buscan (y se guardan). */
+function coordenadasCliente_(cli) {
+  const co = coordenadas_(cli.coordenadas);
+  if (co) return co;
+  if (!/\d/.test(txt_(cli.direccion)) || !txt_(cli.municipio)) return null;
+  try {
+    const r = Maps.newGeocoder().setRegion('es').geocode([txt_(cli.direccion), txt_(cli.municipio), txt_(cli.cp), 'España']
+      .filter(String).join(', '));
+    const res = r && r.status === 'OK' && r.results && r.results[0];
+    /* Solo si Google la encuentra en el portal (no el centro de la calle o del pueblo). */
+    if (!res || ['ROOFTOP', 'RANGE_INTERPOLATED'].indexOf(res.geometry.location_type) < 0) return null;
+    const loc = res.geometry.location;
+    actualizar_('CLIENTES', cli.id, {coordenadas: redondear_(loc.lat, 6) + ',' + redondear_(loc.lng, 6)});
+    return [redondear_(loc.lat, 6), redondear_(loc.lng, 6)];
+  } catch (e) { return null; }
+}
+
+function correosDireccion_() {
+  const vistos = {};
+  return leer_('USUARIOS').filter(function (x) {
+    return ['admin', 'superadmin'].indexOf(normal_(x.rol)) >= 0 && normal_(x.activo) === 'si' && txt_(x.email);
+  }).map(function (x) { return txt_(x.email); }).filter(function (e) {
+    const k = normal_(e); if (vistos[k]) return false; vistos[k] = 1; return true;
+  });
+}
+
+/**
+ * Al meter una ficha de captación: ¿hay otra de OTRO captador a menos de
+ * 200 m en los últimos 90 días? Si la hay, correo a los dos y a dirección
+ * (una vez por pareja de fichas). Devuelve el aviso para enseñarlo ya.
+ */
+function avisoZonaCaptacion_(cap) {
+  try {
+    if (normal_(config_().aviso_zona) === 'no') return '';
+    const capt = txt_(cap.captador_id);
+    if (!capt) return '';
+    const clientes = indexar_(leer_('CLIENTES'), 'id');
+    const cli = clientes[String(cap.cliente_id)];
+    if (!cli) return '';
+    const aqui = coordenadasCliente_(cli);
+    if (!aqui) return '';
+    const usuarios = indexar_(leer_('USUARIOS'), 'id');
+    const desde = sumarDias_(hoyISO_(), -DIAS_ZONA);
+    const cerca = [];
+    leer_('CAPTACIONES').forEach(function (k) {
+      if (String(k.id) === String(cap.id) || !txt_(k.captador_id) || String(k.captador_id) === capt) return;
+      if (String(k.cliente_id) === String(cap.cliente_id)) return;
+      const alta = txt_(k.creado).slice(0, 10) || txt_(k.fecha).slice(0, 10);
+      if (!alta || alta < desde) return;
+      const otro = clientes[String(k.cliente_id)];
+      const co = otro && coordenadas_(otro.coordenadas);
+      if (!co) return;
+      const m = metrosEntre_(aqui, co);
+      if (m < METROS_ZONA) cerca.push({cap: k, cli: otro, metros: Math.round(m)});
+    });
+    if (!cerca.length) return '';
+    cerca.sort(function (a, b) { return a.metros - b.metros; });
+    const avisados = leerProp_(K_AVISOS_ZONA, {});
+    const yo = usuarios[capt] || {};
+    const etiqueta = function (c) { return [txt_(c.direccion), txt_(c.municipio)].filter(String).join(', '); };
+    const lineas = [];
+    const otros = {};
+    cerca.forEach(function (x) {
+      const k = [String(cap.id), String(x.cap.id)].sort().join('|');
+      const quien = usuarios[String(x.cap.captador_id)] || {};
+      lineas.push({k: k, texto: (quien.nombre || 'Otro captador') + ' sacó el ' + fechaLarga_(txt_(x.cap.creado) || x.cap.fecha) +
+        ' una ficha en ' + etiqueta(x.cli) + ' (a ' + x.metros + ' m)'});
+      otros[String(x.cap.captador_id)] = quien;
+    });
+    const nuevas = lineas.filter(function (x) { return !avisados[x.k]; });
+    const aviso = 'Ojo: ' + lineas.map(function (x) { return x.texto; }).join('; ') + '.';
+    if (!nuevas.length) return aviso;
+    const para = [txt_(yo.email)].concat(Object.keys(otros).map(function (id) { return txt_(otros[id].email); }))
+      .concat(correosDireccion_()).filter(String);
+    const unicos = para.filter(function (e, i) { return para.map(normal_).indexOf(normal_(e)) === i; });
+    const nombres = [yo.nombre].concat(Object.keys(otros).map(function (id) { return otros[id].nombre; })).filter(String);
+    const html = '<div style="font-family:Arial,sans-serif;font-size:15px;color:#17191c;max-width:620px">' +
+      '<p>Hola,</p><p><b>' + nombres.join(' y ') + '</b>: estáis sacando leads en la misma zona (a menos de ' + METROS_ZONA + ' m).</p>' +
+      '<p style="margin:14px 0 6px"><b>La ficha nueva</b></p><p style="margin:0">' + (yo.nombre || '') + ' · ' + etiqueta(cli) +
+      ' · ' + fechaLarga_(txt_(cap.creado) || hoyISO_()) + '</p>' +
+      '<p style="margin:14px 0 6px"><b>Lo que ya había cerca (últimos ' + DIAS_ZONA + ' días)</b></p><ul style="padding-left:20px;margin:0">' +
+      nuevas.map(function (x) { return '<li style="margin:0 0 6px">' + x.texto + '</li>'; }).join('') + '</ul>' +
+      '<p style="margin:16px 0">Hablad entre vosotros para repartiros las calles y no llamar dos veces a la misma puerta.</p>' +
+      '<p style="margin:22px 0"><a href="' + WEB_CRM + '#captaciones" style="background:#b4fa1e;color:#17191c;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:700">Abrir el CRM</a></p>' +
+      '<p style="color:#5b6159;font-size:12px">Aviso automático del CRM. La distancia sale de las coordenadas de cada ficha.</p></div>';
+    if (unicos.length) {
+      try {
+        MailApp.sendEmail({to: unicos.join(','), name: 'CRM · ZERO WATTIOS',
+          subject: 'Dos captadores en la misma zona · ' + etiqueta(cli), htmlBody: html});
+      } catch (e) { /* sin cuota: el aviso sale igualmente en pantalla */ }
+    }
+    nuevas.forEach(function (x) { avisados[x.k] = hoyISO_(); });
+    Object.keys(avisados).forEach(function (k) { if (diasEntre_(avisados[k], hoyISO_()) > 180) delete avisados[k]; });
+    guardarProp_(K_AVISOS_ZONA, avisados);
+    registrar_(null, 'aviso_zona', 'CAPTACIONES', cap.id, nuevas.length + ' cerca');
+    return aviso;
+  } catch (e) {
+    return '';
+  }
+}
+
+
+/* ==========================================================================
+   25_Historial.gs
+   ========================================================================== */
+
+/**
+ * CRM · ZERO WATTIOS
+ * 25_Historial.gs — Histórico de cambios de cada lead (02/11/2026).
+ *
+ * Orden de Nando: «en el lead se tiene que ver un histórico de todos los
+ * cambios que ha ido haciendo el captador o el comercial». Cada vez que
+ * alguien cambia un dato de la ficha del cliente o de una de sus citas, se
+ * apunta qué campo era, cómo estaba, cómo queda, quién y cuándo.
+ */
+
+/* Lo que no se apunta: marcas internas que cambian solas. */
+const CAMPOS_SIN_HISTORIAL = ['id', 'creado', 'creado_por', 'modificado', 'modificado_por', 'fecha_estado', 'fecha_resultado',
+  'cliente_id', 'operacion_id'];
+/* Lo que se apunta sin el valor (que no salga en claro a quien no debe verlo). */
+const CAMPOS_SIN_VALOR = ['dni', 'cotitular'];
+
+const NOMBRE_CAMPO = {
+  nombre: 'Nombre', telefono: 'Teléfono', email: 'Correo', direccion: 'Dirección', municipio: 'Municipio', cp: 'C.P.',
+  coordenadas: 'Coordenadas', tipo_vivienda: 'Tipo de vivienda', regimen: 'Régimen', m2: 'm²', personas: 'Personas',
+  anyo: 'Año', calefaccion: 'Calefacción', gasto_combustible: 'Gasto combustible', periodo_combustible: 'Periodo combustible',
+  gasto_luz_mes: 'Gasto de luz/mes', comercializadora: 'Comercializadora', cups: 'CUPS', potencia_contratada: 'Potencia',
+  ya_fv: 'Ya tiene FV', interes: 'Interés', perfil: 'Perfil', otros: 'Otros datos', origen: 'Origen', estado: 'Estado',
+  proxima_accion: 'Próximo paso', proxima_fecha: 'Fecha próximo paso', etiquetas: 'Etiquetas', comercial_id: 'Comercial',
+  captador_id: 'Captador', dni: 'DNI', cotitular: 'Cotitular',
+  fecha: 'Día de la cita', hora_cita: 'Hora', estado_cita: 'Estado de la cita', tecnologia: 'Tecnología',
+  resultado: 'Resultado', notas: 'Notas'
+};
+
+function valorHistorial_(campo, v) {
+  const s = txt_(v);
+  return s.length > 300 ? s.slice(0, 297) + '…' : s;
+}
+
+/**
+ * Apunta los campos que cambian entre «antes» y «despues». Para un alta,
+ * antes es null y se apunta una sola línea.
+ */
+function apuntarHistorial_(u, entidad, entidadId, clienteId, antes, despues, resumenAlta) {
+  try {
+    const filas = [];
+    const base = {fecha: ahora_(), usuario_id: u ? u.id : '', cliente_id: txt_(clienteId), entidad: entidad, entidad_id: txt_(entidadId)};
+    if (!antes) {
+      filas.push(Object.assign({}, base, {campo: 'alta', antes: '', despues: txt_(resumenAlta).slice(0, 300)}));
+    } else {
+      Object.keys(despues || {}).forEach(function (k) {
+        if (CAMPOS_SIN_HISTORIAL.indexOf(k) >= 0 || k.charAt(0) === '_') return;
+        const a = txt_(antes[k]), d = txt_(despues[k]);
+        if (a === d) return;
+        if (!isNaN(parseFloat(a)) && !isNaN(parseFloat(d)) && /^-?[\d.,]+$/.test(a) && /^-?[\d.,]+$/.test(d) &&
+            Math.abs(parseFloat(a.replace(',', '.')) - parseFloat(d.replace(',', '.'))) < 1e-9) return;
+        const oculto = CAMPOS_SIN_VALOR.indexOf(k) >= 0;
+        /* Un texto al que se le añade algo: solo lo añadido. */
+        if (['notas', 'perfil', 'otros'].indexOf(k) >= 0 && a && d.indexOf(a) === 0) {
+          filas.push(Object.assign({}, base, {campo: k, antes: '', despues: valorHistorial_(k, '+ ' + d.slice(a.length).trim())}));
+          return;
+        }
+        filas.push(Object.assign({}, base, {campo: k,
+          antes: oculto ? (a ? '(había)' : '') : valorHistorial_(k, a),
+          despues: oculto ? (d ? '(cambiado)' : '(borrado)') : valorHistorial_(k, d)}));
+      });
+    }
+    if (filas.length) añadirFilas_('CAMBIOS', filas);
+  } catch (e) { /* el historial nunca impide guardar */ }
+}
+
+/** El histórico de un cliente y de sus citas, lo más nuevo arriba. */
+function accHistorialCambios_(u, p) {
+  const cli = leer_('CLIENTES').filter(function (c) { return String(c.id) === String(p.cliente_id); })[0];
+  if (!cli) return {ok: false, error: 'No existe ese cliente.'};
+  if (!veCliente_(u, cli)) return {ok: false, error: 'Ese cliente no es tuyo.'};
+  const usuarios = indexar_(leer_('USUARIOS'), 'id');
+  const nombre = function (id) { return (usuarios[String(id)] || {}).nombre || ''; };
+  const capsDelCliente = {};
+  leer_('CAPTACIONES').forEach(function (k) { if (String(k.cliente_id) === String(cli.id)) capsDelCliente[String(k.id)] = k; });
+  const traducir = function (campo, v) {
+    if ((campo === 'comercial_id' || campo === 'captador_id' || campo === 'usuario_id') && v) return nombre(v) || v;
+    if (campo === 'estado_cita') return etiquetaCatalogo_('estadosCita', v);
+    if (campo === 'resultado') return etiquetaCatalogo_('resultadosCaptacion', v);
+    if (campo === 'estado') return etiquetaCatalogo_('estadosCliente', v);
+    if (/fecha$/.test(campo) && /^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10).split('-').reverse().join('/');
+    return v;
+  };
+  const filas = leer_('CAMBIOS').filter(function (x) { return String(x.cliente_id) === String(cli.id); })
+    /* La nota automática de reagendar o cancelar ya se ve en el motivo y en el cambio de día. */
+    .filter(function (x) { return !(x.campo === 'notas' && /^(\+ )?(Reagendada del|Cancelada el) /.test(txt_(x.despues))); })
+    .map(function (x) {
+      const cita = x.entidad === 'CAPTACIONES' ? capsDelCliente[String(x.entidad_id)] : null;
+      return {fecha: txt_(x.fecha), quien: nombre(x.usuario_id) || 'Sistema', usuario_id: txt_(x.usuario_id),
+              que: x.entidad === 'CAPTACIONES' ? 'Cita' + (cita ? ' del ' + fechaLarga_(cita.fecha) : '') : 'Ficha',
+              campo: txt_(x.campo), nombre_campo: x.campo === 'alta' ? 'Alta' : (NOMBRE_CAMPO[x.campo] || x.campo),
+              antes: traducir(x.campo, txt_(x.antes)), despues: traducir(x.campo, txt_(x.despues))};
+    })
+    .sort(function (a, b) { return b.fecha.localeCompare(a.fecha); });
+  /* Los reagendados y cancelaciones llevan además el motivo. */
+  leer_('CITAS_CAMBIOS').filter(function (x) { return String(x.cliente_id) === String(cli.id) && txt_(x.motivo); })
+    .forEach(function (x) {
+      filas.push({fecha: txt_(x.creado), quien: nombre(x.usuario_id) || 'Sistema', usuario_id: txt_(x.usuario_id),
+        que: 'Cita del ' + fechaLarga_(x.fecha_antes), campo: 'motivo',
+        nombre_campo: normal_(x.tipo) === 'cancelada' ? 'Motivo de la cancelación' : 'Motivo del cambio', antes: '', despues: txt_(x.motivo)});
+    });
+  filas.sort(function (a, b) { return b.fecha.localeCompare(a.fecha); });
+  return {ok: true, cambios: filas.slice(0, 500)};
+}
+
+function etiquetaCatalogo_(lista, v) {
+  const f = (CATALOGO[lista] || []).filter(function (x) { return x[0] === normal_(v); })[0];
+  return f ? f[1] : txt_(v);
 }
 
 
