@@ -2012,5 +2012,30 @@ comprobar('cambiar el resultado de una cita de Nando no choca con las reglas',
 vaciarCorreos();
 }
 
+console.log('\n== Sentada por el captador y próximos pasos ==');
+{
+vaciarCorreos();
+const U = n => leer_('USUARIOS').filter(x => x.usuario === n)[0];
+const ayer = sumarDias_(hoyISO_(), -1);
+const nueva = despachar_({accion: 'guardarCaptacion', token: sesiones.sandra.token, captacion: {
+  cliente: {nombre: 'Sentada Captador', telefono: '640000111', direccion: 'Calle Sentada 1', municipio: 'Madrid'},
+  fecha: ayer, hora_cita: '11:00', comercial_id: U('rober').id}});
+const cid = nueva.captacion.cliente_id;
+const cli = () => leer_('CLIENTES').filter(c => c.id === cid)[0];
+comprobar('la cita deja «Sentada concertada» como próximo paso', /sentada concertada/i.test(cli().proxima_accion), cli().proxima_accion);
+vaciarCorreos();
+const m = despachar_({accion: 'guardarCaptacion', token: sesiones.sandra.token, captacion: {id: nueva.captacion.id, cliente_id: cid, resultado: 'sentada', fecha_resultado: hoyISO_()}});
+comprobar('la captadora puede marcarla como sentada', m.ok && m.captacion.resultado === 'sentada', m.error);
+comprobar('el cliente pasa a sentada', cli().estado === 'sentada', cli().estado);
+comprobar('y la «Sentada concertada» deja de ser su próximo paso', !txt_(cli().proxima_accion) && !txt_(cli().proxima_fecha), cli().proxima_accion);
+comprobar('a ella no le llega el aviso de su propio cambio', !correosEnviados().some(c => c.to === U('sandra').email), correosEnviados().map(c => c.subject));
+/* Vencidos del viernes: ni la sentada automática ni quien ya compró */
+const comprado = leer_('CLIENTES').filter(c => c.comercial_id === U('rober').id)[0];
+actualizar_('CLIENTES', comprado.id, {estado: 'cita', proxima_accion: 'Llamar', proxima_fecha: sumarDias_(hoyISO_(), -5)});
+insertar_('OPERACIONES', {cliente_id: comprado.id, comercial_id: U('rober').id, estado: 'firmada', fecha_firma: sumarDias_(hoyISO_(), -3), creado: ahora_()});
+const ven = vencidosDe_(U('rober'), hoyISO_());
+comprobar('los vencidos no incluyen clientes que ya han firmado', !ven.some(v => v.nombre === comprado.nombre && v.tipo === 'Seguimiento'), ven.filter(v => v.tipo === 'Seguimiento').map(v => v.nombre));
+}
+
 console.log('\n' + (fallos ? 'FALLAN ' + fallos + ' de ' + pruebas : 'Todo correcto: ' + pruebas + ' comprobaciones'));
 process.exit(fallos ? 1 : 0);
