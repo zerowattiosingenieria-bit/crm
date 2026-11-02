@@ -147,7 +147,7 @@ function acciones_(): array {
     'recordarCRM' => 'accRecordarCRM_', 'recordatorios' => 'accRecordatorios_',
     /* Reagendar y cancelar citas, estadísticas e histórico del lead (estadisticas.php, historial.php) */
     'reagendarCita' => 'accReagendarCita_', 'cancelarCita' => 'accCancelarCita_', 'estadisticas' => 'accEstadisticas_',
-    'historialCambios' => 'accHistorialCambios_'
+    'historialCambios' => 'accHistorialCambios_', 'coordenadasZona' => 'accCoordenadasZona_'
   ];
 }
 

@@ -271,7 +271,9 @@ function metrosEntre_(array $a, array $b): float {
 function coordenadasCliente_(array $cli): ?array {
   $co = coordenadas_($cli['coordenadas'] ?? '');
   if ($co) return $co;
-  if (!preg_match('/\d/', txt_($cli['direccion'] ?? '')) || txt_($cli['municipio'] ?? '') === '') return null;
+  if (!preg_match('/\d/', txt_($cli['direccion'] ?? ''))) return null;
+  /* Sin municipio, solo si la dirección ya lo lleva (o el código postal). */
+  if (txt_($cli['municipio'] ?? '') === '' && !preg_match('/\b\d{5}\b|,.*[a-záéíóúñ]{3}/iu', preg_replace('/^[^,]*,/', '', txt_($cli['direccion'])))) return null;
   if (!empty($GLOBALS['ZW_PRUEBAS'])) return null;
   try {
     $r = geocodificar_(implode(', ', array_filter([txt_($cli['direccion']), txt_($cli['municipio']), txt_($cli['cp'] ?? ''), 'España'], fn($s) => $s !== '')));
@@ -368,4 +370,29 @@ function avisoZonaCaptacion_(array $cap): string {
   } catch (Throwable $e) {
     return '';
   }
+}
+
+/**
+ * Dirección: busca las coordenadas de los clientes de las fichas de los
+ * últimos 90 días que no las tienen (solo si Google da el portal), para que
+ * el aviso de misma zona tenga con qué comparar. Va por tandas.
+ */
+function accCoordenadasZona_(array $u, array $p): array {
+  exigir_($u, 'editarTodo');
+  $limite = (int)min(num_($p['limite'] ?? '') ?: 25, 60);
+  $desde = sumarDias_(hoyISO_(), -DIAS_ZONA);
+  $clientes = indexar_(leer_('CLIENTES'), 'id');
+  $vistos = []; $pendientes = [];
+  foreach (leer_('CAPTACIONES') as $k) {
+    $alta = trozo_($k['creado'] ?? '', 0, 10) ?: trozo_($k['fecha'] ?? '', 0, 10);
+    $c = $clientes[txt_($k['cliente_id'])] ?? null;
+    if (!$c || txt_($k['captador_id']) === '' || $alta === '' || $alta < $desde || isset($vistos[$c['id']]) || coordenadas_($c['coordenadas'] ?? '')) continue;
+    $vistos[$c['id']] = 1;
+    $pendientes[] = $c;
+  }
+  $hechos = 0; $sin = 0;
+  $tanda = array_slice($pendientes, 0, $limite);
+  foreach ($tanda as $c) { if (coordenadasCliente_($c)) $hechos++; else $sin++; dormir_(100); }
+  registrar_($u, 'coordenadas_zona', 'CLIENTES', '', $hechos . ' de ' . count($tanda));
+  return ['ok' => true, 'hechos' => $hechos, 'sin_precision' => $sin, 'quedan' => max(0, count($pendientes) - count($tanda))];
 }
