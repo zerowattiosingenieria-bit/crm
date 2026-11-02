@@ -8,6 +8,27 @@ Esto no sustituye al manual: el manual cuenta cómo se usa el CRM hoy
 luego no hay manera de reconstruir.
 
 
+## 02/11/2026 (noche) · «Eso también va en el CRM»
+
+Desde el 3 de noviembre comerciales y captadores lo apuntan todo en el CRM.
+Para que no se quede nada fuera, les llega un correo cuando se les olvida
+algo o lo ponen en otro sitio. Solo a comerciales y captadores: dirección
+no recibe nada (tampoco la cuenta de comercial de Nando, que usa su correo).
+
+- **Lo puesto fuera.** Los agentes, al leer WhatsApp, Trello o el correo,
+  apuntan con `recordarCRM` lo que alguien ha puesto allí y no en el CRM.
+- **Lo que se queda a medias** (solo en el correo de la tarde): visita ya
+  pasada sin resultado, sentada sin proyecto pedido a los 2 días, propuesta
+  lista sin marcar como enviada a los 2 días, proyecto parado por falta de
+  datos 2 días, ficha de captación sin teléfono, dirección o gasto, y el
+  parte del día anterior sin mandar.
+- **Cuándo:** lunes a viernes hacia las 13:30 y las 19:30, un solo correo por
+  persona y nada si no hay nada. Lo mismo no se repite antes de 3 días.
+- **Se apaga** con `avisos_crm = no` en Ajustes. Solo cuenta lo que pasa
+  desde `recordatorios_desde` (03/11/2026), para no llenarles el correo de
+  cosas viejas.
+
+
 ## 02/11/2026 (tarde) · Un cliente, una ficha
 
 Revisión de los datos reales: 872 clientes, de los que 7 parejas eran el

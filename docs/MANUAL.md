@@ -246,6 +246,16 @@ puede lanzar el envío a todo el equipo sin esperar al viernes. Si alguien no
 debe recibirlo, se le quita el correo en *Usuarios* o se pone `resumen_semanal`
 a `no` en Ajustes.
 
+## Los recordatorios por correo (comerciales y captadores)
+
+Todo se apunta en el CRM. Si algo se ha puesto solo en WhatsApp, en Trello o
+en un correo, o se ha quedado a medias (una visita sin resultado, una
+sentada sin proyecto pedido, una propuesta lista sin marcar como enviada,
+una ficha sin teléfono, el parte del día sin mandar), llega un correo de
+«CRM · ZERO WATTIOS» con la lista y cómo hacerlo. Sale entre semana hacia
+las 13:30 y las 19:30, solo si hay algo, y no repite lo mismo antes de 3
+días. Si ya está hecho, no hay que hacer nada.
+
 ## Preguntas rápidas
 
 **¿Se puede usar en el móvil?** Sí; el menú se abre con el botón de arriba a
