@@ -8,6 +8,19 @@ Esto no sustituye al manual: el manual cuenta cómo se usa el CRM hoy
 luego no hay manera de reconstruir.
 
 
+## 02/11/2026 (noche) · Reglas de la agenda de Nando
+
+Regla para los captadores: a Nando no se le pueden dar **más de 3 visitas al
+día**, **ni los viernes**, **ni después de las 17:30**, salvo que él lo
+autorice. Si la cita no cumple, el CRM lo avisa mientras se rellena la ficha
+y no la adjudica; ofrece guardarla **sin adjudicar** y le manda a Nando un
+correo para autorizarla (la acepta adjudicándosela). El cliente pasa a su
+cartera para que lo vea. Vale para fichas nuevas, adjudicar, cambiar el día
+o la hora y reagendar. Dirección, Nando y el agente no tienen ese freno (solo
+el aviso). Las reglas están en Ajustes › `agenda_bloqueos`
+(`{"U-000004":{"dias":[5],"max_dia":3,"hasta":"17:30"}}`).
+
+
 ## 02/11/2026 (noche) · Reagendar, cancelar, estadísticas, misma zona e histórico del lead
 
 Orden de Nando para que captadores y comerciales trabajen todo desde el CRM.

@@ -246,6 +246,14 @@ puede lanzar el envío a todo el equipo sin esperar al viernes. Si alguien no
 debe recibirlo, se le quita el correo en *Usuarios* o se pone `resumen_semanal`
 a `no` en Ajustes.
 
+## La agenda de Nando (captadores)
+
+A Nando no se le pueden dar más de 3 visitas al día, ni visitas los viernes,
+ni después de las 17:30, salvo que él lo autorice. Si la cita no cumple, el
+CRM te lo dice al rellenarla y te ofrece guardarla sin adjudicar y pedirle
+autorización: le llega un correo y, si la acepta, se la adjudica él. Si no,
+busca otro día u hora.
+
 ## Reagendar o cancelar una cita, y las estadísticas
 
 - En **Captaciones** (o en la ficha del cliente, pestaña **Citas**) cada cita
