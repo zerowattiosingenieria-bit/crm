@@ -8,6 +8,64 @@ Esto no sustituye al manual: el manual cuenta cómo se usa el CRM hoy
 luego no hay manera de reconstruir.
 
 
+## 02/11/2026
+
+### Pantalla «Hoy» para todos
+
+Primera opción del menú. El comercial ve sus visitas de hoy y mañana (con
+Modo visita, cómo llegar y la ficha), las llamadas y pasos que le tocan y un
+semáforo de su cartera (rojo si lleva más de 7 días sin tocarse, ámbar a los
+3), sentadas sin propuesta y visitas sin resultado. El captador ve lo que
+tiene sin adjudicar y la comisión en juego de sus citas de la semana.
+Dirección ve además los cobros vencidos o de esta semana y los pagos raros
+del banco. Hay un menú corto por rol (se cambia al largo con un botón).
+
+### Dar citas desde el CRM (Trello sigue mandando un mes)
+
+«+ Nueva cita» en la Agenda y en la ficha del cliente. Al elegir comercial y
+día se ve lo que ya tiene y el CRM avisa si no le da tiempo: cada visita
+dura como mínimo 1 h 45 min y se suma lo que tarda en coche hasta la
+siguiente (Google Maps; si falla, 30 min). También avisa los viernes de
+Nando. Tabla de huecos de los comerciales de la semana. La agenda que manda
+sigue siendo Trello (`agenda_fuente = trello`); cuando se deje Trello se
+cambia a `crm` en Ajustes. Duración, días bloqueados y avisos se tocan en
+Ajustes › Agenda y avisos.
+
+### Modo visita en el móvil
+
+Una pantalla con fotos de la casa y facturas de luz y gas desde la cámara,
+la nota (escrita o dictada), resultado y próximo paso, y «Guardar y mandar
+al ingeniero». Sin cobertura, la nota se guarda en el móvil y se manda sola
+al volver. Dictado por voz en todos los cuadros de texto largos.
+
+### Captaciones más rápidas
+
+«📍 Estoy en la puerta» rellena la dirección por GPS y «🏠 Datos del
+Catastro» trae referencia, m² y año. El captador recibe un correo cuando su
+cita pasa a sentada, venta, no sentada o potencial.
+
+### Propuesta: enviar, pedir cambios y aceptación firmada
+
+En la pestaña Proyecto: enviar el PDF por WhatsApp o correo con el texto
+preparado (lo manda el comercial desde su móvil, el CRM no envía nada al
+cliente), pedir cambios al ingeniero y recoger la firma del cliente en
+pantalla con foto del DNI.
+
+### Contabilidad
+
+Casar cobros solos con el banco (solo los que no tienen duda), pagos raros
+(posibles dobles y salidas de 500 € o más sin gasto), facturar un cobro con
+un clic (número FZW siguiente), reserva de impuestos del trimestre, obras
+sin factura de proveedor y paquete Excel para la gestoría.
+
+### Llave de servicio para los agentes
+
+Rol nuevo «Agente» y botón «Llave de servicio» en Ajustes › Usuarios: una
+llave de un año que no caduca por inactividad, sin acceso a usuarios ni
+configuración, y que se puede revocar. Los cobros apuntados a mano ya no se
+rehacen al recalcular.
+
+
 ## 30/10/2026
 
 ### Control de versiones del proyecto

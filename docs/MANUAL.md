@@ -23,6 +23,17 @@ apagar el código desde **Ajustes**, poniendo `dos_pasos` en `no`.
 
 ---
 
+## Novedades del 02/11/2026 (todo el mundo)
+
+- **Hoy**: primera pantalla del menú, con lo que te toca hoy. El botón «Menú corto/largo» cambia cuántas opciones ves.
+- **Buscador de arriba**: escribe calle, nombre, nº de operación o de factura y elige.
+- **Nueva cita** (Agenda o ficha del cliente): eliges cliente, comercial, día y hora; abajo ves lo que ya tiene ese día y si le da tiempo (1 h 45 min por visita más el coche). De momento la agenda buena sigue siendo Trello.
+- **Modo visita** (botón en la ficha y en Hoy): fotos, facturas, nota dictada y mandar al ingeniero. Funciona sin cobertura para las notas.
+- **Micrófono 🎤** junto a los cuadros de texto: dicta en vez de escribir.
+- **Captadores**: «Estoy en la puerta» y «Datos del Catastro» al dar de alta; te llega un correo cuando tu cita tiene resultado.
+- **Proyecto**: botones para mandar la propuesta por WhatsApp o correo, pedir cambios y recoger la firma del cliente.
+- **Dirección**: «Casar cobros solos» y pagos raros en Banco; «Facturar» en cada cobro; reserva de impuestos, obras sin factura de proveedor y paquete de la gestoría en Contabilidad.
+
 ## Para los captadores (Sandra y Abraham)
 
 **Mis captaciones → + Nueva ficha.** Es la ficha de la puerta: propietarios,
