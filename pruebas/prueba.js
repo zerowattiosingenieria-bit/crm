@@ -624,7 +624,7 @@ comprobar('la captadora sí la ve',
 
 const adjudica = despachar_({accion: 'guardarCaptacion', token: sesiones.sandra.token,
   captacion: {id: capNueva.captacion.id, cliente_id: idCliNuevo,
-    comercial_id: sesiones.nando.usuario.id, fecha: sumarDias_(hoyISO_(), 2)}});
+    comercial_id: sesiones.nando.usuario.id, fecha: sumarDias_(hoyISO_(), 2), hora_cita: '11:00'}});
 comprobar('la captadora la adjudica al comercial que quiere', adjudica.ok === true, adjudica.error);
 comprobar('el comercial adjudicado ya la ve',
   despachar_({accion: 'datos', token: sesiones.nando.token})
@@ -1754,7 +1754,7 @@ const c2 = despachar_({accion: 'comprobarCita', token: sesiones.fernando.token, 
 comprobar('con 1 h 45 min y el coche, cuadra', c2.aviso === '', c2);
 const c3 = despachar_({accion: 'comprobarCita', token: sesiones.fernando.token, comercial_id: 'U-000004',
   fecha: '2030-03-15', hora: '10:00', direccion: 'Calle Falsa 1, Madrid'});
-comprobar('los viernes de Nando avisan', /Viernes/.test(c3.aviso), c3);
+comprobar('los viernes de Nando avisan', /viernes/i.test(c3.aviso), c3);
 const hu = despachar_({accion: 'agendaHuecos', token: sesiones.nando.token, desde: fechaA, hasta: fechaA});
 comprobar('los huecos dicen la fuente y la duración', hu.ok && hu.fuente === 'trello' && hu.duracion_min === 105, hu.error);
 
@@ -1973,6 +1973,43 @@ comprobar('el resultado lo pone el comercial, con nombre legible', de('resultado
   /sentada/i.test(de('resultado')[0].despues), de('resultado')[0]);
 comprobar('lo más nuevo arriba', hs.cambios[0].fecha >= hs.cambios[hs.cambios.length - 1].fecha);
 comprobar('otro captador no ve el histórico', despachar_({accion: 'historialCambios', token: entrar('abraham').token, cliente_id: cid}).ok === false);
+}
+
+console.log('\n== Reglas de la agenda de Nando (captadores) ==');
+{
+vaciarCorreos();
+const U = n => leer_('USUARIOS').filter(x => x.usuario === n)[0];
+const NANDO = U('nando').id;
+/* Un miércoles cualquiera del futuro y el viernes de esa semana. */
+const mie = '2031-01-08', vie = '2031-01-10';
+const ficha = (n, fecha, hora, extra) => despachar_({accion: 'guardarCaptacion', token: sesiones.sandra.token, captacion: Object.assign({
+  cliente: {nombre: 'Reglas ' + n, telefono: '6' + String(30000000 + n).slice(-8), direccion: 'Calle Reglas ' + n, municipio: 'Madrid'},
+  fecha, hora_cita: hora, comercial_id: NANDO}, extra || {})});
+const v1 = ficha(1, vie, '11:00');
+comprobar('la captadora no puede darle a Nando un viernes', v1.ok === false && v1.requiere_autorizacion && /viernes/.test(v1.error), v1);
+const t1 = ficha(2, mie, '18:00');
+comprobar('ni después de las 17:30', t1.ok === false && /17:30/.test(t1.error), t1);
+comprobar('a las 17:30 sí', ficha(3, mie, '17:30').ok === true);
+comprobar('la 2ª del día sí', ficha(4, mie, '10:00').ok === true);
+comprobar('la 3ª del día sí', ficha(5, mie, '12:30').ok === true);
+const q4 = ficha(6, mie, '15:00');
+comprobar('la 4ª del día no (como mucho 3)', q4.ok === false && /3/.test(q4.error), q4);
+vaciarCorreos();
+const p1 = despachar_({accion: 'guardarCaptacion', token: sesiones.sandra.token, pedir_autorizacion: true, captacion: {
+  cliente: {nombre: 'Reglas 7', telefono: '630000007', direccion: 'Calle Reglas 7', municipio: 'Madrid'},
+  fecha: vie, hora_cita: '11:00', comercial_id: NANDO}});
+comprobar('pidiendo autorización se guarda sin adjudicar', p1.ok && !p1.captacion.comercial_id && /autorice/.test(p1.captacion.notas) && /correo/.test(p1.pendiente_autorizacion), p1);
+const cor = correosEnviados().filter(c => /Autoriza una visita/.test(c.subject))[0] || {};
+comprobar('y le llega el correo a Nando', cor.to === U('nando').email && /viernes/.test(cor.htmlBody), cor.subject);
+const acepta = despachar_({accion: 'guardarCaptacion', token: sesiones.nando.token, captacion: {id: p1.captacion.id, cliente_id: p1.captacion.cliente_id, comercial_id: NANDO}});
+comprobar('Nando la acepta adjudicándosela', acepta.ok && acepta.captacion.comercial_id === NANDO, acepta.error);
+comprobar('a Rober (sin reglas) un viernes por la tarde sí', ficha(8, vie, '19:00', {comercial_id: U('rober').id}).ok === true);
+const rg = despachar_({accion: 'reagendarCita', token: sesiones.sandra.token, id: leer_('CAPTACIONES').filter(x => x.comercial_id === NANDO && x.fecha === mie)[0].id, fecha: vie, hora_cita: '10:00'});
+comprobar('reagendar a un viernes tampoco, y no apunta el cambio', rg.ok === false && rg.requiere_autorizacion, rg);
+comprobar('cambiar el resultado de una cita de Nando no choca con las reglas',
+  despachar_({accion: 'guardarCaptacion', token: sesiones.sandra.token, captacion: {id: leer_('CAPTACIONES').filter(x => x.comercial_id === NANDO && x.fecha === mie)[0].id,
+    cliente_id: leer_('CAPTACIONES').filter(x => x.comercial_id === NANDO && x.fecha === mie)[0].cliente_id, interes: 8}}).ok === true);
+vaciarCorreos();
 }
 
 console.log('\n' + (fallos ? 'FALLAN ' + fallos + ' de ' + pruebas : 'Todo correcto: ' + pruebas + ' comprobaciones'));
