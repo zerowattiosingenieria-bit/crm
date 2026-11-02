@@ -246,6 +246,21 @@ puede lanzar el envío a todo el equipo sin esperar al viernes. Si alguien no
 debe recibirlo, se le quita el correo en *Usuarios* o se pone `resumen_semanal`
 a `no` en Ajustes.
 
+## Reagendar o cancelar una cita, y las estadísticas
+
+- En **Captaciones** (o en la ficha del cliente, pestaña **Citas**) cada cita
+  pendiente tiene **↻ Reagendar** (nuevo día y hora, y por qué) y
+  **✕ Cancelar** (motivo). Todo queda contado en las estadísticas.
+- **Estadísticas** (menú): citas sacadas, reagendadas, canceladas, sentadas y
+  ventas de cada captador y del equipo, hoy, esta semana, este mes, el
+  trimestre y el año; cuántas citas hacen falta para una venta y las ventas
+  cerradas por semana, mes, trimestre y año. Sin importes.
+- Si metes una ficha a menos de 200 m de otra que sacó un compañero en los
+  últimos 90 días, te sale un aviso y os llega un correo a los dos y a
+  dirección: hablad para repartiros las calles.
+- En la ficha de cada cliente, pestaña **Historial**, el **Histórico de
+  cambios** enseña cada dato que se ha cambiado, cómo estaba, quién y cuándo.
+
 ## Los recordatorios por correo (comerciales y captadores)
 
 Todo se apunta en el CRM. Si algo se ha puesto solo en WhatsApp, en Trello o

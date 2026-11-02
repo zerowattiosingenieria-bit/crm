@@ -8,6 +8,38 @@ Esto no sustituye al manual: el manual cuenta cómo se usa el CRM hoy
 luego no hay manera de reconstruir.
 
 
+## 02/11/2026 (noche) · Reagendar, cancelar, estadísticas, misma zona e histórico del lead
+
+Orden de Nando para que captadores y comerciales trabajen todo desde el CRM.
+
+- **Reagendar y cancelar.** Cada cita tiene «↻ Reagendar» (nuevo día, hora,
+  motivo) y «✕ Cancelar» (motivo de una lista y una línea de detalle), en
+  Captaciones y en la ficha del cliente (pestaña Citas). Cada cambio queda
+  guardado en `CITAS_CAMBIOS`. Cambiar el día de una cita por otro camino
+  (editarla, el agente que copia Trello) también cuenta como reagendada.
+- **Estadísticas** (menú «Estadísticas», para todos). Por captador y del grupo,
+  hoy / semana / mes / trimestre / año: citas sacadas, reagendadas,
+  canceladas (con %), sentadas, ventas y citas por venta. También las
+  citas por día de los últimos 14 días, las citas que hacen falta para una
+  venta en los últimos 12 meses y las ventas cerradas por semana, mes,
+  trimestre y año. Los captadores ven a sus compañeros para picarse; solo
+  números, sin importes ni clientes. Dirección ve además a los comerciales.
+  Cada cosa cuenta el día que pasa (la cita, el día que se mete; la venta,
+  el día de la firma).
+- **Misma zona.** Al meter una ficha, si otro captador sacó otra a menos de
+  200 m en los últimos 90 días, sale el aviso en pantalla y llega un correo
+  a los dos captadores y a dirección (una vez por pareja de fichas). Usa
+  las coordenadas de la ficha; si no tiene y la dirección lleva número, se
+  buscan en Google solo si las da en el portal. Se apaga con `aviso_zona = no`.
+- **Histórico del lead.** En la ficha, pestaña Historial, «Histórico de
+  cambios»: cada campo que cambia el captador, el comercial o dirección en
+  la ficha y en sus citas, cómo estaba, cómo queda, quién y cuándo (tabla
+  `CAMBIOS`). El DNI se apunta sin el número.
+- La columna «Vendido» (euros) del rendimiento de captación solo la ve dirección.
+- Servidor: las tablas nuevas se crean solas en la primera petición tras el
+  despliegue (huella del ESQUEMA en `ESQUEMA_HUELLA`).
+
+
 ## 02/11/2026 (noche) · «Eso también va en el CRM»
 
 Desde el 3 de noviembre comerciales y captadores lo apuntan todo en el CRM.
