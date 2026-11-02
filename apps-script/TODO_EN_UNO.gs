@@ -8266,7 +8266,12 @@ function enviarRecordatorios_(opciones) {
 }
 
 /** Disparador (13:30 y 19:30). */
-function recordatoriosCRM() { return enviarRecordatorios_({}); }
+function recordatoriosCRM() {
+  /* Desde el 02/11/2026 los manda el servidor de crm.zerowattios.com (api/cron.php);
+     esta hoja ya es solo el espejo y no debe mandar nada (saldría repetido y con datos viejos). */
+  if (PROPS.getProperty('CRM_MIGRADO') === 'si') return {ok: true, migrado: true};
+  return enviarRecordatorios_({});
+}
 
 /** Dirección: ver lo que saldría ahora (simular) o mandarlo ya. */
 function accRecordatorios_(u, p) {
