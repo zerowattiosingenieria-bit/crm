@@ -27,7 +27,7 @@ Orden de Nando para que captadores y comerciales trabajen todo desde el CRM.
   Cada cosa cuenta el día que pasa (la cita, el día que se mete; la venta,
   el día de la firma).
 - **Misma zona.** Al meter una ficha, si otro captador sacó otra a menos de
-  200 m en los últimos 90 días, sale el aviso en pantalla y llega un correo
+  200 m en las últimas 48 horas, sale el aviso en pantalla y llega un correo
   a los dos captadores y a dirección (una vez por pareja de fichas). Usa
   las coordenadas de la ficha; si no tiene y la dirección lleva número, se
   buscan en Google solo si las da en el portal. Se apaga con `aviso_zona = no`.

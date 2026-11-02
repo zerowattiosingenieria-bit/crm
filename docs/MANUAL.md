@@ -256,7 +256,7 @@ a `no` en Ajustes.
   trimestre y el año; cuántas citas hacen falta para una venta y las ventas
   cerradas por semana, mes, trimestre y año. Sin importes.
 - Si metes una ficha a menos de 200 m de otra que sacó un compañero en los
-  últimos 90 días, te sale un aviso y os llega un correo a los dos y a
+  últimas 48 horas, te sale un aviso y os llega un correo a los dos y a
   dirección: hablad para repartiros las calles.
 - En la ficha de cada cliente, pestaña **Historial**, el **Histórico de
   cambios** enseña cada dato que se ha cambiado, cómo estaba, quién y cuándo.
