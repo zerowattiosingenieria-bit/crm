@@ -1833,5 +1833,53 @@ comprobar('un comercial no puede fusionar', despachar_({accion: 'fusionarCliente
   origen: a.cliente.id, destino: a.cliente.id}).ok === false);
 }
 
+console.log('\n== Recordatorios: también va en el CRM ==');
+{
+vaciarCorreos();
+const U = n => leer_('USUARIOS').filter(x => x.usuario === n)[0];
+const r1 = despachar_({accion: 'recordarCRM', token: sesiones.fernando.token, usuario: 'sandra', donde: 'whatsapp',
+  que: 'Cita para el martes con la vecina del 5', cliente: 'Calle Mayor 5 · Vecina'});
+comprobar('dirección apunta algo que una captadora puso en WhatsApp', r1.ok && r1.encolado, r1);
+const r2 = despachar_({accion: 'recordarCRM', token: sesiones.fernando.token, usuario: 'sandra', donde: 'whatsapp',
+  que: 'Cita para el martes con la vecina del 5', cliente: 'Calle Mayor 5 · Vecina'});
+comprobar('lo mismo no se apunta dos veces', r2.ok && r2.encolado === false, r2);
+const r3 = despachar_({accion: 'recordarCRM', token: sesiones.fernando.token, usuario: 'fernando', que: 'Algo'});
+comprobar('a dirección no se le recuerda nada', r3.ok && r3.encolado === false, r3);
+comprobar('un comercial no puede apuntar recordatorios a otros',
+  despachar_({accion: 'recordarCRM', token: sesiones.nando.token, usuario: 'sandra', que: 'x'}).ok === false);
+/* Una visita pasada sin resultado y una ficha de captación sin teléfono */
+const cap = despachar_({accion: 'guardarCaptacion', token: sesiones.sandra.token,
+  captacion: {cliente: {nombre: 'Sin Teléfono', direccion: 'Calle Recordatorio 12', municipio: 'Madrid'},
+              fecha: '2030-05-06', hora_cita: '10:00', comercial_id: U('nando').id}});
+comprobar('se mete la captación de prueba', cap.ok, cap.error);
+if (cap.ok) actualizar_('CAPTACIONES', cap.captacion.id, {comercial_id: U('nando').id, creado: '2030-05-06 09:00:00'});
+const sim = despachar_({accion: 'recordatorios', token: sesiones.fernando.token, hoy: '2030-05-08'});
+const de = n => (sim.correos || []).filter(c => c.usuario === U(n).nombre)[0];
+comprobar('simular no manda nada', sim.ok && correosEnviados().length === 0, sim.error);
+comprobar('a la captadora: lo de WhatsApp y la ficha sin teléfono',
+  de('sandra') && de('sandra').fuera.length === 1 && de('sandra').aMedias.some(t => /teléfono/.test(t)), de('sandra'));
+if (cap.ok) actualizar_('CAPTACIONES', cap.captacion.id, {comercial_id: U('rober').id});
+const sim2 = despachar_({accion: 'recordatorios', token: sesiones.fernando.token, hoy: '2030-05-08'});
+const de2 = n => (sim2.correos || []).filter(c => c.usuario === U(n).nombre)[0];
+comprobar('al comercial: la visita sin resultado', de2('rober') && de2('rober').aMedias.some(t => /no tiene resultado/.test(t)), de2('rober'));
+comprobar('a Nando no le llega: su correo es el de dirección', !de2('nando'));
+comprobar('a dirección nunca le llega', !de('fernando') && !de('superadmin'));
+comprobar('un comercial no puede lanzarlos', despachar_({accion: 'recordatorios', token: sesiones.nando.token}).ok === false);
+const env = enviarRecordatorios_({hoy: '2030-05-08', tarde: true});
+const aSandra = correosEnviados().filter(c => c.to === U('sandra').email)[0] || {};
+comprobar('sale un correo por persona', env.correos.length === correosEnviados().length &&
+  new Set(correosEnviados().map(c => c.to)).size === correosEnviados().length, correosEnviados().map(c => c.to));
+comprobar('el correo dice que lo puso en WhatsApp y que va en el CRM', /en WhatsApp/.test(aSandra.htmlBody) &&
+  /Abrir el CRM/.test(aSandra.htmlBody) && /por meter en el CRM/.test(aSandra.subject), aSandra.subject);
+comprobar('solo a comerciales y captadores', correosEnviados().length > 0 && correosEnviados().every(c =>
+  leer_('USUARIOS').filter(x => x.email === c.to).every(x => ['comercial', 'captador'].includes(x.rol))), correosEnviados().map(c => c.to));
+vaciarCorreos();
+enviarRecordatorios_({hoy: '2030-05-08', tarde: true});
+comprobar('no repite lo mismo el mismo día', correosEnviados().length === 0, correosEnviados().length);
+comprobar('lo avisado sale de la cola', leerProp_(K_COLA_RECORD, []).length === 0);
+comprobar('el fin de semana no sale nada', enviarRecordatorios_({hoy: '2030-05-11', tarde: true, simular: true}).correos.length === 0);
+vaciarCorreos();
+}
+
 console.log('\n' + (fallos ? 'FALLAN ' + fallos + ' de ' + pruebas : 'Todo correcto: ' + pruebas + ' comprobaciones'));
 process.exit(fallos ? 1 : 0);
