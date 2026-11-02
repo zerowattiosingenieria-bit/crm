@@ -138,7 +138,8 @@ function acciones_() {
 
     /* Un cliente, una ficha (22_Ficha.gs) */
     duplicados: accDuplicados_,
-    fusionarClientes: accFusionarClientes_
+    fusionarClientes: accFusionarClientes_,
+    recordarCRM: accRecordarCRM_, recordatorios: accRecordatorios_
   };
 }
 
