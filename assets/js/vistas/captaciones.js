@@ -114,6 +114,12 @@ function nuevaCaptacion(refrescar, ir) {
     }}, '🏠 Datos del Catastro'),
     estadoAyuda),
     h('p.nota', 'Haz una foto de la fachada y súbela en la ficha del cliente (pestaña Proyecto) en cuanto la guardes.'));
+  /* Los botones de GPS y Catastro, justo encima de la dirección, que es lo que rellenan. */
+  const campoDir = ctl('direccion') && ctl('direccion').closest('.campo, label');
+  if (campoDir && campoDir.parentNode) {
+    ayudas.style.gridColumn = '1 / -1';
+    campoDir.parentNode.insertBefore(ayudas, campoDir);
+  }
   const revisar = async () => {
     const d = f.leer();
     if (!d.comercial_id || !d.fecha || !d.hora_cita) return poner(revision);
