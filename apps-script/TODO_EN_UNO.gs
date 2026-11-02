@@ -8341,7 +8341,8 @@ function instalarRecordatorios() {
 
 const ESTADOS_OP_VENTA = ['firmada', 'tramite', 'material', 'instalacion', 'instalada', 'legalizada', 'cerrada'];
 const METROS_ZONA = 200;
-const DIAS_ZONA = 90;
+const HORAS_ZONA = 48;   // coincidir en la misma zona en menos de 48 h (orden de Nando, 02/11/2026)
+const DIAS_ZONA = 90;    // solo para buscar coordenadas de las fichas recientes
 const K_AVISOS_ZONA = 'avisos_zona';
 
 const MOTIVOS_CANCELACION = [
@@ -8647,7 +8648,7 @@ function correosDireccion_() {
 
 /**
  * Al meter una ficha de captación: ¿hay otra de OTRO captador a menos de
- * 200 m en los últimos 90 días? Si la hay, correo a los dos y a dirección
+ * 200 m en las últimas 48 horas? Si la hay, correo a los dos y a dirección
  * (una vez por pareja de fichas). Devuelve el aviso para enseñarlo ya.
  */
 function avisoZonaCaptacion_(cap) {
@@ -8661,13 +8662,14 @@ function avisoZonaCaptacion_(cap) {
     const aqui = coordenadasCliente_(cli);
     if (!aqui) return '';
     const usuarios = indexar_(leer_('USUARIOS'), 'id');
-    const desde = sumarDias_(hoyISO_(), -DIAS_ZONA);
+    const desde = Utilities.formatDate(new Date(Date.now() - HORAS_ZONA * 3600000), zonaHoraria_(), 'yyyy-MM-dd HH:mm:ss');
     const cerca = [];
     leer_('CAPTACIONES').forEach(function (k) {
       if (String(k.id) === String(cap.id) || !txt_(k.captador_id) || String(k.captador_id) === capt) return;
       if (String(k.cliente_id) === String(cap.cliente_id)) return;
-      const alta = txt_(k.creado).slice(0, 10) || txt_(k.fecha).slice(0, 10);
-      if (!alta || alta < desde) return;
+      /* Solo cuenta lo que el otro metió en las últimas 48 horas. */
+      const alta = txt_(k.creado);
+      if (alta.length < 16 || alta < desde) return;
       const otro = clientes[String(k.cliente_id)];
       const co = otro && coordenadas_(otro.coordenadas);
       if (!co) return;
@@ -8699,7 +8701,7 @@ function avisoZonaCaptacion_(cap) {
       '<p>Hola,</p><p><b>' + nombres.join(' y ') + '</b>: estáis sacando leads en la misma zona (a menos de ' + METROS_ZONA + ' m).</p>' +
       '<p style="margin:14px 0 6px"><b>La ficha nueva</b></p><p style="margin:0">' + (yo.nombre || '') + ' · ' + etiqueta(cli) +
       ' · ' + fechaLarga_(txt_(cap.creado) || hoyISO_()) + '</p>' +
-      '<p style="margin:14px 0 6px"><b>Lo que ya había cerca (últimos ' + DIAS_ZONA + ' días)</b></p><ul style="padding-left:20px;margin:0">' +
+      '<p style="margin:14px 0 6px"><b>Lo que ya había cerca (últimas ' + HORAS_ZONA + ' horas)</b></p><ul style="padding-left:20px;margin:0">' +
       nuevas.map(function (x) { return '<li style="margin:0 0 6px">' + x.texto + '</li>'; }).join('') + '</ul>' +
       '<p style="margin:16px 0">Hablad entre vosotros para repartiros las calles y no llamar dos veces a la misma puerta.</p>' +
       '<p style="margin:22px 0"><a href="' + WEB_CRM + '#captaciones" style="background:#b4fa1e;color:#17191c;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:700">Abrir el CRM</a></p>' +
