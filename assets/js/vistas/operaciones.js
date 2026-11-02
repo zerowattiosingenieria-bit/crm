@@ -147,7 +147,8 @@ export function tarjetaOperacion(o, cliente, refrescar) {
             h('h4', {estilo: {marginBottom: '4px'}}, 'Beneficio no económico'),
             h('p.nota', {estilo: {margin: 0}}, o.beneficio_no_economico)) : null)),
 
-      cobros.length ? h('div', {estilo: {marginTop: '14px'}},
+      /* Cobros = contabilidad: solo dirección (orden de Nando, 02/11/2026). */
+      api.puede('finanzas') && cobros.length ? h('div', {estilo: {marginTop: '14px'}},
         h('h4', {estilo: {marginBottom: '6px'}}, 'Cobros'),
         tabla([
           {clave: 'concepto', et: 'Concepto', valor: c => api.etiquetaCatalogo('conceptosCobro', c.concepto)},
@@ -176,7 +177,7 @@ export function tarjetaOperacion(o, cliente, refrescar) {
       h('.acciones', {estilo: {marginTop: '14px'}},
         h('button.btn.mini', {onclick: () => editorOperacion(o, cliente || api.cliente(o.cliente_id),
           async () => { await refrescar(); })}, 'Editar instalación'),
-        h('span.nota', 'Cobrado ' + eur(cobrado) + ' de ' + eur(o.total)))));
+        api.puede('finanzas') ? h('span.nota', 'Cobrado ' + eur(cobrado) + ' de ' + eur(o.total)) : null)));
 }
 
 /* ================= listado ================= */
@@ -222,13 +223,13 @@ export async function vistaOperaciones({ir, refrescar}) {
        pinta: o => normal(o.forma_pago) === 'financiado'
          ? h('div', h('span', 'Financiado'), h('div.nota', num(o.cuota) ? eur2(o.cuota) + '/mes' : ''))
          : 'Contado'},
-      {clave: 'cobrado', et: 'Cobrado', num: true,
+      ...(api.puede('finanzas') ? [{clave: 'cobrado', et: 'Cobrado', num: true,
        valor: o => suma(api.cobrosDe(o.id).filter(c => txt(c.fecha_cobro)), 'importe'),
        pinta: o => {
          const c = suma(api.cobrosDe(o.id).filter(x => txt(x.fecha_cobro)), 'importe');
          const p = num(o.total) ? c * 100 / num(o.total) : 0;
          return h('div', h('span', eur(c)), h('div.nota', Math.round(p) + ' %'));
-       }},
+       }}] : []),
       {clave: 'fecha_firma', et: 'Firma', valor: o => txt(o.fecha_firma),
        pinta: o => txt(o.fecha_firma) ? fechaCorta(o.fecha_firma) : '—'},
       {clave: 'instalacion', et: 'Instalación', valor: o => txt(o.fecha_instalacion || o.fecha_prevista_instalacion),
