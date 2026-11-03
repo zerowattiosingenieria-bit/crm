@@ -160,3 +160,26 @@ function accGuardarIncidencia_(u, p) {
 function accResolverIncidencia_(u, p) {
   return accGuardarIncidencia_(u, {incidencia: {id: txt_(p.id), estado: 'resuelta', solucion: txt_(p.solucion)}});
 }
+
+/**
+ * Avisar de una incidencia (03/11/2026): cualquier usuario puede darla de
+ * alta, pero no ve el listado ni toca las que ya hay (solo dirección).
+ */
+function accGuardarAvisoIncidencia_(u, p) {
+  asegurarHoja_('INCIDENCIAS');
+  const d = (p && typeof p.incidencia === 'object' && p.incidencia) || {};
+  const titulo = txt_(d.titulo).trim();
+  if (!titulo) return {ok: false, error: 'Escribe qué pasa.'};
+  const urg = normal_(d.urgencia) || 'media';
+  if (URGENCIAS_INC.indexOf(urg) < 0) return {ok: false, error: 'La urgencia es alta, media o baja.'};
+  const cli = txt_(d.cliente_id);
+  if (cli && !leer_('CLIENTES').some(function (c) { return txt_(c.id) === cli; })) return {ok: false, error: 'Ese cliente no existe.'};
+  const ahora = ahora_();
+  const nueva = insertar_('INCIDENCIAS', {
+    titulo: cortarInc_(titulo, 300), detalle: cortarInc_(d.detalle, 3000), cliente_id: cli, urgencia: urg,
+    estado: 'abierta', fecha: hoyISO_(), origen: 'aviso', bitacora: '[]', creado: ahora, creado_por: u.id || '',
+    modificado: ahora, modificado_por: u.id || ''
+  });
+  registrar_(u, 'alta_incidencia', 'INCIDENCIAS', nueva.id, cortarInc_(titulo, 200));
+  return {ok: true, id: nueva.id};
+}
