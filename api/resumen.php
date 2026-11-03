@@ -322,6 +322,8 @@ function comisionesPeriodo_(array $persona, string $desde, string $hasta): array
   $r = comisionesDe_($persona, $ventas, $captadas, $equipo);
   $r['desde'] = $desde; $r['hasta'] = $hasta;
   $r['ventas'] = count($ventas); $r['captadas'] = count($captadas); $r['de_equipo'] = count($equipo);
+  /* Lo facturado por sus propias ventas del periodo (IVA incl.), ampliaciones incluidas. */
+  $r['facturado'] = redondear_(array_sum(array_map(fn($o) => num_($o['total'] ?? 0), $ventas)), 2);
   return $r;
 }
 
