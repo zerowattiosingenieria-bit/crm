@@ -69,7 +69,13 @@ export function tablaVentasPeriodo(op, ir, {titulo = 'Ventas del periodo'} = {})
   const filas = (op.detalle || []).slice().sort((a, b) => txt(a.fecha).localeCompare(txt(b.fecha)));
   const cab = h('p', {estilo: {margin: '14px 0 6px', fontWeight: '600'}},
     titulo + ' (' + fechaCorta(op.desde) + ' — ' + fechaCorta(op.hasta) + ')');
-  if (!filas.length) return h('div', cab, h('p.nota', 'Todavía no hay ventas firmadas en este periodo.'));
+  /* Lo facturado solo tiene sentido para quien vende (comerciales y dirección). */
+  const facturado = num(op.ventas) > 0
+    ? h('p', {estilo: {margin: '8px 0 0', textAlign: 'right'}},
+        'Facturado en el periodo (' + miles(op.ventas) + ' venta' + (num(op.ventas) === 1 ? '' : 's') + ' propia' +
+        (num(op.ventas) === 1 ? '' : 's') + ', IVA incl.): ', h('b', eur(op.facturado)))
+    : null;
+  if (!filas.length) return h('div', cab, h('p.nota', 'Todavía no hay ventas firmadas en este periodo.'), facturado);
   return h('div', cab,
     tabla([
       {clave: 'fecha', et: 'Firma', valor: c => txt(c.fecha), pinta: c => fechaCorta(c.fecha)},
@@ -83,6 +89,7 @@ export function tablaVentasPeriodo(op, ir, {titulo = 'Ventas del periodo'} = {})
          (num(c.sencillas) === 2 ? ' · doble' : ''))},
       {clave: 'importe', et: 'Comisión', num: true, valor: c => num(c.importe), pinta: c => h('b', eur(c.importe))}
     ], filas, {vacio: ''}),
+    facturado,
     h('p', {estilo: {margin: '8px 0 0', textAlign: 'right'}}, 'Total comisiones del periodo: ', h('b', eur(op.total))));
 }
 
