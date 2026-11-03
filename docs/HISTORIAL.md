@@ -21,6 +21,8 @@ luego no hay manera de reconstruir.
   cliente. Las ampliaciones y extras (tipo «otro») no comisionan.
 - Las nóminas usan las mismas reglas.
 - Las ampliaciones y extras (tipo «otro») tampoco cuentan para el objetivo.
+- Campo nuevo en la operación, **«Cuenta como (ventas)»**: vacío cuenta según el tipo;
+  se pone 2 cuando, por ejemplo, una aerotermia lleva dos máquinas (Lomas 66).
 
 ## 03/11/2026 · Todo el mundo puede avisar de una incidencia
 
