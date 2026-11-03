@@ -56,6 +56,8 @@ const camposOperacion = (cliente) => [
   {id: 'precio_ajustado', et: '¿Se ha bajado el precio estándar?', tipo: 'select',
    opciones: [['no', 'No, precio de tarifa'], ['si', 'Sí, precio ajustado']],
    ayuda: 'Con precio ajustado, el comercial cobra su comisión reducida'},
+  {id: 'ventas', et: 'Cuenta como (ventas)', tipo: 'numero',
+   ayuda: 'Vacío = según el tipo (una doble cuenta 2). Pon 2 si lleva dos máquinas de aerotermia'},
   {id: 'beneficio_no_economico', et: 'Beneficio no económico', ancho: 3,
    ayuda: 'Prescriptor, obra escaparate, entrada en una urbanización…'},
   {id: 'observaciones', et: 'Observaciones', tipo: 'area', ancho: 3},
