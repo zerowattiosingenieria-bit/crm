@@ -3101,14 +3101,9 @@ function resumenPersona_(persona, desde, hasta, conImportes) {
   });
 
   const importeVendido = ganadasRango.reduce(function (a, o) { return a + num_(o.total); }, 0);
-  /* Las captaciones que acaban en venta se pagan a quien abrió la puerta,
-     sea captador o comercial, así que se miran por captador_id siempre. */
-  const misCaptacionesVendidas = captaciones.filter(function (c) {
-    return String(c.captador_id) === String(persona.id) && normal_(c.resultado) === 'venta' &&
-           enRango(txt_(c.fecha_resultado) || txt_(c.fecha));
-  });
-  const comisiones = comisionesDe_(persona, ganadasRango, misCaptacionesVendidas,
-    ventasDeSuEquipo_(persona, desde, hasta));
+  /* Comisiones: lo que ha vendido, lo que ha captado (sea captador o
+     comercial) y lo que vende o capta la gente que tiene a su cargo. */
+  const comisiones = comisionesPeriodo_(persona, desde, hasta);
 
   /* Objetivo del periodo 16-15: una operación doble cuenta por dos. */
   const delPeriodo = misOps.filter(function (o) {
@@ -3190,7 +3185,10 @@ function resumenPersona_(persona, desde, hasta, conImportes) {
     frios: frios, proximas: proximas,
     partes_enviados: partes.length,
     dias_sin_parte: diasSinParte_(persona, partes),
-    comisiones: comisiones
+    comisiones: comisiones,
+    /* Las ventas del periodo 16-15 de esta persona, con dirección, importe y
+       lo que cobra por cada una. Cada uno solo pide su propio resumen. */
+    objetivo_periodo: comisionesPeriodo_(persona, obj.desde, obj.hasta)
   };
 
   if (conImportes || persona.rol !== 'captador') {
@@ -3248,7 +3246,10 @@ function comisionesDe_(persona, ganadas, captacionesVenta, ventasEquipo) {
     detalle.push(Object.assign({
       operacion_id: o && o.id ? o.id : '', referencia: (o && o.referencia) || '',
       tipo: o ? o.tipo : '', concepto: concepto, importe: redondear_(importe, 2),
-      fecha: o ? (txt_(o.fecha_firma) || txt_(o.creado)) : ''
+      fecha: o ? (txt_(o.fecha_firma) || txt_(o.creado)) : '',
+      cliente_id: o ? txt_(o.cliente_id) : '', direccion: o ? txt_(o._direccion) : '',
+      importe_venta: o ? redondear_(num_(o.total), 2) : 0,
+      sencillas: o ? (normal_(o.tipo) === 'fv_aero' ? 2 : (['fv', 'aero'].indexOf(normal_(o.tipo)) >= 0 ? 1 : 0)) : 1
     }, extra || {}));
   };
   const porTipo = function (o, fv, aero) {
@@ -3263,7 +3264,12 @@ function comisionesDe_(persona, ganadas, captacionesVenta, ventasEquipo) {
   });
 
   (captacionesVenta || []).forEach(function (c) {
-    const tipo = normal_(c.tecnologia) || 'fv';
+    /* Si es una operación vendida, cuenta como la venta (una doble, por dos). */
+    if (txt_(c.tipo) && !txt_(c.tecnologia)) {
+      apuntar(porTipo(c, cCapFV, cCapAero), 'captación vendida', c, {de: c._de || ''});
+      return;
+    }
+    const tipo = tipoDeTecnologia_(c.tecnologia);
     const importe = (tipo === 'fv' || tipo === 'fv_aero' ? cCapFV : 0) +
                     (tipo === 'aero' || tipo === 'fv_aero' ? cCapAero : 0);
     apuntar(importe, 'captación vendida', null,
@@ -3272,10 +3278,60 @@ function comisionesDe_(persona, ganadas, captacionesVenta, ventasEquipo) {
   });
 
   (ventasEquipo || []).forEach(function (o) {
-    apuntar(porTipo(o, cEqFV, cEqAero), 'venta de su equipo', o, {de: o._de || ''});
+    apuntar(porTipo(o, cEqFV, cEqAero), o._como === 'captacion' ? 'captación de su equipo' : 'venta de su equipo',
+      o, {de: o._de || ''});
   });
 
   return {total: redondear_(total, 2), detalle: detalle};
+}
+
+/** «FOTOVOLTAICA», «AEROTERMIA + FOTOVOLTAICA»… → fv, aero o fv_aero. */
+function tipoDeTecnologia_(t) {
+  t = normal_(t);
+  if (['fv', 'aero', 'fv_aero'].indexOf(t) >= 0) return t;
+  const fv = t.indexOf('fotov') >= 0 || t.indexOf('placa') >= 0 || t.indexOf('solar') >= 0;
+  const ae = t.indexOf('aerot') >= 0;
+  return fv && ae ? 'fv_aero' : (ae ? 'aero' : 'fv');
+}
+
+/** Quién captó una operación: el de la operación o, si no lo tiene, el del cliente. */
+function captadorDe_(o, clientesPorId) {
+  return txt_(o.captador_id) || txt_((clientesPorId[txt_(o.cliente_id)] || {}).captador_id);
+}
+
+/**
+ * Comisiones de una persona entre dos fechas (por fecha de firma), con el
+ * detalle por venta: dirección, importe y lo que cobra por cada una.
+ *   · venta: sus operaciones firmadas, a su tarifa (una doble cuenta por dos).
+ *   · captación: operaciones firmadas de clientes que captó, las cerrara quien las cerrara.
+ *   · equipo: lo que venden o captan las personas que la tienen de responsable.
+ * Las ampliaciones y extras (tipo «otro») no comisionan.
+ */
+function comisionesPeriodo_(persona, desde, hasta) {
+  const yo = txt_(persona.id);
+  const clientes = indexar_(leer_('CLIENTES'), 'id');
+  const usuarios = leer_('USUARIOS');
+  const nombre = {}, suyos = {};
+  usuarios.forEach(function (x) {
+    nombre[txt_(x.id)] = txt_(x.nombre);
+    if (txt_(x.responsable_id) === yo && txt_(x.id) !== yo) suyos[txt_(x.id)] = true;
+  });
+  const ventas = [], captadas = [], equipo = [];
+  leer_('OPERACIONES').forEach(function (o0) {
+    if (!esGanada_(o0)) return;
+    const f = txt_(o0.fecha_firma) || txt_(o0.creado);
+    if (f < desde || f > hasta) return;
+    const o = Object.assign({}, o0, {_direccion: txt_((clientes[txt_(o0.cliente_id)] || {}).direccion)});
+    const com = txt_(o.comercial_id), cap = captadorDe_(o, clientes);
+    if (com === yo) ventas.push(o);
+    if (cap && cap === yo) captadas.push(Object.assign({}, o, {_de: nombre[com] || ''}));
+    if (suyos[com]) equipo.push(Object.assign({}, o, {_de: nombre[com], _como: 'venta'}));
+    else if (cap && suyos[cap]) equipo.push(Object.assign({}, o, {_de: nombre[cap], _como: 'captacion'}));
+  });
+  const r = comisionesDe_(persona, ventas, captadas, equipo);
+  r.desde = desde; r.hasta = hasta;
+  r.ventas = ventas.length; r.captadas = captadas.length; r.de_equipo = equipo.length;
+  return r;
 }
 
 /** Las ventas cerradas por la gente que tiene a esta persona de responsable. */
@@ -3732,17 +3788,8 @@ function accGenerarNomina_(u, p) {
   const desdeC = Utilities.formatDate(iniC, zonaHoraria_(), 'yyyy-MM-dd');
   const hastaC = Utilities.formatDate(finC, zonaHoraria_(), 'yyyy-MM-dd');
 
-  const ganadas = leer_('OPERACIONES').filter(function (o) {
-    const f = txt_(o.fecha_firma) || txt_(o.creado);
-    return String(o.comercial_id) === String(objetivoId) && esGanada_(o) && f >= desdeC && f <= hastaC;
-  });
-  const capVenta = leer_('CAPTACIONES').filter(function (c) {
-    const f = txt_(c.fecha_resultado) || txt_(c.fecha);
-    return String(c.captador_id) === String(objetivoId) && normal_(c.resultado) === 'venta' &&
-           f >= desdeC && f <= hastaC;
-  });
-  const com = comisionesDe_(persona, ganadas, capVenta,
-    ventasDeSuEquipo_(persona, desdeC, hastaC));
+  /* Las mismas reglas que el resumen: ventas, captaciones y equipo. */
+  const com = comisionesPeriodo_(persona, desdeC, hastaC);
 
   const bruto = num_(persona.salario_bruto);
   const dietas = num_(persona.dietas_mes);

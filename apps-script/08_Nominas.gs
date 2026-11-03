@@ -167,17 +167,8 @@ function accGenerarNomina_(u, p) {
   const desdeC = Utilities.formatDate(iniC, zonaHoraria_(), 'yyyy-MM-dd');
   const hastaC = Utilities.formatDate(finC, zonaHoraria_(), 'yyyy-MM-dd');
 
-  const ganadas = leer_('OPERACIONES').filter(function (o) {
-    const f = txt_(o.fecha_firma) || txt_(o.creado);
-    return String(o.comercial_id) === String(objetivoId) && esGanada_(o) && f >= desdeC && f <= hastaC;
-  });
-  const capVenta = leer_('CAPTACIONES').filter(function (c) {
-    const f = txt_(c.fecha_resultado) || txt_(c.fecha);
-    return String(c.captador_id) === String(objetivoId) && normal_(c.resultado) === 'venta' &&
-           f >= desdeC && f <= hastaC;
-  });
-  const com = comisionesDe_(persona, ganadas, capVenta,
-    ventasDeSuEquipo_(persona, desdeC, hastaC));
+  /* Las mismas reglas que el resumen: ventas, captaciones y equipo. */
+  const com = comisionesPeriodo_(persona, desdeC, hastaC);
 
   const bruto = num_(persona.salario_bruto);
   const dietas = num_(persona.dietas_mes);
