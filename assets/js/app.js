@@ -10,7 +10,7 @@ import {vistaClientes, vistaCliente} from './vistas/clientes.js';
 import {vistaOperaciones} from './vistas/operaciones.js';
 import {vistaCaptaciones} from './vistas/captaciones.js';
 import {vistaEstadisticas} from './vistas/estadisticas.js';
-import {vistaIncidencias} from './vistas/incidencias.js';
+import {vistaIncidencias, vistaAvisarIncidencia} from './vistas/incidencias.js';
 import {vistaMapa} from './vistas/mapa.js';
 import {vistaDirectorio} from './vistas/directorio.js';
 import {vistaContabilidad, vistaFacturas, vistaGastos, vistaCobros} from './vistas/finanzas.js';
@@ -42,6 +42,7 @@ const VISTAS = {
   captaciones:  {titulo: 'Captaciones',        pinta: vistaCaptaciones},
   estadisticas: {titulo: 'Estadísticas',       pinta: vistaEstadisticas},
   incidencias:  {titulo: 'Incidencias',        pinta: vistaIncidencias,   permiso: 'direccion'},
+  avisar:       {titulo: 'Avisar de una incidencia', pinta: vistaAvisarIncidencia},
   mapa:         {titulo: 'Mapa de clientes',   pinta: vistaMapa,          permiso: 'direccion'},
   directorio:   {titulo: 'Directorio y puertas', pinta: vistaDirectorio,  permiso: 'directorio'},
   contabilidad: {titulo: 'Contabilidad',       pinta: vistaContabilidad,  permiso: 'finanzas'},
@@ -84,6 +85,7 @@ function menuDe(rol) {
       {id: 'estadisticas', et: 'Estadísticas del equipo', ico: '▥'},
       {id: 'clientes', et: 'Mis clientes', ico: '☰'},
       {id: 'parte', et: 'Parte del día', ico: '✓'},
+      {id: 'avisar', et: 'Avisar incidencia', ico: '⚠'},
       {grupo: 'Lo mío'},
       {id: 'resumen', et: 'Mi resumen', ico: '◔'},
       {id: 'nomina', et: 'Mi nómina', ico: '€'},
@@ -104,6 +106,7 @@ function menuDe(rol) {
       {id: 'estadisticas', et: 'Estadísticas', ico: '▥'},
       {id: 'parte', et: 'Parte del día', ico: '✓'},
       {id: 'directorio', et: 'Directorio', ico: '🗂'},
+      {id: 'avisar', et: 'Avisar incidencia', ico: '⚠'},
       {grupo: 'Lo mío'},
       {id: 'resumen', et: 'Mi resumen', ico: '◔'},
       {id: 'nomina', et: 'Mi nómina', ico: '€'},
@@ -156,8 +159,8 @@ function rutaActual() {
    abajo del menú y queda guardado en ese aparato. */
 const K_MENU = 'zw.crm.menuSimple';
 const MENU_CORTO = {
-  captador: ['hoy', 'agenda', 'captaciones', 'estadisticas', 'clientes', 'parte', 'perfil'],
-  comercial: ['hoy', 'agenda', 'clientes', 'operaciones', 'parte', 'perfil'],
+  captador: ['hoy', 'agenda', 'captaciones', 'estadisticas', 'clientes', 'parte', 'avisar', 'perfil'],
+  comercial: ['hoy', 'agenda', 'clientes', 'operaciones', 'parte', 'avisar', 'perfil'],
   otro: ['hoy', 'panel', 'tablero', 'incidencias', 'agenda', 'clientes', 'operaciones', 'captaciones', 'estadisticas', 'cobros', 'banco', 'perfil']
 };
 const menuCorto = () => { try { return localStorage.getItem(K_MENU) === '1'; } catch (e) { return false; } };

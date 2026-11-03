@@ -342,6 +342,7 @@ export const estadisticas = hoy => pedir('estadisticas', hoy ? {hoy} : {});
 export const incidencias = ({ver, orden} = {}) => pedir('incidencias', {ver: ver || 'abiertas', orden: orden || 'urgencia'});
 export const guardarIncidencia = incidencia => pedir('guardarIncidencia', {incidencia});
 export const resolverIncidencia = (id, solucion) => pedir('resolverIncidencia', {id, solucion});
+export const avisarIncidencia = incidencia => pedir('guardarAvisoIncidencia', {incidencia});
 export const historialCambios = cliente_id => pedir('historialCambios', {cliente_id});
 
 /* ---------- próximos pasos que de verdad tocan (02/11/2026) ----------
