@@ -25,6 +25,8 @@ luego no hay manera de reconstruir.
   se pone 2 cuando, por ejemplo, una aerotermia lleva dos máquinas (Lomas 66).
 - Al cumplir el objetivo, lo que se firme después sigue contando en el mismo periodo
   (no pasa al siguiente); corregido el aviso del panel que decía lo contrario.
+- El objetivo del periodo muestra también lo **facturado** por las ventas propias de
+  cada comercial (IVA incluido, ampliaciones incluidas), en su panel y en Equipo.
 
 ## 03/11/2026 · Todo el mundo puede avisar de una incidencia
 
