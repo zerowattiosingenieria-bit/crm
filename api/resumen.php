@@ -73,13 +73,9 @@ function resumenPersona_(array $persona, string $desde, string $hasta, bool $con
   $captacionesVentaTodas = array_values(array_filter($captaciones, fn($c) => mismo_($c['captador_id'], $persona['id'] ?? '') && normal_($c['resultado']) === 'venta'));
 
   $importeVendido = 0; foreach ($ganadasRango as $o) $importeVendido += num_($o['total']);
-  /* Las captaciones que acaban en venta se pagan a quien abrió la puerta,
-     sea captador o comercial, así que se miran por captador_id siempre. */
-  $misCaptacionesVendidas = array_values(array_filter($captaciones, fn($c) =>
-    mismo_($c['captador_id'], $persona['id'] ?? '') && normal_($c['resultado']) === 'venta' &&
-    $enRango(txt_($c['fecha_resultado']) ?: txt_($c['fecha']))));
-  $comisiones = comisionesDe_($persona, $ganadasRango, $misCaptacionesVendidas,
-    ventasDeSuEquipo_($persona, $desde, $hasta));
+  /* Comisiones: lo que ha vendido, lo que ha captado (sea captador o
+     comercial) y lo que vende o capta la gente que tiene a su cargo. */
+  $comisiones = comisionesPeriodo_($persona, $desde, $hasta);
 
   /* Objetivo del periodo 16-15: una operación doble cuenta por dos. */
   $delPeriodo = array_values(array_filter($misOps, function ($o) use ($obj) {
@@ -165,7 +161,10 @@ function resumenPersona_(array $persona, string $desde, string $hasta, bool $con
     'frios' => $frios, 'proximas' => $proximas,
     'partes_enviados' => count($partes),
     'dias_sin_parte' => diasSinParte_($persona, $partes),
-    'comisiones' => $comisiones
+    'comisiones' => $comisiones,
+    /* Las ventas del periodo 16-15 de esta persona, con dirección, importe y
+       lo que cobra por cada una. Cada uno solo pide su propio resumen. */
+    'objetivo_periodo' => comisionesPeriodo_($persona, $obj['desde'], $obj['hasta'])
   ];
 
   if ($conImportes || $rol !== 'captador') {
@@ -225,7 +224,10 @@ function comisionesDe_(array $persona, array $ganadas, ?array $captacionesVenta,
     $detalle[] = unir_([
       'operacion_id' => ($o && txt_($o['id'] ?? '') !== '') ? $o['id'] : '', 'referencia' => ($o && txt_($o['referencia'] ?? '') !== '') ? $o['referencia'] : '',
       'tipo' => $o ? ($o['tipo'] ?? '') : '', 'concepto' => $concepto, 'importe' => redondear_($importe, 2),
-      'fecha' => $o ? (txt_($o['fecha_firma'] ?? '') ?: txt_($o['creado'] ?? '')) : ''
+      'fecha' => $o ? (txt_($o['fecha_firma'] ?? '') ?: txt_($o['creado'] ?? '')) : '',
+      'cliente_id' => $o ? txt_($o['cliente_id'] ?? '') : '', 'direccion' => $o ? txt_($o['_direccion'] ?? '') : '',
+      'importe_venta' => $o ? redondear_(num_($o['total'] ?? 0), 2) : 0,
+      'sencillas' => $o ? (normal_($o['tipo'] ?? '') === 'fv_aero' ? 2 : (in_array(normal_($o['tipo'] ?? ''), ['fv', 'aero'], true) ? 1 : 0)) : 1
     ], $extra ?? []);
   };
   $porTipo = function (array $o, $fv, $aero) {
@@ -240,7 +242,12 @@ function comisionesDe_(array $persona, array $ganadas, ?array $captacionesVenta,
   }
 
   foreach ($captacionesVenta ?? [] as $c) {
-    $tipo = normal_($c['tecnologia'] ?? '') ?: 'fv';
+    /* Si es una operación vendida, cuenta como la venta (una doble, por dos). */
+    if (txt_($c['tipo'] ?? '') !== '' && txt_($c['tecnologia'] ?? '') === '') {
+      $apuntar($porTipo($c, $cCapFV, $cCapAero), 'captación vendida', $c, ['de' => $c['_de'] ?? '']);
+      continue;
+    }
+    $tipo = tipoDeTecnologia_($c['tecnologia'] ?? '');
     $importe = (($tipo === 'fv' || $tipo === 'fv_aero') ? $cCapFV : 0) +
                (($tipo === 'aero' || $tipo === 'fv_aero') ? $cCapAero : 0);
     $apuntar($importe, 'captación vendida', null,
@@ -249,10 +256,59 @@ function comisionesDe_(array $persona, array $ganadas, ?array $captacionesVenta,
   }
 
   foreach ($ventasEquipo ?? [] as $o) {
-    $apuntar($porTipo($o, $cEqFV, $cEqAero), 'venta de su equipo', $o, ['de' => $o['_de'] ?? '']);
+    $apuntar($porTipo($o, $cEqFV, $cEqAero), ($o['_como'] ?? '') === 'captacion' ? 'captación de su equipo' : 'venta de su equipo',
+      $o, ['de' => $o['_de'] ?? '']);
   }
 
   return ['total' => redondear_($total, 2), 'detalle' => $detalle];
+}
+
+/** «FOTOVOLTAICA», «AEROTERMIA + FOTOVOLTAICA»… → fv, aero o fv_aero. */
+function tipoDeTecnologia_($t): string {
+  $t = normal_($t);
+  if (in_array($t, ['fv', 'aero', 'fv_aero'], true)) return $t;
+  $fv = strpos($t, 'fotov') !== false || strpos($t, 'placa') !== false || strpos($t, 'solar') !== false;
+  $ae = strpos($t, 'aerot') !== false;
+  return $fv && $ae ? 'fv_aero' : ($ae ? 'aero' : 'fv');
+}
+
+/** Quién captó una operación: el de la operación o, si no lo tiene, el del cliente. */
+function captadorDe_(array $o, array $clientesPorId): string {
+  return txt_($o['captador_id'] ?? '') ?: txt_(($clientesPorId[txt_($o['cliente_id'] ?? '')] ?? [])['captador_id'] ?? '');
+}
+
+/**
+ * Comisiones de una persona entre dos fechas (por fecha de firma), con el
+ * detalle por venta: dirección, importe y lo que cobra por cada una.
+ *   · venta: sus operaciones firmadas, a su tarifa (una doble cuenta por dos).
+ *   · captación: operaciones firmadas de clientes que captó, las cerrara quien las cerrara.
+ *   · equipo: lo que venden o captan las personas que la tienen de responsable.
+ * Las ampliaciones y extras (tipo «otro») no comisionan.
+ */
+function comisionesPeriodo_(array $persona, string $desde, string $hasta): array {
+  $yo = txt_($persona['id'] ?? '');
+  $clientes = indexar_(leer_('CLIENTES'));
+  $usuarios = leer_('USUARIOS');
+  $nombre = [];
+  foreach ($usuarios as $x) $nombre[txt_($x['id'])] = txt_($x['nombre']);
+  $suyos = [];
+  foreach ($usuarios as $x) if (mismo_(txt_($x['responsable_id'] ?? ''), $yo) && !mismo_($x['id'], $yo)) $suyos[txt_($x['id'])] = true;
+  $ventas = []; $captadas = []; $equipo = [];
+  foreach (leer_('OPERACIONES') as $o) {
+    if (!esGanada_($o)) continue;
+    $f = txt_($o['fecha_firma']) ?: txt_($o['creado']);
+    if ($f < $desde || $f > $hasta) continue;
+    $o['_direccion'] = txt_(($clientes[txt_($o['cliente_id'])] ?? [])['direccion'] ?? '');
+    $com = txt_($o['comercial_id']); $cap = captadorDe_($o, $clientes);
+    if (mismo_($com, $yo)) $ventas[] = $o;
+    if ($cap !== '' && mismo_($cap, $yo)) { $c = $o; $c['_de'] = $nombre[$com] ?? ''; $captadas[] = $c; }
+    if (isset($suyos[$com])) { $c = $o; $c['_de'] = $nombre[$com]; $c['_como'] = 'venta'; $equipo[] = $c; }
+    elseif ($cap !== '' && isset($suyos[$cap])) { $c = $o; $c['_de'] = $nombre[$cap]; $c['_como'] = 'captacion'; $equipo[] = $c; }
+  }
+  $r = comisionesDe_($persona, $ventas, $captadas, $equipo);
+  $r['desde'] = $desde; $r['hasta'] = $hasta;
+  $r['ventas'] = count($ventas); $r['captadas'] = count($captadas); $r['de_equipo'] = count($equipo);
+  return $r;
 }
 
 /** Las ventas cerradas por la gente que tiene a esta persona de responsable. */

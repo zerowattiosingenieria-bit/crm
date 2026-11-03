@@ -171,17 +171,8 @@ function accGenerarNomina_(array $u, array $p): array {
   $desdeC = formatearFecha_($iniC, 'yyyy-MM-dd');
   $hastaC = formatearFecha_($finC, 'yyyy-MM-dd');
 
-  $ganadas = filtrar_('OPERACIONES', function ($o) use ($objetivoId, $desdeC, $hastaC) {
-    $f = txt_($o['fecha_firma']) ?: txt_($o['creado']);
-    return mismo_($o['comercial_id'], $objetivoId) && esGanada_($o) && strcmp($f, $desdeC) >= 0 && strcmp($f, $hastaC) <= 0;
-  });
-  $capVenta = filtrar_('CAPTACIONES', function ($c) use ($objetivoId, $desdeC, $hastaC) {
-    $f = txt_($c['fecha_resultado']) ?: txt_($c['fecha']);
-    return mismo_($c['captador_id'], $objetivoId) && normal_($c['resultado']) === 'venta' &&
-           strcmp($f, $desdeC) >= 0 && strcmp($f, $hastaC) <= 0;
-  });
-  $com = comisionesDe_($persona, $ganadas, $capVenta,
-    ventasDeSuEquipo_($persona, $desdeC, $hastaC));
+  /* Las mismas reglas que el resumen: ventas, captaciones y equipo. */
+  $com = comisionesPeriodo_($persona, $desdeC, $hastaC);
 
   $bruto = num_($persona['salario_bruto']);
   $dietas = num_($persona['dietas_mes']);
