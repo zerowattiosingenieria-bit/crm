@@ -83,7 +83,8 @@ function resumenPersona_(array $persona, string $desde, string $hasta, bool $con
     return esGanada_($o) && $f >= $obj['desde'] && $f <= $obj['hasta'];
   }));
   $sencillasPeriodo = 0;
-  foreach ($delPeriodo as $o) $sencillasPeriodo += (normal_($o['tipo']) === 'fv_aero' ? 2 : 1);
+  /* Las ampliaciones y extras (tipo «otro») no cuentan como venta. */
+  foreach ($delPeriodo as $o) $sencillasPeriodo += (normal_($o['tipo']) === 'fv_aero' ? 2 : (in_array(normal_($o['tipo']), ['fv', 'aero'], true) ? 1 : 0));
   $objetivoMes = num_($persona['objetivo_mes'] ?? '') ?: ($rol === 'captador' ? 60 : 6);
   $logradoObjetivo = $rol === 'captador'
     ? count(array_filter($fichas, fn($c) => txt_($c['fecha']) >= $obj['desde'] && txt_($c['fecha']) <= $obj['hasta']))
