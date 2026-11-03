@@ -322,6 +322,8 @@ function comisionesPeriodo_(persona, desde, hasta) {
   const r = comisionesDe_(persona, ventas, captadas, equipo);
   r.desde = desde; r.hasta = hasta;
   r.ventas = ventas.length; r.captadas = captadas.length; r.de_equipo = equipo.length;
+  /* Lo facturado por sus propias ventas del periodo (IVA incl.), ampliaciones incluidas. */
+  r.facturado = redondear_(ventas.reduce(function (a, o) { return a + num_(o.total); }, 0), 2);
   return r;
 }
 
