@@ -266,6 +266,12 @@ comprobar('el resumen trae las ventas del periodo de quien lo pide', rRober.ok &
   rRober.resumen.objetivo_periodo.detalle.length === 1 && rRober.resumen.objetivo_periodo.detalle[0].operacion_id === opR.id, rRober.resumen && rRober.resumen.objetivo_periodo);
 const rNandoP = despachar_({accion: 'resumen', token: sesiones.nando.token, hasta: '2030-01-25'});
 comprobar('el objetivo no cuenta las ampliaciones (tipo «otro»): la doble suma 2', rNandoP.resumen.logrado_objetivo === 2, rNandoP.resumen.logrado_objetivo);
+const opDos = insertar_('OPERACIONES', {cliente_id: cliP.id, comercial_id: uNando.id, tipo: 'aero', ventas: 2, estado: 'firmada', fecha_firma: '2030-01-23', total: 28000, creado: hoyP});
+const pN2 = comisionesPeriodo_(leer_('USUARIOS').filter(x => x.id === uNando.id)[0], '2030-01-16', '2030-02-15');
+const lDos = pN2.detalle.filter(d => d.operacion_id === opDos.id)[0];
+comprobar('una aerotermia con dos máquinas («ventas» = 2) cuenta y cobra por dos', lDos && lDos.sencillas === 2 && lDos.importe === 1400, lDos);
+const rNandoP2 = despachar_({accion: 'resumen', token: sesiones.nando.token, hasta: '2030-01-25'});
+comprobar('…y suma 2 al objetivo', rNandoP2.resumen.logrado_objetivo === 4, rNandoP2.resumen.logrado_objetivo);
 }
 const eq = despachar_({accion: 'equipo', token: sesiones.fernando.token});
 comprobar('dirección ve el equipo entero', eq.ok === true && eq.equipo.length === 7, eq.error || eq.equipo.length);
