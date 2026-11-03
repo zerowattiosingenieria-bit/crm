@@ -271,6 +271,9 @@ const pN2 = comisionesPeriodo_(leer_('USUARIOS').filter(x => x.id === uNando.id)
 const lDos = pN2.detalle.filter(d => d.operacion_id === opDos.id)[0];
 comprobar('una aerotermia con dos máquinas («ventas» = 2) cuenta y cobra por dos', lDos && lDos.sencillas === 2 && lDos.importe === 1400, lDos);
 const rNandoP2 = despachar_({accion: 'resumen', token: sesiones.nando.token, hasta: '2030-01-25'});
+comprobar('periodo: lo facturado suma sus ventas propias con IVA (doble 30.000 + extra 3.000 + aero 28.000)', pN2.facturado === 61000 && pN2.ventas === 3, pN2.facturado);
+comprobar('cada uno ve solo lo suyo: Rober ve su facturado (10.000), no el de Nando', rRober.resumen.objetivo_periodo.facturado === 10000, rRober.resumen.objetivo_periodo.facturado);
+comprobar('…y no puede pedir el resumen de Nando', despachar_({accion: 'resumen', token: sesiones.rober.token, usuario_id: uNando.id}).ok === false);
 comprobar('…y suma 2 al objetivo', rNandoP2.resumen.logrado_objetivo === 4, rNandoP2.resumen.logrado_objetivo);
 }
 const eq = despachar_({accion: 'equipo', token: sesiones.fernando.token});
