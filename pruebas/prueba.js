@@ -1567,7 +1567,7 @@ comprobar('el ping no se apunta', logAhora().length === antes);
 const lecturas = ['misEquipos','datos','buscar','proyecto','descargarArchivo','proyectosPendientes',
   'cifras','tareas','finanzas','partes','resumen','equipo','analitica','alertas','nominas','nominaDias',
   'descargarNomina','vacaciones','mapa','usuarios','registro','directorio','directorioFicha','puertas',
-  'banco','copias','descargarCopia','agendaHuecos','comprobarCita','alertasBanco','catastro','duplicados','estadisticas','historialCambios'];
+  'banco','copias','descargarCopia','agendaHuecos','comprobarCita','alertasBanco','catastro','duplicados','estadisticas','historialCambios','incidencias'];
 const malClasificadas = Object.keys(acciones_()).filter(a => a !== 'salir' &&
   (tipoDePeticion_(a) === 'consulta') !== lecturas.includes(a));
 comprobar('cada acción está clasificada como consulta o modificación', malClasificadas.length === 0,
@@ -2035,6 +2035,29 @@ actualizar_('CLIENTES', comprado.id, {estado: 'cita', proxima_accion: 'Llamar', 
 insertar_('OPERACIONES', {cliente_id: comprado.id, comercial_id: U('rober').id, estado: 'firmada', fecha_firma: sumarDias_(hoyISO_(), -3), creado: ahora_()});
 const ven = vencidosDe_(U('rober'), hoyISO_());
 comprobar('los vencidos no incluyen clientes que ya han firmado', !ven.some(v => v.nombre === comprado.nombre && v.tipo === 'Seguimiento'), ven.filter(v => v.tipo === 'Seguimiento').map(v => v.nombre));
+}
+
+/* ---- Incidencias (03/11/2026) ---- */
+{
+const F = entrar('fernando').token;
+const g = inc => despachar_({accion: 'guardarIncidencia', token: F, incidencia: inc});
+const i1 = g({titulo: 'Megara 6 · salta el fusible', urgencia: 'media', fecha: sumarDias_(hoyISO_(), -10)});
+const i2 = g({titulo: 'COVE Norte 29', urgencia: 'alta', fecha: sumarDias_(hoyISO_(), -2)});
+const i3 = g({titulo: 'Cargo Greenfield', urgencia: 'alta', fecha: sumarDias_(hoyISO_(), -5), origen: 'panel', origen_id: 'dec-1'});
+comprobar('incidencias: dirección las crea', i1.ok && i2.ok && i3.ok && /^IN-/.test(i1.incidencia.id), i1.error);
+comprobar('incidencias: un comercial no las ve', despachar_({accion: 'incidencias', token: entrar('rober').token}).ok === false);
+const li = despachar_({accion: 'incidencias', token: F});
+comprobar('incidencias: por urgencia y la más antigua arriba', li.incidencias.map(x => x.titulo).join('|') === 'Cargo Greenfield|COVE Norte 29|Megara 6 · salta el fusible', li.incidencias.map(x => x.titulo));
+comprobar('incidencias: cuentas', li.cuentas.abiertas === 3 && li.cuentas.alta === 2 && li.cuentas.viejas === 1, li.cuentas);
+comprobar('incidencias: origen + origen_id no duplica', g({titulo: 'x', origen: 'panel', origen_id: 'dec-1'}).incidencia.id === i3.incidencia.id);
+const up = g({id: i1.incidencia.id, nota: 'Soy Renovable va el jueves'});
+comprobar('incidencias: apuntar actualización', up.ok && up.incidencia.actualizacion === 'Soy Renovable va el jueves' && up.incidencia.bitacora.length === 1, up);
+comprobar('incidencias: sin solución no se resuelve', despachar_({accion: 'resolverIncidencia', token: F, id: i2.incidencia.id, solucion: ''}).ok === false);
+const rs = despachar_({accion: 'resolverIncidencia', token: F, id: i2.incidencia.id, solucion: 'Climassine mandó el COVE'});
+comprobar('incidencias: resolver con cómo se solucionó', rs.ok && rs.incidencia.estado === 'resuelta' && rs.incidencia.solucion === 'Climassine mandó el COVE', rs);
+comprobar('incidencias: ya no sale en abiertas', despachar_({accion: 'incidencias', token: F}).incidencias.length === 2);
+const re = g({id: i2.incidencia.id, estado: 'abierta', nota: 'Falta el boletín'});
+comprobar('incidencias: reabrir', re.ok && re.incidencia.estado === 'abierta' && !re.incidencia.solucion, re);
 }
 
 console.log('\n' + (fallos ? 'FALLAN ' + fallos + ' de ' + pruebas : 'Todo correcto: ' + pruebas + ' comprobaciones'));
