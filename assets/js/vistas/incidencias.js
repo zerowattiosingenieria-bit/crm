@@ -149,3 +149,36 @@ export async function tarjetaIncidenciasHoy(ir) {
     {subtitulo: c.alta ? c.alta + ' urgente' + (c.alta === 1 ? '' : 's') + (c.viejas ? ' · ' + c.viejas + ' con más de 7 días' : '') : (c.viejas ? c.viejas + ' con más de 7 días' : 'Por urgencia y fecha'),
      acciones: h('button.btn.mini', {onclick: () => ir('incidencias')}, 'Ver todas')});
 }
+
+/** «Avisar de una incidencia» (03/11/2026): para comerciales y captadores
+ *  (y quien quiera). Solo crea; el listado lo ve dirección. */
+export async function vistaAvisarIncidencia({id, ir}) {
+  const clientes = (api.estado.clientes || []).slice().sort((a, b) => etiquetaCliente(a).localeCompare(etiquetaCliente(b)));
+  const titulo = h('input', {type: 'text', maxlength: 300, placeholder: 'Ej.: «Megara 6 · salta el diferencial con la aerotermia»', estilo: {width: '100%'}});
+  const urg = h('select', ['alta', 'media', 'baja'].map(u => h('option', {value: u, selected: u === 'media'}, URG[u][0])));
+  const cli = h('select', {estilo: {width: '100%'}}, h('option', {value: ''}, 'Sin cliente'),
+    clientes.map(c => h('option', {value: c.id, selected: c.id === id}, etiquetaCliente(c))));
+  const det = h('textarea', {rows: 5, placeholder: 'Qué ha pasado, desde cuándo, qué ha dicho el cliente…', estilo: {width: '100%', resize: 'vertical'}});
+  const hecho = h('div');
+  const campo = (et, el) => h('label', {estilo: {display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0}}, h('span.nota', et), el);
+  const b = h('button.btn.primario', {onclick: async () => {
+    if (!txt(titulo.value)) return avisoError('Escribe qué pasa.');
+    b.disabled = true;
+    try {
+      const r = await api.avisarIncidencia({titulo: titulo.value, urgencia: urg.value, cliente_id: cli.value, detalle: det.value});
+      if (!r.ok) throw new Error(r.error || 'No se ha podido enviar.');
+      aviso('Incidencia enviada a dirección.');
+      poner(hecho, h('p', {estilo: {padding: '8px 10px', background: 'var(--fondo-2, #f1fadf)', borderRadius: '6px'}},
+        '✓ Enviada a dirección (' + r.id + '): «' + titulo.value + '». Ellos la gestionan y la resuelven.'));
+      titulo.value = ''; det.value = ''; urg.value = 'media';
+    } catch (e) { avisoError(e); } finally { b.disabled = false; }
+  }}, 'Enviar a dirección');
+  return tarjeta('Avisar de una incidencia',
+    h('div', {estilo: {display: 'grid', gap: '12px', maxWidth: '720px'}},
+      campo('Qué pasa', titulo),
+      h('div', {estilo: {display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px'}},
+        campo('Urgencia', urg), h('div', {estilo: {gridColumn: 'span 2', minWidth: 0}}, campo('Cliente', cli))),
+      campo('Detalle', det),
+      h('div', b), hecho),
+    {subtitulo: 'Le llega a dirección (Rubén y Fernando), que la gestiona y la da por resuelta. Tú no verás el listado.'});
+}

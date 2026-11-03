@@ -397,6 +397,7 @@ export async function vistaCliente({id, ir, refrescar}) {
         ? h('a.btn', {href: comoLlegarHref(destinoDe(c)), target: '_blank', rel: 'noopener'}, '🚗 Ir')
         : null,
       h('button.btn', {onclick: acc.visita}, '📋 Modo visita'),
+      h('button.btn', {onclick: () => ir('avisar/' + encodeURIComponent(c.id)), title: 'Avisar a dirección de un problema con este cliente'}, '⚠ Incidencia'),
       h('button.btn.primario', {onclick: apuntar}, '+ Apuntar')));
 
   const tabs = [
