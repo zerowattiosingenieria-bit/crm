@@ -2058,6 +2058,9 @@ comprobar('incidencias: resolver con cómo se solucionó', rs.ok && rs.incidenci
 comprobar('incidencias: ya no sale en abiertas', despachar_({accion: 'incidencias', token: F}).incidencias.length === 2);
 const re = g({id: i2.incidencia.id, estado: 'abierta', nota: 'Falta el boletín'});
 comprobar('incidencias: reabrir', re.ok && re.incidencia.estado === 'abierta' && !re.incidencia.solucion, re);
+const av = despachar_({accion: 'guardarAvisoIncidencia', token: entrar('rober').token, incidencia: {titulo: 'Cliente sin agua caliente', urgencia: 'alta'}});
+comprobar('incidencias: un comercial avisa sin ver el listado', av.ok && /^IN-/.test(av.id) && !av.incidencia, av);
+comprobar('incidencias: a dirección le salta', despachar_({accion: 'incidencias', token: F}).incidencias.some(x => x.id === av.id && x.origen === 'aviso'));
 }
 
 console.log('\n' + (fallos ? 'FALLAN ' + fallos + ' de ' + pruebas : 'Todo correcto: ' + pruebas + ' comprobaciones'));
