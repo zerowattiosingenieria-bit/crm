@@ -338,6 +338,10 @@ export const revocarLlaves = usuario_id => pedir('revocarLlaves', {usuario_id});
 export const reagendarCita = datos => pedir('reagendarCita', datos);
 export const cancelarCita = datos => pedir('cancelarCita', datos);
 export const estadisticas = hoy => pedir('estadisticas', hoy ? {hoy} : {});
+/* Incidencias para Rubén y dirección (03/11/2026). */
+export const incidencias = ({ver, orden} = {}) => pedir('incidencias', {ver: ver || 'abiertas', orden: orden || 'urgencia'});
+export const guardarIncidencia = incidencia => pedir('guardarIncidencia', {incidencia});
+export const resolverIncidencia = (id, solucion) => pedir('resolverIncidencia', {id, solucion});
 export const historialCambios = cliente_id => pedir('historialCambios', {cliente_id});
 
 /* ---------- próximos pasos que de verdad tocan (02/11/2026) ----------
