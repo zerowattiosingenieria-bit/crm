@@ -212,6 +212,11 @@ cliente y detalle). En el campo de la derecha se escribe cómo va y se pulsa
 «✓ Resuelta». En «Ver: Resueltas» quedan con su solución y se pueden
 reabrir. Solo lo ve dirección.
 
+**Avisar de una incidencia (todo el mundo).** Comerciales y captadores tienen
+«Avisar incidencia» en el menú y el botón «⚠ Incidencia» en la ficha del
+cliente. Se escribe qué pasa, la urgencia, el cliente y el detalle, y se pulsa
+«Enviar a dirección». No se ve el listado: lo gestiona dirección.
+
 ## Vacaciones (todo el mundo)
 
 Cada persona tiene **22 días laborables** al año. En *Vacaciones* aparece el

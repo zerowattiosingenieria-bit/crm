@@ -8,6 +8,15 @@ Esto no sustituye al manual: el manual cuenta cómo se usa el CRM hoy
 luego no hay manera de reconstruir.
 
 
+## 03/11/2026 · Todo el mundo puede avisar de una incidencia
+
+- Comerciales y captadores tienen **Avisar incidencia** en el menú (y el
+  botón «⚠ Incidencia» en la ficha del cliente, que ya la deja con el
+  cliente puesto). Escriben qué pasa, urgencia, cliente y detalle y se envía.
+- No ven el listado ni las de los demás: solo reciben la confirmación con el
+  número. A dirección (Rubén y Fernando) le sale en Incidencias con quién la
+  abrió. Rubén, como dirección, las crea desde el propio listado.
+
 ## 03/11/2026 · Incidencias para dirección
 
 - Menú **Incidencias** (solo dirección: Rubén y Fernando) y tarjeta
