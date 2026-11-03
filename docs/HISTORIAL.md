@@ -8,6 +8,19 @@ Esto no sustituye al manual: el manual cuenta cómo se usa el CRM hoy
 luego no hay manera de reconstruir.
 
 
+## 03/11/2026 · Incidencias para dirección
+
+- Menú **Incidencias** (solo dirección: Rubén y Fernando) y tarjeta
+  «Incidencias abiertas» arriba del todo en Hoy de dirección.
+- Ordenadas por urgencia (alta, media, baja) y, dentro, la más antigua
+  arriba. También «más antiguas» o «más recientes».
+- Al lado de cada una, un campo para apuntar cómo va o cómo se ha
+  solucionado: «Guardar actualización» la deja en el historial; «✓ Resuelta»
+  la cierra con esa solución. Las resueltas se pueden ver y reabrir.
+- Indicadores: abiertas, urgentes, más de 7 días y resueltas este mes.
+- Pedido por Nando: «a Rubén y a la dirección les tiene que saltar en el CRM
+  un listado de incidencias…».
+
 ## 02/11/2026 (noche) · Llamadas y próximos pasos, y la sentada del captador
 
 - **Llamadas y próximos pasos** (Hoy), la agenda, «Se te está pasando» del

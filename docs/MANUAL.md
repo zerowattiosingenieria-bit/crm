@@ -202,6 +202,16 @@ la casa.
 solas cada viernes a las 19:15 en el Drive de la empresa, con un botón para
 hacer una a mano. Las copias de más de tres meses se borran solas.
 
+### Incidencias (dirección)
+
+Menú **Incidencias** (y tarjeta arriba en Hoy). Salen las abiertas por
+urgencia y, dentro de cada urgencia, la más antigua primero. Para abrir
+una: «+ Nueva incidencia» (qué pasa, urgencia, desde cuándo, responsable,
+cliente y detalle). En el campo de la derecha se escribe cómo va y se pulsa
+«Guardar actualización», o se escribe cómo se ha solucionado y se pulsa
+«✓ Resuelta». En «Ver: Resueltas» quedan con su solución y se pueden
+reabrir. Solo lo ve dirección.
+
 ## Vacaciones (todo el mundo)
 
 Cada persona tiene **22 días laborables** al año. En *Vacaciones* aparece el
