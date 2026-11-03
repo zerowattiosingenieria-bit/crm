@@ -134,7 +134,7 @@ const ESQUEMA = {
     'paneles_num','panel_modelo','panel_wp','inversor_modelo','inversor_kw',
     'bateria_kwh','bateria_modelo','cargador_modelo',
     'aero_kw','aero_modelo','deposito_acs','deposito_inercia','suelo_radiante','tejado',
-    'precio_ajustado','beneficio_no_economico','observaciones','motivo_perdida',
+    'precio_ajustado','ventas','beneficio_no_economico','observaciones','motivo_perdida',
     'modificado','modificado_por'],
 
   COBROS: ['id','operacion_id','concepto','importe','fecha_prevista','fecha_cobro',

@@ -151,7 +151,7 @@ const ESQUEMA = {
     'paneles_num','panel_modelo','panel_wp','inversor_modelo','inversor_kw',
     'bateria_kwh','bateria_modelo','cargador_modelo',
     'aero_kw','aero_modelo','deposito_acs','deposito_inercia','suelo_radiante','tejado',
-    'precio_ajustado','beneficio_no_economico','observaciones','motivo_perdida',
+    'precio_ajustado','ventas','beneficio_no_economico','observaciones','motivo_perdida',
     'modificado','modificado_por'],
 
   COBROS: ['id','operacion_id','concepto','importe','fecha_prevista','fecha_cobro',
@@ -3112,7 +3112,7 @@ function resumenPersona_(persona, desde, hasta, conImportes) {
   });
   const sencillasPeriodo = delPeriodo.reduce(function (a, o) {
     /* Las ampliaciones y extras (tipo «otro») no cuentan como venta. */
-    return a + (normal_(o.tipo) === 'fv_aero' ? 2 : (['fv', 'aero'].indexOf(normal_(o.tipo)) >= 0 ? 1 : 0));
+    return a + sencillasDe_(o);
   }, 0);
   const objetivoMes = num_(persona.objetivo_mes) || (persona.rol === 'captador' ? 60 : 6);
   const logradoObjetivo = persona.rol === 'captador'
@@ -3205,6 +3205,15 @@ function resumenPersona_(persona, desde, hasta, conImportes) {
   return r;
 }
 
+/** Cuántas ventas sencillas cuenta una operación: lo que diga su campo
+ *  «ventas» o, si está vacío, por tipo (doble = 2; ampliaciones y extras = 0). */
+function sencillasDe_(o) {
+  const n = num_(o.ventas);
+  if (n > 0) return Math.round(n);
+  const t = normal_(o.tipo);
+  return t === 'fv_aero' ? 2 : (['fv', 'aero'].indexOf(t) >= 0 ? 1 : 0);
+}
+
 function esGanada_(o) {
   return ['firmada','tramite','material','instalacion','instalada','legalizada','cerrada']
     .indexOf(normal_(o.estado)) >= 0;
@@ -3250,11 +3259,15 @@ function comisionesDe_(persona, ganadas, captacionesVenta, ventasEquipo) {
       fecha: o ? (txt_(o.fecha_firma) || txt_(o.creado)) : '',
       cliente_id: o ? txt_(o.cliente_id) : '', direccion: o ? txt_(o._direccion) : '',
       importe_venta: o ? redondear_(num_(o.total), 2) : 0,
-      sencillas: o ? (normal_(o.tipo) === 'fv_aero' ? 2 : (['fv', 'aero'].indexOf(normal_(o.tipo)) >= 0 ? 1 : 0)) : 1
+      sencillas: o ? sencillasDe_(o) : 1
     }, extra || {}));
   };
   const porTipo = function (o, fv, aero) {
     const t = normal_(o.tipo);
+    /* Si la operación dice cuántas ventas cuenta (p. ej. dos máquinas de
+       aerotermia), se paga la tarifa de su tipo por cada una. */
+    const n = num_(o.ventas);
+    if (n > 0) return n * (t === 'aero' ? aero : (t === 'fv' ? fv : (t === 'fv_aero' ? (fv + aero) / 2 : 0)));
     return (t === 'fv' || t === 'fv_aero' ? fv : 0) + (t === 'aero' || t === 'fv_aero' ? aero : 0);
   };
 
