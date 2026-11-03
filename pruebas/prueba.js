@@ -264,6 +264,8 @@ comprobar('periodo: Rober solo ve lo suyo', pR.total === 400 && pR.detalle.lengt
 const rRober = despachar_({accion: 'resumen', token: sesiones.rober.token, hasta: '2030-01-25'});
 comprobar('el resumen trae las ventas del periodo de quien lo pide', rRober.ok && rRober.resumen.objetivo_periodo &&
   rRober.resumen.objetivo_periodo.detalle.length === 1 && rRober.resumen.objetivo_periodo.detalle[0].operacion_id === opR.id, rRober.resumen && rRober.resumen.objetivo_periodo);
+const rNandoP = despachar_({accion: 'resumen', token: sesiones.nando.token, hasta: '2030-01-25'});
+comprobar('el objetivo no cuenta las ampliaciones (tipo «otro»): la doble suma 2', rNandoP.resumen.logrado_objetivo === 2, rNandoP.resumen.logrado_objetivo);
 }
 const eq = despachar_({accion: 'equipo', token: sesiones.fernando.token});
 comprobar('dirección ve el equipo entero', eq.ok === true && eq.equipo.length === 7, eq.error || eq.equipo.length);
