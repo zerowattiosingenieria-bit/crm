@@ -23,6 +23,8 @@ luego no hay manera de reconstruir.
 - Las ampliaciones y extras (tipo «otro») tampoco cuentan para el objetivo.
 - Campo nuevo en la operación, **«Cuenta como (ventas)»**: vacío cuenta según el tipo;
   se pone 2 cuando, por ejemplo, una aerotermia lleva dos máquinas (Lomas 66).
+- Al cumplir el objetivo, lo que se firme después sigue contando en el mismo periodo
+  (no pasa al siguiente); corregido el aviso del panel que decía lo contrario.
 
 ## 03/11/2026 · Todo el mundo puede avisar de una incidencia
 
