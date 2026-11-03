@@ -14,6 +14,7 @@ import {tarjeta, kpi, kpis, marca, aviso} from '../ui.js';
 import {nuevaCita} from './citas.js';
 import {nuevoSeguimiento} from './clientes.js';
 import {citaSinConfirmar} from './panel.js';
+import {tarjetaIncidenciasHoy} from './incidencias.js';
 
 const OPERACION_GANADA = ['firmada', 'tramite', 'material', 'instalacion', 'instalada', 'legalizada', 'cerrada'];
 
@@ -119,6 +120,12 @@ export async function vistaHoy({ir, refrescar}) {
     if (sinAdj.length) bloques.push(tarjeta('Fichas sin adjudicar', h('ul.hoy-lista', sinAdj.map(c => h('li',
       h('span.que', nom(cliente(c.cliente_id)), h('span.nota', ' · ' + fechaCorta(c.fecha))),
       h('button.btn.mini.primario', {onclick: () => ir('captaciones')}, 'Adjudicar'))))));
+  }
+
+  /* --- dirección: incidencias abiertas (03/11/2026) --- */
+  if (esDir) {
+    const inc = await tarjetaIncidenciasHoy(ir);
+    if (inc) bloques.unshift(inc);
   }
 
   /* --- dirección: dinero de hoy --- */
