@@ -57,6 +57,35 @@ export async function vistaPanel({ir}) {
 
 /* Lo que dice el Centro de Mando, al lado de lo que calcula el CRM. Es el
    sitio donde se ve de un vistazo si al CRM le falta algo por meter. */
+/* Ventas del periodo 16-15 de quien mira el panel: dirección, importe y lo
+   que cobra por cada una. El servidor solo devuelve las suyas. */
+const POR_QUE = {
+  'venta': 'Venta tuya', 'venta con precio ajustado': 'Venta tuya (precio ajustado)',
+  'captación vendida': 'Captación tuya', 'venta de su equipo': 'Venta de tu equipo',
+  'captación de su equipo': 'Captación de tu equipo'
+};
+export function tablaVentasPeriodo(op, ir, {titulo = 'Ventas del periodo'} = {}) {
+  if (!op) return null;
+  const filas = (op.detalle || []).slice().sort((a, b) => txt(a.fecha).localeCompare(txt(b.fecha)));
+  const cab = h('p', {estilo: {margin: '14px 0 6px', fontWeight: '600'}},
+    titulo + ' (' + fechaCorta(op.desde) + ' — ' + fechaCorta(op.hasta) + ')');
+  if (!filas.length) return h('div', cab, h('p.nota', 'Todavía no hay ventas firmadas en este periodo.'));
+  return h('div', cab,
+    tabla([
+      {clave: 'fecha', et: 'Firma', valor: c => txt(c.fecha), pinta: c => fechaCorta(c.fecha)},
+      {clave: 'direccion', et: 'Dirección', valor: c => txt(c.direccion) || txt(c.referencia),
+       pinta: c => c.cliente_id ? h('a', {href: '#cliente/' + encodeURIComponent(c.cliente_id)}, txt(c.direccion) || c.cliente_id)
+                                : txt(c.direccion) || txt(c.referencia)},
+      {clave: 'importe_venta', et: 'Importe (IVA incl.)', num: true, valor: c => num(c.importe_venta),
+       pinta: c => num(c.importe_venta) ? eur(c.importe_venta) : '—'},
+      {clave: 'concepto', et: 'Por qué', valor: c => POR_QUE[txt(c.concepto)] || txt(c.concepto),
+       pinta: c => h('span', (POR_QUE[txt(c.concepto)] || txt(c.concepto)) + (c.de ? ' · ' + c.de : '') +
+         (num(c.sencillas) === 2 ? ' · doble' : ''))},
+      {clave: 'importe', et: 'Comisión', num: true, valor: c => num(c.importe), pinta: c => h('b', eur(c.importe))}
+    ], filas, {vacio: ''}),
+    h('p', {estilo: {margin: '8px 0 0', textAlign: 'right'}}, 'Total comisiones del periodo: ', h('b', eur(op.total))));
+}
+
 function tarjetaCentroDeMando(cif, ir) {
   if (!cif || !cif.cifras) return null;
   const porClave = {};
@@ -205,6 +234,10 @@ function panelDireccion({cabecera, r, al, an, fin, listos, esperando, solicitado
   };
   rellenarConBanco(tarjetasBanco);
 
+  const misVentas = r.objetivo_periodo && (r.objetivo_periodo.detalle || []).length
+    ? tarjeta('Tu objetivo del periodo', tablaVentasPeriodo(r.objetivo_periodo, ir, {titulo: 'Tus comisiones'}),
+        {subtitulo: 'Solo lo tuyo: ventas, captaciones y lo que vende o capta tu equipo'}) : null;
+
   return h('div', cabecera,
     kpis(
       kpi('Facturación del año', eurCorto(cifrasAnio.facturacion),
@@ -222,6 +255,8 @@ function panelDireccion({cabecera, r, al, an, fin, listos, esperando, solicitado
       'Importes con IVA incluido. Margen y beneficio salen de los movimientos del banco de este año.'),
 
     tarjetaCentroDeMando(cif, ir),
+
+    misVentas,
 
     tarjetaProyectosListos(listos, ir),
 
@@ -313,6 +348,7 @@ function panelComercial({cabecera, r, al, listos, esperando, solicitados, ir}) {
               ? 'Objetivo cumplido. Lo que entre a partir de aquí suma para el siguiente.'
               : 'Te faltan ' + miles(r.objetivo_mes - r.logrado_objetivo) +
                 ' venta(s) sencilla(s). Una doble cuenta por dos.'),
+          tablaVentasPeriodo(r.objetivo_periodo, ir),
           h('div', {estilo: {marginTop: '14px'}},
             h('button.btn.lima', {onclick: () => ir('parte')}, 'Enviar el parte de hoy')))),
       tarjeta('Tus próximos pasos',
@@ -374,6 +410,7 @@ function panelCaptador({cabecera, r, al, ir, enviados}) {
         h('div', progreso(r.logrado_objetivo, r.objetivo_mes),
           h('p.nota', {estilo: {marginTop: '10px'}},
             'Del ' + fechaCorta(r.periodo_objetivos.desde) + ' al ' + fechaCorta(r.periodo_objetivos.hasta) + '.'),
+          tablaVentasPeriodo(r.objetivo_periodo, ir, {titulo: 'Tus captaciones vendidas'}),
           h('div', {estilo: {marginTop: '14px'}, class: 'acciones'},
             h('button.btn.lima', {onclick: () => ir('parte')}, 'Enviar el parte de hoy'),
             h('a.btn', {href: api.estado.config.ficha_captacion || '#', target: '_blank'},

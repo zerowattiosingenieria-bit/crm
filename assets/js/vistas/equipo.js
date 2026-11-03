@@ -5,6 +5,7 @@ import {h, poner, txt, num, eur, eurCorto, miles, pct, fechaCorta, mesLargo, cap
 import * as api from '../api.js';
 import {tarjeta, tabla, kpi, kpis, etiquetaEstado, marca, filtros, cargando, aviso} from '../ui.js';
 import {barras, lineas, embudo, progreso, anillo} from '../graficos.js';
+import {tablaVentasPeriodo} from './panel.js';
 
 /* ================= equipo (dirección) ================= */
 export async function vistaEquipo({ir}) {
@@ -183,7 +184,8 @@ function pintaResumen(r, ir) {
         h('div', progreso(r.logrado_objetivo, r.objetivo_mes),
           h('p.nota', {estilo: {marginTop: '10px'}},
             esCaptador ? 'Fichas de captación subidas en el periodo.'
-                       : 'Ventas sencillas; una doble cuenta por dos.'))),
+                       : 'Ventas sencillas; una doble cuenta por dos.'),
+          tablaVentasPeriodo(r.objetivo_periodo, ir, {titulo: 'Ventas y comisiones'}))),
       tarjeta('Actividad',
         h('div',
           h('.dato', h('.et', 'Partes enviados'), h('.v', miles(r.partes_enviados))),
