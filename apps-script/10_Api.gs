@@ -143,7 +143,8 @@ function acciones_() {
 
     /* Reagendar y cancelar citas, estadísticas (24_Estadisticas.gs) */
     reagendarCita: accReagendarCita_, cancelarCita: accCancelarCita_, estadisticas: accEstadisticas_,
-    historialCambios: accHistorialCambios_, coordenadasZona: accCoordenadasZona_
+    historialCambios: accHistorialCambios_, coordenadasZona: accCoordenadasZona_,
+    incidencias: accIncidencias_, guardarIncidencia: accGuardarIncidencia_, resolverIncidencia: accResolverIncidencia_
   };
 }
 

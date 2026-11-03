@@ -162,6 +162,8 @@ const ESQUEMA = {
   /* Histórico de cambios de cada lead: qué campo, cómo estaba, cómo queda,
      quién y cuándo (02/11/2026). */
   CAMBIOS: ['id','fecha','usuario_id','cliente_id','entidad','entidad_id','campo','antes','despues'],
+  INCIDENCIAS: ['id','creado','creado_por','fecha','titulo','detalle','cliente_id','urgencia','estado',
+    'responsable_id','actualizacion','bitacora','solucion','resuelta','resuelta_por','origen','origen_id','modificado','modificado_por'],
 
   PARTES: ['id','fecha','usuario_id','rol','visitas','puertas','fichas',
     'sentadas','sentadas_detalle','ventas','importe_vendido',
