@@ -147,7 +147,9 @@ function acciones_(): array {
     'recordarCRM' => 'accRecordarCRM_', 'recordatorios' => 'accRecordatorios_',
     /* Reagendar y cancelar citas, estadísticas e histórico del lead (estadisticas.php, historial.php) */
     'reagendarCita' => 'accReagendarCita_', 'cancelarCita' => 'accCancelarCita_', 'estadisticas' => 'accEstadisticas_',
-    'historialCambios' => 'accHistorialCambios_', 'coordenadasZona' => 'accCoordenadasZona_'
+    'historialCambios' => 'accHistorialCambios_', 'coordenadasZona' => 'accCoordenadasZona_',
+    /* Incidencias para Rubén y dirección (incidencias.php, 03/11/2026) */
+    'incidencias' => 'accIncidencias_', 'guardarIncidencia' => 'accGuardarIncidencia_', 'resolverIncidencia' => 'accResolverIncidencia_'
   ];
 }
 
