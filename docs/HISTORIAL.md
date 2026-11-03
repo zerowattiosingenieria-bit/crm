@@ -20,6 +20,7 @@ luego no hay manera de reconstruir.
 - El captador de una venta sale de la operación o, si no lo tiene, del
   cliente. Las ampliaciones y extras (tipo «otro») no comisionan.
 - Las nóminas usan las mismas reglas.
+- Las ampliaciones y extras (tipo «otro») tampoco cuentan para el objetivo.
 
 ## 03/11/2026 · Todo el mundo puede avisar de una incidencia
 
