@@ -184,3 +184,30 @@ function accGuardarIncidencia_(array $u, array $p): array {
 function accResolverIncidencia_(array $u, array $p): array {
   return accGuardarIncidencia_($u, ['incidencia' => ['id' => txt_($p['id'] ?? ''), 'estado' => 'resuelta', 'solucion' => txt_($p['solucion'] ?? '')]]);
 }
+
+/**
+ * Avisar de una incidencia (03/11/2026). Cualquier usuario del CRM
+ * (comerciales y captadores incluidos) puede dar de alta una incidencia,
+ * pero no ve el listado ni puede tocar las que ya existen: solo se crea
+ * una nueva con qué pasa, urgencia, cliente y detalle, y se le devuelve el
+ * número. La gestión sigue siendo de dirección.
+ */
+function accGuardarAvisoIncidencia_(array $u, array $p): array {
+  asegurarHoja_('INCIDENCIAS');
+  $d = is_array($p['incidencia'] ?? null) ? $p['incidencia'] : [];
+  $titulo = trim(txt_($d['titulo'] ?? ''));
+  if ($titulo === '') return ['ok' => false, 'error' => 'Escribe qué pasa.'];
+  $urg = normal_($d['urgencia'] ?? '') ?: 'media';
+  if (!in_array($urg, URGENCIAS_INC, true)) return ['ok' => false, 'error' => 'La urgencia es alta, media o baja.'];
+  $cli = txt_($d['cliente_id'] ?? '');
+  if ($cli !== '' && !buscar1_('CLIENTES', fn($c) => mismo_($c['id'], $cli))) return ['ok' => false, 'error' => 'Ese cliente no existe.'];
+  $ahora = ahora_();
+  $nueva = insertar_('INCIDENCIAS', [
+    'titulo' => mb_substr($titulo, 0, 300), 'detalle' => mb_substr(txt_($d['detalle'] ?? ''), 0, 3000),
+    'cliente_id' => $cli, 'urgencia' => $urg, 'estado' => 'abierta', 'fecha' => hoyISO_(),
+    'origen' => 'aviso', 'bitacora' => '[]', 'creado' => $ahora, 'creado_por' => $u['id'] ?? '',
+    'modificado' => $ahora, 'modificado_por' => $u['id'] ?? ''
+  ]);
+  registrar_($u, 'alta_incidencia', 'INCIDENCIAS', $nueva['id'], mb_substr($titulo, 0, 200));
+  return ['ok' => true, 'id' => $nueva['id']];
+}

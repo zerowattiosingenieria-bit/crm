@@ -149,7 +149,8 @@ function acciones_(): array {
     'reagendarCita' => 'accReagendarCita_', 'cancelarCita' => 'accCancelarCita_', 'estadisticas' => 'accEstadisticas_',
     'historialCambios' => 'accHistorialCambios_', 'coordenadasZona' => 'accCoordenadasZona_',
     /* Incidencias para Rubén y dirección (incidencias.php, 03/11/2026) */
-    'incidencias' => 'accIncidencias_', 'guardarIncidencia' => 'accGuardarIncidencia_', 'resolverIncidencia' => 'accResolverIncidencia_'
+    'incidencias' => 'accIncidencias_', 'guardarIncidencia' => 'accGuardarIncidencia_', 'resolverIncidencia' => 'accResolverIncidencia_',
+    'guardarAvisoIncidencia' => 'accGuardarAvisoIncidencia_'
   ];
 }
 
