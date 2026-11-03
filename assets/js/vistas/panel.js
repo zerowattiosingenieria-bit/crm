@@ -345,7 +345,8 @@ function panelComercial({cabecera, r, al, listos, esperando, solicitados, ir}) {
           progreso(r.logrado_objetivo, r.objetivo_mes),
           h('p.nota', {estilo: {marginTop: '10px'}},
             r.logrado_objetivo >= r.objetivo_mes
-              ? 'Objetivo cumplido. Lo que entre a partir de aquí suma para el siguiente.'
+              ? 'Objetivo cumplido. Todo lo que firmes hasta el ' + fechaCorta(r.periodo_objetivos.hasta) +
+                ' sigue contando en este periodo; no pasa al siguiente.'
               : 'Te faltan ' + miles(r.objetivo_mes - r.logrado_objetivo) +
                 ' venta(s) sencilla(s). Una doble cuenta por dos.'),
           tablaVentasPeriodo(r.objetivo_periodo, ir),
