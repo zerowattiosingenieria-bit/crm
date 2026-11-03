@@ -84,7 +84,7 @@ function resumenPersona_(array $persona, string $desde, string $hasta, bool $con
   }));
   $sencillasPeriodo = 0;
   /* Las ampliaciones y extras (tipo «otro») no cuentan como venta. */
-  foreach ($delPeriodo as $o) $sencillasPeriodo += (normal_($o['tipo']) === 'fv_aero' ? 2 : (in_array(normal_($o['tipo']), ['fv', 'aero'], true) ? 1 : 0));
+  foreach ($delPeriodo as $o) $sencillasPeriodo += sencillasDe_($o);
   $objetivoMes = num_($persona['objetivo_mes'] ?? '') ?: ($rol === 'captador' ? 60 : 6);
   $logradoObjetivo = $rol === 'captador'
     ? count(array_filter($fichas, fn($c) => txt_($c['fecha']) >= $obj['desde'] && txt_($c['fecha']) <= $obj['hasta']))
@@ -184,6 +184,15 @@ function resumenPersona_(array $persona, string $desde, string $hasta, bool $con
   return $r;
 }
 
+/** Cuántas ventas sencillas cuenta una operación: lo que diga su campo
+ *  «ventas» o, si está vacío, por tipo (doble = 2; ampliaciones y extras = 0). */
+function sencillasDe_(array $o): int {
+  $n = num_($o['ventas'] ?? '');
+  if ($n > 0) return (int)round($n);
+  $t = normal_($o['tipo'] ?? '');
+  return $t === 'fv_aero' ? 2 : (in_array($t, ['fv', 'aero'], true) ? 1 : 0);
+}
+
 function esGanada_(array $o): bool {
   return in_array(normal_($o['estado'] ?? ''), ['firmada','tramite','material','instalacion','instalada','legalizada','cerrada'], true);
 }
@@ -228,11 +237,15 @@ function comisionesDe_(array $persona, array $ganadas, ?array $captacionesVenta,
       'fecha' => $o ? (txt_($o['fecha_firma'] ?? '') ?: txt_($o['creado'] ?? '')) : '',
       'cliente_id' => $o ? txt_($o['cliente_id'] ?? '') : '', 'direccion' => $o ? txt_($o['_direccion'] ?? '') : '',
       'importe_venta' => $o ? redondear_(num_($o['total'] ?? 0), 2) : 0,
-      'sencillas' => $o ? (normal_($o['tipo'] ?? '') === 'fv_aero' ? 2 : (in_array(normal_($o['tipo'] ?? ''), ['fv', 'aero'], true) ? 1 : 0)) : 1
+      'sencillas' => $o ? sencillasDe_($o) : 1
     ], $extra ?? []);
   };
   $porTipo = function (array $o, $fv, $aero) {
     $t = normal_($o['tipo'] ?? '');
+    /* Si la operación dice cuántas ventas cuenta (p. ej. dos máquinas de
+       aerotermia), se paga la tarifa de su tipo por cada una. */
+    $n = num_($o['ventas'] ?? '');
+    if ($n > 0) return $n * ($t === 'aero' ? $aero : ($t === 'fv' ? $fv : ($t === 'fv_aero' ? ($fv + $aero) / 2 : 0)));
     return (($t === 'fv' || $t === 'fv_aero') ? $fv : 0) + (($t === 'aero' || $t === 'fv_aero') ? $aero : 0);
   };
 
