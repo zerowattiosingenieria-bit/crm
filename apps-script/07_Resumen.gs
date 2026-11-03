@@ -88,7 +88,8 @@ function resumenPersona_(persona, desde, hasta, conImportes) {
     return esGanada_(o) && f >= obj.desde && f <= obj.hasta;
   });
   const sencillasPeriodo = delPeriodo.reduce(function (a, o) {
-    return a + (normal_(o.tipo) === 'fv_aero' ? 2 : 1);
+    /* Las ampliaciones y extras (tipo «otro») no cuentan como venta. */
+    return a + (normal_(o.tipo) === 'fv_aero' ? 2 : (['fv', 'aero'].indexOf(normal_(o.tipo)) >= 0 ? 1 : 0));
   }, 0);
   const objetivoMes = num_(persona.objetivo_mes) || (persona.rol === 'captador' ? 60 : 6);
   const logradoObjetivo = persona.rol === 'captador'
