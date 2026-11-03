@@ -8,6 +8,19 @@ Esto no sustituye al manual: el manual cuenta cómo se usa el CRM hoy
 luego no hay manera de reconstruir.
 
 
+## 03/11/2026 (noche) · Ventas y comisiones en el objetivo del periodo
+
+- En **Panel › Objetivo del periodo** (16 al 15) sale la lista de ventas
+  firmadas del periodo con **dirección, importe y comisión** de cada una, y
+  el total. Cada uno ve solo lo suyo; dirección ve a cada persona en Equipo.
+- Reglas de Nando: Nando 700 € por venta suya y 400 € por cada venta de
+  Rober (es su responsable); Rober 400 € por venta; captadores 400 € por cada
+  venta de lo que captaron; Rubén 400 € por cada venta que venga de Sandra o
+  Abraham. **Una doble (aerotermia + fotovoltaica) cuenta como dos ventas.**
+- El captador de una venta sale de la operación o, si no lo tiene, del
+  cliente. Las ampliaciones y extras (tipo «otro») no comisionan.
+- Las nóminas usan las mismas reglas.
+
 ## 03/11/2026 · Todo el mundo puede avisar de una incidencia
 
 - Comerciales y captadores tienen **Avisar incidencia** en el menú (y el
