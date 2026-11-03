@@ -238,6 +238,33 @@ const cTodo = comisionesDe_(uNando,
   [{id: 'CA-2', tecnologia: 'fv', fecha: hoyISO_()}],
   [{id: 'Y', referencia: 'R3', tipo: 'fv', fecha_firma: hoyISO_(), _de: 'Rober'}]);
 comprobar('vender, captar y llevar equipo se suman', cTodo.total === 1500, cTodo.total);
+/* Comisiones del periodo por operación (03/11/2026): una doble cuenta por
+   dos; el captador sale de la operación o, si no lo tiene, del cliente; el
+   responsable de los captadores cobra por lo que ellos captan. */
+{
+const uFer = leer_('USUARIOS').filter(x => x.usuario === 'fernando')[0];
+actualizar_('USUARIOS', uSandra.id, {responsable_id: uFer.id});
+actualizar_('USUARIOS', uFer.id, {comision_equipo_fv: 400, comision_equipo_aero: 400});
+const hoyP = hoyISO_();
+const cliP = insertar_('CLIENTES', {nombre: 'Prueba comisiones', direccion: 'C. Comisión 1', captador_id: uSandra.id, comercial_id: uNando.id, estado: 'ganado', creado: hoyP});
+const opD = insertar_('OPERACIONES', {cliente_id: cliP.id, comercial_id: uNando.id, tipo: 'fv_aero', estado: 'firmada', fecha_firma: '2030-01-20', total: 30000, creado: hoyP});
+const opR = insertar_('OPERACIONES', {cliente_id: cliP.id, comercial_id: uRober.id, tipo: 'fv', estado: 'firmada', fecha_firma: '2030-01-21', total: 10000, creado: hoyP});
+insertar_('OPERACIONES', {cliente_id: cliP.id, comercial_id: uNando.id, tipo: 'otro', estado: 'firmada', fecha_firma: '2030-01-22', total: 3000, creado: hoyP});
+const pN = comisionesPeriodo_(leer_('USUARIOS').filter(x => x.id === uNando.id)[0], '2030-01-16', '2030-02-15');
+comprobar('periodo: Nando cobra su doble (1.400) y la venta de Rober (400); lo de tipo «otro» no comisiona',
+  pN.total === 1800 + 0 && pN.detalle.length === 2, pN);
+comprobar('periodo: cada línea lleva dirección e importe', pN.detalle.every(d => d.direccion === 'C. Comisión 1' && d.importe_venta > 0), pN.detalle);
+const pS = comisionesPeriodo_(leer_('USUARIOS').filter(x => x.id === uSandra.id)[0], '2030-01-16', '2030-02-15');
+comprobar('periodo: Sandra cobra 400 por sencilla captada (doble 800 + fv 400), captador del cliente', pS.total === 1200, pS);
+const pF = comisionesPeriodo_(leer_('USUARIOS').filter(x => x.id === uFer.id)[0], '2030-01-16', '2030-02-15');
+comprobar('periodo: el responsable de los captadores cobra 400 por sencilla', pF.total === 1200 &&
+  pF.detalle.every(d => d.concepto === 'captación de su equipo' && d.de === uSandra.nombre), pF);
+const pR = comisionesPeriodo_(leer_('USUARIOS').filter(x => x.id === uRober.id)[0], '2030-01-16', '2030-02-15');
+comprobar('periodo: Rober solo ve lo suyo', pR.total === 400 && pR.detalle.length === 1, pR);
+const rRober = despachar_({accion: 'resumen', token: sesiones.rober.token, hasta: '2030-01-25'});
+comprobar('el resumen trae las ventas del periodo de quien lo pide', rRober.ok && rRober.resumen.objetivo_periodo &&
+  rRober.resumen.objetivo_periodo.detalle.length === 1 && rRober.resumen.objetivo_periodo.detalle[0].operacion_id === opR.id, rRober.resumen && rRober.resumen.objetivo_periodo);
+}
 const eq = despachar_({accion: 'equipo', token: sesiones.fernando.token});
 comprobar('dirección ve el equipo entero', eq.ok === true && eq.equipo.length === 7, eq.error || eq.equipo.length);
 comprobar('hay ranking de comerciales', eq.ranking_comerciales.length === 2);
