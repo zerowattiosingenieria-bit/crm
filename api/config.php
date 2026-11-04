@@ -76,7 +76,7 @@ const ESQUEMA = [
   "FACTURAS" => ['id', 'numero', 'operacion_id', 'cliente_id', 'fecha_emision', 'concepto', 'base', 'iva_pct', 'iva', 'total', 'estado', 'fecha_vencimiento', 'fecha_cobro', 'url', 'emitida_por', 'notas'],
   "GASTOS" => ['id', 'operacion_id', 'categoria', 'proveedor', 'concepto', 'importe', 'iva_pct', 'fecha', 'estado_pago', 'fecha_pago', 'factura_proveedor', 'creado', 'creado_por', 'notas'],
   "SEGUIMIENTO" => ['id', 'cliente_id', 'operacion_id', 'usuario_id', 'fecha', 'canal', 'nota', 'proximo_paso', 'proxima_fecha', 'estado_resultante', 'origen', 'creado'],
-  "CAPTACIONES" => ['id', 'cliente_id', 'captador_id', 'fecha', 'hora_cita', 'estado_cita', 'tecnologia', 'comercial_id', 'resultado', 'fecha_resultado', 'operacion_id', 'interes', 'notas', 'creado'],
+  "CAPTACIONES" => ['id', 'cliente_id', 'captador_id', 'fecha', 'hora_cita', 'estado_cita', 'tecnologia', 'comercial_id', 'resultado', 'fecha_resultado', 'operacion_id', 'interes', 'notas', 'volver_llamar', 'creado'],
   /* 02/11/2026: cada cita reagendada o cancelada (estadísticas) y el histórico de cambios de cada lead. */
   "CITAS_CAMBIOS" => ['id', 'captacion_id', 'cliente_id', 'captador_id', 'comercial_id', 'tipo', 'fecha_antes', 'hora_antes', 'fecha_nueva', 'hora_nueva', 'motivo', 'usuario_id', 'creado'],
   "CAMBIOS" => ['id', 'fecha', 'usuario_id', 'cliente_id', 'entidad', 'entidad_id', 'campo', 'antes', 'despues'],
@@ -108,7 +108,7 @@ const CATALOGO = [
   "estadosFactura" => [['emitida', 'Emitida'], ['enviada', 'Enviada al cliente'], ['cobrada', 'Cobrada'], ['vencida', 'Vencida'], ['rectificada', 'Rectificada']],
   "categoriasGasto" => [['material_fv', 'Material fotovoltaica'], ['material_aero', 'Material aerotermia'], ['bateria', 'Baterías'], ['montaje', 'Montaje / subcontrata'], ['mano_obra', 'Mano de obra propia'], ['legalizacion', 'Legalización y tasas'], ['gestion', 'Gestión de ayudas'], ['comision', 'Comisión comercial'], ['captacion', 'Comisión de captación'], ['transporte', 'Transporte y dietas'], ['marketing', 'Marketing y marca'], ['administracion', 'Gestoría y administración'], ['estructura', 'Gastos de estructura'], ['otro', 'Otro']],
   "canales" => [['llamada', 'Llamada'], ['whatsapp', 'WhatsApp'], ['email', 'Email'], ['visita', 'Visita'], ['puerta', 'Puerta fría'], ['otro', 'Otro']],
-  "estadosCita" => [['confirmada', 'Confirmada'], ['pendiente', 'Pendiente'], ['recontactar', 'A recontactar'], ['no_interesa', 'No interesa']],
+  "estadosCita" => [['confirmada', 'Confirmada'], ['pendiente', 'Pendiente'], ['recontactar', 'Pendiente de reagendar'], ['no_interesa', 'No interesa']],
   "resultadosCaptacion" => [['pendiente', 'Pendiente'], ['sentada', 'Convertida en sentada'], ['venta', 'Acabó en venta'], ['cancelada', 'Cancelada'], ['no_sentada', 'No llegó a sentada'], ['potencial', 'Queda como potencial']],
   "origenes" => [['captacion', 'Captación a puerta'], ['referido', 'Referido'], ['web', 'Web'], ['llamada', 'Llamada entrante'], ['feria', 'Feria / evento'], ['campana', 'Campaña'], ['otro', 'Otro']],
   "tiposJornada" => [['trabajado', 'Trabajado'], ['vacaciones', 'Vacaciones'], ['festivo', 'Festivo'], ['baja', 'Baja'], ['libre', 'Libre']],

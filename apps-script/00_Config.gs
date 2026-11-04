@@ -152,7 +152,7 @@ const ESQUEMA = {
 
   CAPTACIONES: ['id','cliente_id','captador_id','fecha','hora_cita','estado_cita',
     'tecnologia','comercial_id','resultado','fecha_resultado','operacion_id',
-    'interes','notas','creado'],
+    'interes','notas','volver_llamar','creado'],
 
   /* Cada vez que una cita se reagenda o se cancela (02/11/2026): para saber
      cuántas se aplazan y cuántas se caen, por captador y por fechas. */
@@ -316,7 +316,7 @@ const CATALOGO = {
 
   estadosCita: [
     ['confirmada','Confirmada'],['pendiente','Pendiente'],
-    ['recontactar','A recontactar'],['no_interesa','No interesa']
+    ['recontactar','Pendiente de reagendar'],['no_interesa','No interesa']
   ],
 
   resultadosCaptacion: [

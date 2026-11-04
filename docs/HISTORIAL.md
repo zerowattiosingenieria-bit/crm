@@ -8,6 +8,23 @@ Esto no sustituye al manual: el manual cuenta cómo se usa el CRM hoy
 luego no hay manera de reconstruir.
 
 
+## 04/11/2026 · Captaciones pendientes de reagendar
+
+Lo pidió un captador: a veces el cliente aún no puede dar fecha por motivos
+personales, y el CRM obligaba a poner una, así que la captación quedaba con
+una fecha que no era la buena.
+
+- En la ficha de captación nueva, el estado **«Pendiente de reagendar»**
+  (antes «A recontactar») deja guardar sin fecha. Opcionalmente se pone el
+  día para **volver a llamar** (campo nuevo `volver_llamar` en CAPTACIONES).
+  El cliente queda con la próxima acción «Llamar para dar cita».
+- **↻ Reagendar** tiene ahora la opción «Aún no puede: queda pendiente de
+  reagendar». Quita la fecha, apunta la nota y cuenta como cita aplazada en
+  las estadísticas. Cuando ya tiene día, el mismo botón le da fecha.
+- En **Hoy** sale la tarjeta **Pendientes de reagendar**, ordenada por el día
+  de volver a llamar, con «Dar fecha». En Captaciones salen como «SIN FECHA».
+- Sin fecha no entran en la agenda ni en las reglas de visitas del comercial.
+
 ## 03/11/2026 (noche) · Ventas y comisiones en el objetivo del periodo
 
 - En **Panel › Objetivo del periodo** (16 al 15) sale la lista de ventas

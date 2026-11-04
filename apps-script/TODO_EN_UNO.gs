@@ -169,7 +169,7 @@ const ESQUEMA = {
 
   CAPTACIONES: ['id','cliente_id','captador_id','fecha','hora_cita','estado_cita',
     'tecnologia','comercial_id','resultado','fecha_resultado','operacion_id',
-    'interes','notas','creado'],
+    'interes','notas','volver_llamar','creado'],
 
   /* Cada vez que una cita se reagenda o se cancela (02/11/2026): para saber
      cuántas se aplazan y cuántas se caen, por captador y por fechas. */
@@ -333,7 +333,7 @@ const CATALOGO = {
 
   estadosCita: [
     ['confirmada','Confirmada'],['pendiente','Pendiente'],
-    ['recontactar','A recontactar'],['no_interesa','No interesa']
+    ['recontactar','Pendiente de reagendar'],['no_interesa','No interesa']
   ],
 
   resultadosCaptacion: [
@@ -2082,7 +2082,8 @@ function accGuardarCaptacion_(u, p) {
     const toca = !ant || ['fecha', 'hora_cita', 'comercial_id'].some(function (k) {
       return d[k] !== undefined && txt_(d[k]) !== txt_(ant[k]); });
     const com = val('comercial_id', '');
-    const fe = val('fecha', '') || (ant ? '' : hoyISO_());
+    /* «Pendiente de reagendar»: el cliente aún no puede dar fecha, no hay cita que revisar. */
+    const fe = val('fecha', '') || ((ant || normal_(val('estado_cita', '')) === 'recontactar') ? '' : hoyISO_());
     const ho = val('hora_cita', '');
     const res = normal_(val('resultado', 'pendiente'));
     if (toca && com && fe && ['cancelada', 'no_sentada', 'venta', 'sentada'].indexOf(res) < 0) {
@@ -2150,7 +2151,7 @@ function guardarCaptacionSinReglas_(u, p) {
   }
 
   const campos = ['fecha','hora_cita','estado_cita','tecnologia','comercial_id','resultado',
-                  'fecha_resultado','operacion_id','interes','notas'];
+                  'fecha_resultado','operacion_id','interes','notas','volver_llamar'];
   if (d.id) {
     const anterior = leer_('CAPTACIONES').filter(function (x) { return String(x.id) === String(d.id); })[0];
     const cambios = {};
@@ -2189,10 +2190,16 @@ function guardarCaptacionSinReglas_(u, p) {
   campos.forEach(function (c) { nueva[c] = d[c] === undefined ? '' : d[c]; });
   /* El comercial que da una cita a un cliente suyo se la queda él. */
   if (!nueva.comercial_id && u.rol === 'comercial') nueva.comercial_id = u.id;
-  nueva.fecha = nueva.fecha || hoyISO_();
+  /* 04/11/2026: si el cliente aún no puede dar fecha, la captación queda
+     «Pendiente de reagendar» sin fecha, en vez de con una fecha inventada. */
+  const sinFecha = !txt_(nueva.fecha) && normal_(nueva.estado_cita) === 'recontactar';
+  if (sinFecha) nueva.hora_cita = '';
+  else { nueva.fecha = nueva.fecha || hoyISO_(); nueva.volver_llamar = ''; }
   nueva.resultado = nueva.resultado || 'pendiente';
   const r = insertar_('CAPTACIONES', nueva);
-  apuntarHistorial_(u, 'CAPTACIONES', r.id, cli.id, null, null, 'Cita nueva para el ' + fechaLarga_(r.fecha, r.hora_cita) +
+  apuntarHistorial_(u, 'CAPTACIONES', r.id, cli.id, null, null, (sinFecha
+    ? 'Captación pendiente de reagendar' + (txt_(r.volver_llamar) ? ': volver a llamar el ' + fechaLarga_(r.volver_llamar) : '')
+    : 'Cita nueva para el ' + fechaLarga_(r.fecha, r.hora_cita)) +
     (txt_(r.comercial_id) ? ' con ' + ((leer_('USUARIOS').filter(function (x) { return String(x.id) === String(r.comercial_id); })[0] || {}).nombre || '') : ''));
 
   const cambiosCliente = {modificado: ahora_(), modificado_por: u.id};
@@ -2204,6 +2211,7 @@ function guardarCaptacionSinReglas_(u, p) {
   if (txt_(nueva.interes)) cambiosCliente.interes = nueva.interes;
   if (nueva.comercial_id) cambiosCliente.comercial_id = nueva.comercial_id;
   if (nueva.fecha) { cambiosCliente.proxima_accion = 'Sentada concertada'; cambiosCliente.proxima_fecha = nueva.fecha; }
+  else if (sinFecha) { cambiosCliente.proxima_accion = 'Llamar para dar cita'; cambiosCliente.proxima_fecha = txt_(nueva.volver_llamar); }
   actualizar_('CLIENTES', cli.id, cambiosCliente);
   registrar_(u, 'alta_captacion', 'CAPTACIONES', r.id, cli.nombre);
   /* Dos captadores en la misma zona (menos de 200 m): correo a los dos y a dirección. */
@@ -8572,6 +8580,7 @@ function fechaLarga_(f, hora) {
 
 /** Reagendar: nueva fecha y hora, y queda apuntado para las estadísticas. */
 function accReagendarCita_(u, p) {
+  if (p.sin_fecha) return dejarSinFecha_(u, p);
   const fecha = txt_(p.fecha).slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return {ok: false, error: 'Pon la nueva fecha de la cita.'};
   const v = captacionVisible_(u, p.id);
@@ -8584,11 +8593,38 @@ function accReagendarCita_(u, p) {
     (motivo ? ' (' + motivo + ')' : '') + '.';
   const r = accGuardarCaptacion_(u, {pedir_autorizacion: !!p.pedir_autorizacion, captacion: {id: cap.id, cliente_id: cap.cliente_id,
     fecha: fecha, hora_cita: hora, estado_cita: p.confirmada ? 'confirmada' : 'pendiente', resultado: 'pendiente',
+    volver_llamar: '',
     notas: (txt_(cap.notas) ? txt_(cap.notas) + '\n' : '') + nota, _cambio_apuntado: true}});
   if (!r.ok) return r;
   apuntarCambioCita_(u, cap, 'reagendada', {fecha: fecha, hora_cita: hora, motivo: motivo});
   registrar_(u, 'reagendar_cita', 'CAPTACIONES', cap.id, nota);
   return {ok: true, captacion: r.captacion, aviso_agenda: r.aviso_agenda || '', pendiente_autorizacion: r.pendiente_autorizacion || ''};
+}
+
+/**
+ * 04/11/2026: el cliente aún no puede dar fecha. La captación se queda
+ * «Pendiente de reagendar», sin fecha (y, si se sabe, con el día para volver
+ * a llamar), en vez de obligar a poner una fecha que no es la buena.
+ */
+function dejarSinFecha_(u, p) {
+  const v = captacionVisible_(u, p.id);
+  const cap = v.cap;
+  if (['venta', 'sentada'].indexOf(normal_(cap.resultado)) >= 0) return {ok: false, error: 'Esa cita ya se hizo: no se puede reagendar.'};
+  let volver = txt_(p.volver_llamar).slice(0, 10);
+  if (volver && !/^\d{4}-\d{2}-\d{2}$/.test(volver)) volver = '';
+  const motivo = txt_(p.motivo);
+  const antes = txt_(cap.fecha) ? 'del ' + fechaLarga_(cap.fecha, cap.hora_cita) : '';
+  const nota = 'Pendiente de reagendar' + (antes ? ' (estaba ' + antes + ')' : '') +
+    (volver ? ', volver a llamar el ' + fechaLarga_(volver) : '') + (motivo ? ': ' + motivo : '') + '.';
+  const r = accGuardarCaptacion_(u, {captacion: {id: cap.id, cliente_id: cap.cliente_id,
+    fecha: '', hora_cita: '', estado_cita: 'recontactar', resultado: 'pendiente', volver_llamar: volver,
+    notas: (txt_(cap.notas) ? txt_(cap.notas) + '\n' : '') + nota, _cambio_apuntado: true}});
+  if (!r.ok) return r;
+  if (txt_(cap.fecha)) apuntarCambioCita_(u, cap, 'reagendada', {fecha: '', hora_cita: '', motivo: motivo || 'Pendiente de reagendar'});
+  actualizar_('CLIENTES', cap.cliente_id, {proxima_accion: 'Llamar para dar cita', proxima_fecha: volver,
+    modificado: ahora_(), modificado_por: u.id});
+  registrar_(u, 'reagendar_cita', 'CAPTACIONES', cap.id, nota);
+  return {ok: true, captacion: r.captacion, sin_fecha: true};
 }
 
 /** Cancelar: la cita no se hace; queda el motivo para las estadísticas. */

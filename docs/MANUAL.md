@@ -275,6 +275,11 @@ busca otro día u hora.
 - En **Captaciones** (o en la ficha del cliente, pestaña **Citas**) cada cita
   pendiente tiene **↻ Reagendar** (nuevo día y hora, y por qué) y
   **✕ Cancelar** (motivo). Todo queda contado en las estadísticas.
+- Si el cliente **aún no puede dar fecha**, no te inventes una: en la ficha
+  nueva elige el estado **Pendiente de reagendar** y deja la fecha vacía
+  (puedes poner el día para volver a llamar). Con una cita ya dada, pulsa
+  **↻ Reagendar › Aún no puede**. Te sale en **Hoy › Pendientes de
+  reagendar**; cuando tenga día, pulsa **Dar fecha**.
 - **Estadísticas** (menú): citas sacadas, reagendadas, canceladas, sentadas y
   ventas de cada captador y del equipo, hoy, esta semana, este mes, el
   trimestre y el año; cuántas citas hacen falta para una venta y las ventas

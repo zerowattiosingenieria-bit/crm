@@ -2101,5 +2101,33 @@ comprobar('incidencias: un comercial avisa sin ver el listado', av.ok && /^IN-/.
 comprobar('incidencias: a dirección le salta', despachar_({accion: 'incidencias', token: F}).incidencias.some(x => x.id === av.id && x.origen === 'aviso'));
 }
 
+console.log('\n== Captación pendiente de reagendar (04/11/2026) ==');
+{
+const S = entrar('sandra').token;
+const hoyR = hoyISO_();
+const sinF = despachar_({accion: 'guardarCaptacion', token: S, captacion: {
+  cliente: {nombre: 'Sin Fecha Uno', telefono: '655000901', direccion: 'Calle Sin Fecha 1', municipio: 'Las Rozas'},
+  fecha: '', hora_cita: '', estado_cita: 'recontactar', volver_llamar: sumarDias_(hoyR, 5), comercial_id: '', tecnologia: 'AEROTERMIA'}});
+const capSF = () => leer_('CAPTACIONES').filter(x => x.id === sinF.captacion.id)[0];
+comprobar('pendiente de reagendar: se guarda sin fecha inventada', sinF.ok && capSF().fecha === '' && capSF().estado_cita === 'recontactar', sinF.error || capSF());
+comprobar('…con el día para volver a llamar', capSF().volver_llamar === sumarDias_(hoyR, 5), capSF().volver_llamar);
+const cliSF = leer_('CLIENTES').filter(x => x.id === sinF.captacion.cliente_id)[0];
+comprobar('…y la ficha del cliente dice «Llamar para dar cita»', cliSF.proxima_accion === 'Llamar para dar cita' && cliSF.proxima_fecha === sumarDias_(hoyR, 5), cliSF.proxima_accion);
+comprobar('con otro estado y sin fecha sigue poniendo hoy', (() => { const r = despachar_({accion: 'guardarCaptacion', token: S, captacion: {
+  cliente: {nombre: 'Con Fecha Dos', telefono: '655000902', direccion: 'Calle Sin Fecha 2', municipio: 'Las Rozas'}, fecha: '', estado_cita: 'pendiente'}});
+  return r.ok && leer_('CAPTACIONES').filter(x => x.id === r.captacion.id)[0].fecha === hoyR; })());
+const conF = despachar_({accion: 'guardarCaptacion', token: S, captacion: {
+  cliente: {nombre: 'Con Fecha Tres', telefono: '655000903', direccion: 'Calle Sin Fecha 3', municipio: 'Las Rozas'},
+  fecha: sumarDias_(hoyR, 2), hora_cita: '11:00', estado_cita: 'confirmada'}});
+const aplaza = despachar_({accion: 'reagendarCita', token: S, id: conF.captacion.id, sin_fecha: true, volver_llamar: sumarDias_(hoyR, 10), motivo: 'Está de viaje'});
+const capCF = () => leer_('CAPTACIONES').filter(x => x.id === conF.captacion.id)[0];
+comprobar('reagendar «aún no puede»: queda sin fecha y pendiente de reagendar', aplaza.ok && capCF().fecha === '' && capCF().hora_cita === '' &&
+  capCF().estado_cita === 'recontactar' && /Pendiente de reagendar/.test(capCF().notas), aplaza.error || capCF());
+comprobar('…y cuenta como cita aplazada en las estadísticas', leer_('CITAS_CAMBIOS').filter(x => x.captacion_id === conF.captacion.id && x.tipo === 'reagendada').length === 1);
+const daFecha = despachar_({accion: 'reagendarCita', token: S, id: conF.captacion.id, fecha: sumarDias_(hoyR, 12), hora_cita: '12:00'});
+comprobar('cuando ya puede, se le da fecha y se limpia el «volver a llamar»', daFecha.ok && capCF().fecha === sumarDias_(hoyR, 12) && capCF().volver_llamar === '', daFecha.error || capCF());
+comprobar('otra captadora no puede dejar sin fecha la de Sandra', despachar_({accion: 'reagendarCita', token: entrar('abraham').token, id: conF.captacion.id, sin_fecha: true}).ok === false);
+}
+
 console.log('\n' + (fallos ? 'FALLAN ' + fallos + ' de ' + pruebas : 'Todo correcto: ' + pruebas + ' comprobaciones'));
 process.exit(fallos ? 1 : 0);

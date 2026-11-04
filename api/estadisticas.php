@@ -71,6 +71,7 @@ function fechaLarga_($f, $hora = ''): string {
 }
 
 function accReagendarCita_(array $u, array $p): array {
+  if (!empty($p['sin_fecha'])) return dejarSinFecha_($u, $p);
   $fecha = trozo_($p['fecha'] ?? '', 0, 10);
   if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) return ['ok' => false, 'error' => 'Pon la nueva fecha de la cita.'];
   $v = captacionVisible_($u, $p['id'] ?? '');
@@ -83,11 +84,38 @@ function accReagendarCita_(array $u, array $p): array {
     ($motivo !== '' ? ' (' . $motivo . ')' : '') . '.';
   $r = accGuardarCaptacion_($u, ['pedir_autorizacion' => !empty($p['pedir_autorizacion']), 'captacion' => ['id' => $cap['id'], 'cliente_id' => $cap['cliente_id'],
     'fecha' => $fecha, 'hora_cita' => $hora, 'estado_cita' => !empty($p['confirmada']) ? 'confirmada' : 'pendiente', 'resultado' => 'pendiente',
+    'volver_llamar' => '',
     'notas' => (txt_($cap['notas']) !== '' ? txt_($cap['notas']) . "\n" : '') . $nota, '_cambio_apuntado' => true]]);
   if (empty($r['ok'])) return $r;
   apuntarCambioCita_($u, $cap, 'reagendada', ['fecha' => $fecha, 'hora_cita' => $hora, 'motivo' => $motivo]);
   registrar_($u, 'reagendar_cita', 'CAPTACIONES', $cap['id'], $nota);
   return ['ok' => true, 'captacion' => $r['captacion'] ?? null, 'aviso_agenda' => $r['aviso_agenda'] ?? '', 'pendiente_autorizacion' => $r['pendiente_autorizacion'] ?? ''];
+}
+
+/**
+ * 04/11/2026: el cliente aún no puede dar fecha. La captación se queda
+ * «Pendiente de reagendar», sin fecha (y, si se sabe, con el día para volver
+ * a llamar), en vez de obligar a poner una fecha que no es la buena.
+ */
+function dejarSinFecha_(array $u, array $p): array {
+  $v = captacionVisible_($u, $p['id'] ?? '');
+  $cap = $v['cap'];
+  if (in_array(normal_($cap['resultado']), ['venta', 'sentada'], true)) return ['ok' => false, 'error' => 'Esa cita ya se hizo: no se puede reagendar.'];
+  $volver = trozo_($p['volver_llamar'] ?? '', 0, 10);
+  if ($volver !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $volver)) $volver = '';
+  $motivo = txt_($p['motivo'] ?? '');
+  $antes = txt_($cap['fecha']) !== '' ? 'del ' . fechaLarga_($cap['fecha'], $cap['hora_cita']) : '';
+  $nota = 'Pendiente de reagendar' . ($antes !== '' ? ' (estaba ' . $antes . ')' : '') .
+    ($volver !== '' ? ', volver a llamar el ' . fechaLarga_($volver) : '') . ($motivo !== '' ? ': ' . $motivo : '') . '.';
+  $r = accGuardarCaptacion_($u, ['captacion' => ['id' => $cap['id'], 'cliente_id' => $cap['cliente_id'],
+    'fecha' => '', 'hora_cita' => '', 'estado_cita' => 'recontactar', 'resultado' => 'pendiente', 'volver_llamar' => $volver,
+    'notas' => (txt_($cap['notas']) !== '' ? txt_($cap['notas']) . "\n" : '') . $nota, '_cambio_apuntado' => true]]);
+  if (empty($r['ok'])) return $r;
+  if (txt_($cap['fecha']) !== '') apuntarCambioCita_($u, $cap, 'reagendada', ['fecha' => '', 'hora_cita' => '', 'motivo' => $motivo ?: 'Pendiente de reagendar']);
+  actualizar_('CLIENTES', $cap['cliente_id'], ['proxima_accion' => 'Llamar para dar cita', 'proxima_fecha' => $volver,
+    'modificado' => ahora_(), 'modificado_por' => $u['id']]);
+  registrar_($u, 'reagendar_cita', 'CAPTACIONES', $cap['id'], $nota);
+  return ['ok' => true, 'captacion' => $r['captacion'] ?? null, 'sin_fecha' => true];
 }
 
 function accCancelarCita_(array $u, array $p): array {

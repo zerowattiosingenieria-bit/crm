@@ -15,6 +15,7 @@ import {nuevaCita} from './citas.js';
 import {nuevoSeguimiento} from './clientes.js';
 import {citaSinConfirmar} from './panel.js';
 import {tarjetaIncidenciasHoy} from './incidencias.js';
+import {ventanaReagendar} from './citas-cambios.js';
 
 const OPERACION_GANADA = ['firmada', 'tramite', 'material', 'instalacion', 'instalada', 'legalizada', 'cerrada'];
 
@@ -57,6 +58,26 @@ export async function vistaHoy({ir, refrescar}) {
     {acciones: h('button.btn.mini', {onclick: () => nuevaCita({refrescar})}, '+ Nueva cita')}));
   if (mananaC.length) bloques.push(tarjeta('Mañana', h('ul.hoy-lista', mananaC.map(lineaCita)),
     {subtitulo: mananaC.filter(citaSinConfirmar).length ? mananaC.filter(citaSinConfirmar).length + ' sin confirmar' : 'Todas confirmadas'}));
+
+  /* --- pendientes de reagendar (04/11/2026): el cliente aún no podía dar fecha --- */
+  const sinFecha = vivas.filter(c => !txt(c.fecha) && normal(c.estado_cita) === 'recontactar' &&
+    normal(c.resultado || 'pendiente') === 'pendiente')
+    .sort((a, b) => (txt(a.volver_llamar) || '9999').localeCompare(txt(b.volver_llamar) || '9999'));
+  if (sinFecha.length) {
+    const tocaLlamar = sinFecha.filter(c => txt(c.volver_llamar) && txt(c.volver_llamar) <= hoy).length;
+    cifras.push(kpi('Pendientes de reagendar', String(sinFecha.length),
+      tocaLlamar ? tocaLlamar + ' para llamar hoy' : 'sin fecha todavía', {estado: tocaLlamar ? 'aviso' : undefined}));
+    bloques.push(tarjeta('Pendientes de reagendar', h('ul.hoy-lista', sinFecha.map(c => {
+      const cli = cliente(c.cliente_id);
+      const toca = txt(c.volver_llamar) && txt(c.volver_llamar) <= hoy;
+      return h('li',
+        h('span.que', nom(cli), h('span.nota', ' · ' + (txt(c.volver_llamar) ? 'llamar el ' + fechaCorta(c.volver_llamar) : 'sin día para llamar') +
+          (esDir || !esCap ? ' · ' + api.nombrePersona(c.captador_id) : '')), toca ? marca('TOCA LLAMAR', 'aviso') : null),
+        txt(cli.telefono) ? h('a.btn.mini', {href: telHref(cli.telefono)}, '📞') : null,
+        h('button.btn.mini.primario', {onclick: () => ventanaReagendar(c, refrescar)}, 'Dar fecha'),
+        h('button.btn.mini', {onclick: () => ir('cliente/' + cli.id)}, 'Ficha'));
+    })), {subtitulo: 'El cliente aún no podía dar fecha. Cuando la tenga, pulsa «Dar fecha».'}));
+  }
 
   if (!esCap) {
     /* --- llamadas y próximos pasos que tocan --- */

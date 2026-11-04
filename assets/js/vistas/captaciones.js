@@ -22,9 +22,12 @@ function nuevaCaptacion(refrescar, ir) {
     ancha: true,
     campos: [
       {separador: 'La cita'},
-      {id: 'fecha', et: 'Fecha de la visita', tipo: 'fecha', requerido: true},
+      {id: 'estado_cita', et: 'Estado', tipo: 'select', opciones: api.opciones('estadosCita'), vacio: false,
+       ayuda: 'Si el cliente aún no puede dar fecha, elige «Pendiente de reagendar» y deja la fecha vacía'},
+      {id: 'fecha', et: 'Fecha de la visita', tipo: 'fecha'},
       {id: 'hora_cita', et: 'Hora', tipo: 'hora'},
-      {id: 'estado_cita', et: 'Estado', tipo: 'select', opciones: api.opciones('estadosCita'), vacio: false},
+      {id: 'volver_llamar', et: 'Volver a llamar el', tipo: 'fecha',
+       ayuda: 'Solo si queda pendiente de reagendar (opcional)'},
       {id: 'tecnologia', et: 'Tecnología', tipo: 'select',
        opciones: ['AEROTERMIA', 'FOTOVOLTAICA', 'AEROTERMIA + FOTOVOLTAICA'], vacio: false},
       {id: 'comercial_id', et: 'Comercial asignado', tipo: 'select', opciones: comerciales},
@@ -59,8 +62,12 @@ function nuevaCaptacion(refrescar, ir) {
     valores: {fecha: hoyISO(), hora_cita: '17:00', estado_cita: 'confirmada',
               tecnologia: 'AEROTERMIA', periodo_combustible: 'al año', interes: 7},
     alGuardar: async d => {
+      /* 04/11/2026: sin fecha solo si queda «Pendiente de reagendar». */
+      const sinFecha = d.estado_cita === 'recontactar' && !txt(d.fecha);
+      if (!sinFecha && !txt(d.fecha)) throw new Error('Pon la fecha de la visita o, si el cliente aún no puede, elige el estado «Pendiente de reagendar».');
       const captacion = {
-        fecha: d.fecha, hora_cita: d.hora_cita, estado_cita: d.estado_cita, tecnologia: d.tecnologia,
+        fecha: sinFecha ? '' : d.fecha, hora_cita: sinFecha ? '' : d.hora_cita, estado_cita: d.estado_cita, tecnologia: d.tecnologia,
+        volver_llamar: sinFecha ? d.volver_llamar : '',
         comercial_id: d.comercial_id, interes: d.interes, notas: d.notas, resultado: 'pendiente',
         cliente: {
           nombre: d.nombre, telefono: d.telefono, email: d.email, direccion: d.direccion,
@@ -134,6 +141,16 @@ function nuevaCaptacion(refrescar, ir) {
     } catch (e) { poner(revision); }
   };
   ['comercial_id', 'fecha', 'hora_cita', 'direccion', 'coordenadas'].forEach(id => ctl(id) && ctl(id).addEventListener('change', revisar));
+  /* «Pendiente de reagendar»: se vacía la fecha (no se inventa una) y se enseña «Volver a llamar». */
+  const campoDe = id => ctl(id) && ctl(id).closest('.campo, label');
+  const ajustarSinFecha = () => {
+    const sin = ctl('estado_cita') && ctl('estado_cita').value === 'recontactar';
+    if (sin) { ctl('fecha').value = ''; ctl('hora_cita').value = ''; poner(revision); }
+    else if (!txt(ctl('fecha').value)) ctl('fecha').value = hoyISO();
+    if (campoDe('volver_llamar')) campoDe('volver_llamar').style.display = sin ? '' : 'none';
+  };
+  if (ctl('estado_cita')) ctl('estado_cita').addEventListener('change', ajustarSinFecha);
+  ajustarSinFecha();
   return vf;
 }
 
@@ -379,8 +396,10 @@ export async function vistaCaptaciones({ir, refrescar}) {
     const ventas = lista.filter(c => txt(c.resultado) === 'venta').length;
 
     const t = tabla([
-      {clave: 'fecha', et: 'Visita', pinta: c => h('div', h('b', fechaCorta(c.fecha)),
-        h('div.nota', txt(c.hora_cita)))},
+      {clave: 'fecha', et: 'Visita', pinta: c => txt(c.fecha) ? h('div', h('b', fechaCorta(c.fecha)),
+        h('div.nota', txt(c.hora_cita)))
+        : h('div', marca('SIN FECHA', 'aviso'),
+          h('div.nota', txt(c.volver_llamar) ? 'llamar el ' + fechaCorta(c.volver_llamar) : 'pendiente de reagendar'))},
       {clave: 'cliente', et: 'Cliente', valor: c => etiquetaCliente(api.cliente(c.cliente_id)),
        pinta: c => { const cli = api.cliente(c.cliente_id) || {};
          return h('div', h('b', etiquetaCliente(cli)), txt(cli.municipio) ? h('div.nota', cli.municipio) : null); }},

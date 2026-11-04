@@ -44,19 +44,32 @@ export const citaCancelada = k => normal(k.resultado) === 'cancelada';
 
 export function ventanaReagendar(k, refrescar) {
   const c = api.cliente(k.cliente_id) || {};
-  return ventanaFormulario({
-    titulo: 'Reagendar la cita · ' + etiquetaCliente(c),
+  const vf = ventanaFormulario({
+    titulo: (txt(k.fecha) ? 'Reagendar la cita · ' : 'Dar fecha a la cita · ') + etiquetaCliente(c),
     campos: [
-      {id: 'fecha', et: 'Nuevo día', tipo: 'fecha', requerido: true},
-      {id: 'hora_cita', et: 'Nueva hora', tipo: 'hora', requerido: true},
+      {id: 'cuando', et: '¿Ya tiene nuevo día?', tipo: 'select', vacio: false, ancho: 3,
+       opciones: [['si', 'Sí, le pongo el nuevo día'], ['no', 'Aún no puede: queda pendiente de reagendar']]},
+      {id: 'fecha', et: 'Nuevo día', tipo: 'fecha'},
+      {id: 'hora_cita', et: 'Nueva hora', tipo: 'hora'},
+      {id: 'volver_llamar', et: 'Volver a llamar el (opcional)', tipo: 'fecha'},
       {id: 'confirmada', et: 'El cliente ya la ha confirmado', tipo: 'select', opciones: [['', 'No, hay que confirmarla'], ['si', 'Sí, confirmada']]},
       {id: 'motivo', et: 'Por qué se cambia', ancho: 3, pista: 'Corto: «le surgió un viaje», «no estaba el marido»…'}
     ],
-    valores: {fecha: txt(k.fecha) > hoyISO() ? k.fecha : sumarDias(hoyISO(), 1), hora_cita: k.hora_cita || '17:00'},
+    valores: {cuando: 'si', fecha: txt(k.fecha) > hoyISO() ? k.fecha : sumarDias(hoyISO(), 1), hora_cita: k.hora_cita || '17:00',
+              volver_llamar: txt(k.volver_llamar)},
     textoBoton: 'Reagendar',
-    extra: h('p.nota', 'Estaba el ' + fechaCorta(k.fecha) + (txt(k.hora_cita) ? ' a las ' + k.hora_cita : '') +
-      '. Queda apuntado como cita reagendada en las estadísticas.'),
+    extra: h('p.nota', (txt(k.fecha) ? 'Estaba el ' + fechaCorta(k.fecha) + (txt(k.hora_cita) ? ' a las ' + k.hora_cita : '') +
+      '. Queda apuntado como cita reagendada en las estadísticas.' : 'Ahora está pendiente de reagendar, sin fecha.') +
+      ' Si el cliente aún no puede, déjala pendiente de reagendar: no hace falta inventar una fecha.'),
     alGuardar: async d => {
+      if (d.cuando === 'no') {
+        const r = await api.reagendarCita({id: k.id, sin_fecha: true, volver_llamar: d.volver_llamar, motivo: d.motivo});
+        if (!r.ok) throw new Error(r.error || 'No se ha podido guardar.');
+        aviso('Queda pendiente de reagendar' + (txt(d.volver_llamar) ? ': volver a llamar el ' + fechaCorta(d.volver_llamar) : '') + '.');
+        await refrescar();
+        return;
+      }
+      if (!txt(d.fecha) || !txt(d.hora_cita)) throw new Error('Pon el nuevo día y la hora, o elige «Aún no puede».');
       const r = await conAutorizacion(pedir => api.reagendarCita({id: k.id, fecha: d.fecha, hora_cita: d.hora_cita, motivo: d.motivo,
         confirmada: d.confirmada === 'si', pedir_autorizacion: pedir}));
       if (!r.ok) throw new Error(r.error || 'No se ha podido reagendar.');
@@ -65,6 +78,18 @@ export function ventanaReagendar(k, refrescar) {
       await refrescar();
     }
   });
+  /* Con «Aún no puede» no se piden día ni hora; con «Sí», no se pide cuándo volver a llamar. */
+  const f = vf.formulario;
+  const ctl = id => f.nodos[id] && f.nodos[id].control;
+  const campo = id => ctl(id) && ctl(id).closest('.campo, label');
+  const ajustar = () => {
+    const sin = ctl('cuando').value === 'no';
+    ['fecha', 'hora_cita', 'confirmada'].forEach(id => { if (campo(id)) campo(id).style.display = sin ? 'none' : ''; });
+    if (campo('volver_llamar')) campo('volver_llamar').style.display = sin ? '' : 'none';
+  };
+  ctl('cuando').addEventListener('change', ajustar);
+  ajustar();
+  return vf;
 }
 
 export function ventanaCancelar(k, refrescar) {

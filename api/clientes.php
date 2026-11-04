@@ -336,7 +336,8 @@ function accGuardarCaptacion_(array $u, array $p): array {
     $toca = !$ant;
     if ($ant) foreach (['fecha', 'hora_cita', 'comercial_id'] as $k) if (array_key_exists($k, $d) && txt_($d[$k]) !== txt_($ant[$k] ?? '')) $toca = true;
     $com = $val('comercial_id', '');
-    $fe = $val('fecha', '') ?: ($ant ? '' : hoyISO_());
+    /* «Pendiente de reagendar»: el cliente aún no puede dar fecha, no hay cita que revisar. */
+    $fe = $val('fecha', '') ?: (($ant || normal_($val('estado_cita', '')) === 'recontactar') ? '' : hoyISO_());
     $ho = $val('hora_cita', '');
     $res = normal_($val('resultado', 'pendiente'));
     if ($toca && $com !== '' && $fe !== '' && !in_array($res, ['cancelada', 'no_sentada', 'venta', 'sentada'], true)) {
@@ -406,7 +407,7 @@ function guardarCaptacionSinReglas_(array $u, array $p): array {
   }
 
   $campos = ['fecha', 'hora_cita', 'estado_cita', 'tecnologia', 'comercial_id', 'resultado',
-             'fecha_resultado', 'operacion_id', 'interes', 'notas'];
+             'fecha_resultado', 'operacion_id', 'interes', 'notas', 'volver_llamar'];
   if (txt_($d['id'] ?? '') !== '') {
     $anterior = buscar1_('CAPTACIONES', fn($x) => mismo_($x['id'], $d['id']));
     $cambios = [];
@@ -447,11 +448,17 @@ function guardarCaptacionSinReglas_(array $u, array $p): array {
   foreach ($campos as $c) $nueva[$c] = array_key_exists($c, $d) ? $d[$c] : '';
   /* El comercial que da una cita a un cliente suyo se la queda él. */
   if (txt_($nueva['comercial_id']) === '' && $u['rol'] === 'comercial') $nueva['comercial_id'] = $u['id'];
-  $nueva['fecha'] = txt_($nueva['fecha']) !== '' ? $nueva['fecha'] : hoyISO_();
+  /* 04/11/2026: si el cliente aún no puede dar fecha, la captación queda
+     «Pendiente de reagendar» sin fecha, en vez de con una fecha inventada. */
+  $sinFecha = txt_($nueva['fecha']) === '' && normal_($nueva['estado_cita']) === 'recontactar';
+  if ($sinFecha) $nueva['hora_cita'] = '';
+  else { $nueva['fecha'] = txt_($nueva['fecha']) !== '' ? $nueva['fecha'] : hoyISO_(); $nueva['volver_llamar'] = ''; }
   $nueva['resultado'] = txt_($nueva['resultado']) !== '' ? $nueva['resultado'] : 'pendiente';
   $r = insertar_('CAPTACIONES', $nueva);
   $comNombre = txt_($r['comercial_id']) !== '' ? txt_((buscar1_('USUARIOS', fn($x) => mismo_($x['id'], $r['comercial_id'])) ?? [])['nombre'] ?? '') : '';
-  apuntarHistorial_($u, 'CAPTACIONES', $r['id'], $cli['id'], null, null, 'Cita nueva para el ' . fechaLarga_($r['fecha'], $r['hora_cita']) .
+  apuntarHistorial_($u, 'CAPTACIONES', $r['id'], $cli['id'], null, null, ($sinFecha
+    ? 'Captación pendiente de reagendar' . (txt_($r['volver_llamar']) !== '' ? ': volver a llamar el ' . fechaLarga_($r['volver_llamar']) : '')
+    : 'Cita nueva para el ' . fechaLarga_($r['fecha'], $r['hora_cita'])) .
     ($comNombre !== '' ? ' con ' . $comNombre : ''));
 
   $cambiosCliente = ['modificado' => ahora_(), 'modificado_por' => $u['id']];
@@ -463,6 +470,7 @@ function guardarCaptacionSinReglas_(array $u, array $p): array {
   if (txt_($nueva['interes']) !== '') $cambiosCliente['interes'] = $nueva['interes'];
   if (txt_($nueva['comercial_id']) !== '') $cambiosCliente['comercial_id'] = $nueva['comercial_id'];
   if (txt_($nueva['fecha']) !== '') { $cambiosCliente['proxima_accion'] = 'Sentada concertada'; $cambiosCliente['proxima_fecha'] = $nueva['fecha']; }
+  elseif ($sinFecha) { $cambiosCliente['proxima_accion'] = 'Llamar para dar cita'; $cambiosCliente['proxima_fecha'] = txt_($nueva['volver_llamar']); }
   actualizar_('CLIENTES', $cli['id'], $cambiosCliente);
   registrar_($u, 'alta_captacion', 'CAPTACIONES', $r['id'], $cli['nombre']);
   /* Dos captadores en la misma zona (menos de 200 m): correo a los dos y a dirección. */

@@ -63,6 +63,7 @@ function fechaLarga_(f, hora) {
 
 /** Reagendar: nueva fecha y hora, y queda apuntado para las estadísticas. */
 function accReagendarCita_(u, p) {
+  if (p.sin_fecha) return dejarSinFecha_(u, p);
   const fecha = txt_(p.fecha).slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return {ok: false, error: 'Pon la nueva fecha de la cita.'};
   const v = captacionVisible_(u, p.id);
@@ -75,11 +76,38 @@ function accReagendarCita_(u, p) {
     (motivo ? ' (' + motivo + ')' : '') + '.';
   const r = accGuardarCaptacion_(u, {pedir_autorizacion: !!p.pedir_autorizacion, captacion: {id: cap.id, cliente_id: cap.cliente_id,
     fecha: fecha, hora_cita: hora, estado_cita: p.confirmada ? 'confirmada' : 'pendiente', resultado: 'pendiente',
+    volver_llamar: '',
     notas: (txt_(cap.notas) ? txt_(cap.notas) + '\n' : '') + nota, _cambio_apuntado: true}});
   if (!r.ok) return r;
   apuntarCambioCita_(u, cap, 'reagendada', {fecha: fecha, hora_cita: hora, motivo: motivo});
   registrar_(u, 'reagendar_cita', 'CAPTACIONES', cap.id, nota);
   return {ok: true, captacion: r.captacion, aviso_agenda: r.aviso_agenda || '', pendiente_autorizacion: r.pendiente_autorizacion || ''};
+}
+
+/**
+ * 04/11/2026: el cliente aún no puede dar fecha. La captación se queda
+ * «Pendiente de reagendar», sin fecha (y, si se sabe, con el día para volver
+ * a llamar), en vez de obligar a poner una fecha que no es la buena.
+ */
+function dejarSinFecha_(u, p) {
+  const v = captacionVisible_(u, p.id);
+  const cap = v.cap;
+  if (['venta', 'sentada'].indexOf(normal_(cap.resultado)) >= 0) return {ok: false, error: 'Esa cita ya se hizo: no se puede reagendar.'};
+  let volver = txt_(p.volver_llamar).slice(0, 10);
+  if (volver && !/^\d{4}-\d{2}-\d{2}$/.test(volver)) volver = '';
+  const motivo = txt_(p.motivo);
+  const antes = txt_(cap.fecha) ? 'del ' + fechaLarga_(cap.fecha, cap.hora_cita) : '';
+  const nota = 'Pendiente de reagendar' + (antes ? ' (estaba ' + antes + ')' : '') +
+    (volver ? ', volver a llamar el ' + fechaLarga_(volver) : '') + (motivo ? ': ' + motivo : '') + '.';
+  const r = accGuardarCaptacion_(u, {captacion: {id: cap.id, cliente_id: cap.cliente_id,
+    fecha: '', hora_cita: '', estado_cita: 'recontactar', resultado: 'pendiente', volver_llamar: volver,
+    notas: (txt_(cap.notas) ? txt_(cap.notas) + '\n' : '') + nota, _cambio_apuntado: true}});
+  if (!r.ok) return r;
+  if (txt_(cap.fecha)) apuntarCambioCita_(u, cap, 'reagendada', {fecha: '', hora_cita: '', motivo: motivo || 'Pendiente de reagendar'});
+  actualizar_('CLIENTES', cap.cliente_id, {proxima_accion: 'Llamar para dar cita', proxima_fecha: volver,
+    modificado: ahora_(), modificado_por: u.id});
+  registrar_(u, 'reagendar_cita', 'CAPTACIONES', cap.id, nota);
+  return {ok: true, captacion: r.captacion, sin_fecha: true};
 }
 
 /** Cancelar: la cita no se hace; queda el motivo para las estadísticas. */
