@@ -97,7 +97,7 @@ export function materialesDe(o, cat) {
         pon('Fotovoltaica', 'fv_wp', n, {concepto: 'Módulo fotovoltaico ' + wp + ' W' + (txt(o.panel_modelo) ? ' · ' + o.panel_modelo : ''),
           unitario: Math.round(num(cat.fv_wp.coste) * wp * 100) / 100, unidad: 'ud'});
       } else {
-        pon('Fotovoltaica', 'fv_modulo_630', n, txt(o.panel_modelo) ? {concepto: 'Módulo ' + o.panel_modelo + (wp ? ' ' + wp + ' W' : '')} : {});
+        pon('Fotovoltaica', 'fv_modulo_630', n, txt(o.panel_modelo) ? {concepto: 'Módulo ' + o.panel_modelo + (wp && !txt(o.panel_modelo).includes(String(wp)) ? ' ' + wp + ' W' : '')} : {});
       }
       const plana = contiene(o.tejado, 'plan', 'suelo', 'inclin');
       pon('Fotovoltaica', plana ? 'estructura_inclinada_modulo' : 'estructura_modulo', n);
