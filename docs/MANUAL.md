@@ -168,6 +168,16 @@ a gasto de una instalación (*Pasar a gasto*), y entra ya como pagada.
 **Facturas, cobros y gastos.** Emitir facturas con numeración automática,
 marcar cobros con un botón, registrar gastos por instalación o generales y
 ver qué queda pendiente de pagar.
+Un gasto sin factura todavía se puede apuntar como **Estimado**: cuenta en
+el coste de la instalación pero no como pendiente de pago.
+
+**Materiales y costes.** Para cada instalación vendida, la lista de piezas y
+trabajos que hay que pedir (paneles, estructura, inversor, baterías,
+aerotermia, depósitos, mano de obra y legalización) con su coste estimado,
+sacado de las facturas de proveedores. Sale también dentro de la ficha de
+cada instalación. Las ya instaladas comparan el coste estimado con los
+gastos reales apuntados. El catálogo de costes se puede ajustar a mano.
+Solo lo ve dirección.
 
 **Equipo.** Ranking de comerciales y captadores con sus conversiones,
 objetivos y comisiones; embudo, municipios donde se cierra, motivos de

@@ -355,7 +355,7 @@ export async function vistaGastos({ir}) {
     {id: 'texto', et: 'Buscar por proveedor, concepto o instalación…'},
     {id: 'categoria', tipo: 'select', opciones: [['', 'Todas las categorías']].concat(api.opciones('categoriasGasto'))},
     {id: 'pago', tipo: 'select', opciones: [['', 'Pagados y pendientes'], ['pendiente', 'Solo pendientes'],
-      ['pagado', 'Solo pagados']]},
+      ['pagado', 'Solo pagados'], ['estimado', 'Solo estimados']]},
     {tipo: 'boton', et: '+ Nuevo gasto', clase: 'primario', accion: () => editorGasto(null, recargar)}
   ], v => { Object.assign(est, v); pinta(); });
 
@@ -375,7 +375,7 @@ export async function vistaGastos({ir}) {
       return !q || [g.proveedor, g.concepto, g._ref, g._cliente].some(v => normal(v).includes(q));
     }).sort((a, b) => txt(b.fecha).localeCompare(txt(a.fecha)));
 
-    const pendientes = lista.filter(g => normal(g.estado_pago) !== 'pagado');
+    const pendientes = lista.filter(g => !['pagado', 'estimado'].includes(normal(g.estado_pago)));
     const porCategoria = {};
     lista.forEach(g => { const k = api.etiquetaCatalogo('categoriasGasto', g.categoria);
       porCategoria[k] = (porCategoria[k] || 0) + num(g.importe); });
@@ -389,11 +389,11 @@ export async function vistaGastos({ir}) {
         g._cliente ? h('div.nota', g._cliente) : null)},
       {clave: 'importe', et: 'Importe', num: true, pinta: g => h('b', eur2(g.importe))},
       {clave: 'estado_pago', et: 'Pago', pinta: g => etiquetaEstado(normal(g.estado_pago),
-        normal(g.estado_pago) === 'pagado' ? 'Pagado' : 'Pendiente')},
+        normal(g.estado_pago) === 'pagado' ? 'Pagado' : (normal(g.estado_pago) === 'estimado' ? 'Estimado' : 'Pendiente'))},
       {clave: 'fecha_pago', et: 'Pagado el', pinta: g => txt(g.fecha_pago) ? fechaCorta(g.fecha_pago) : '—'},
       {clave: 'acciones', et: '', noOrden: true, pinta: g => h('.acciones',
         h('button.btn.mini', {onclick: () => editorGasto(g, recargar)}, 'Editar'),
-        normal(g.estado_pago) !== 'pagado' ? h('button.btn.mini.lima', {onclick: async () => {
+        !['pagado', 'estimado'].includes(normal(g.estado_pago)) ? h('button.btn.mini.lima', {onclick: async () => {
           await api.guardarGasto({id: g.id, fecha_pago: hoyISO(), estado_pago: 'pagado'});
           aviso('Gasto marcado como pagado.'); recargar();
         }}, 'Pagado') : null)}
@@ -445,7 +445,7 @@ function editorGasto(gasto, recargar) {
       {id: 'iva_pct', et: 'IVA (%)', tipo: 'numero'},
       {id: 'fecha', et: 'Fecha', tipo: 'fecha', requerido: true},
       {id: 'estado_pago', et: 'Estado', tipo: 'select',
-       opciones: [['pendiente', 'Pendiente'], ['pagado', 'Pagado']], vacio: false},
+       opciones: [['pendiente', 'Pendiente'], ['pagado', 'Pagado'], ['estimado', 'Estimado (sin factura)']], vacio: false},
       {id: 'fecha_pago', et: 'Fecha de pago', tipo: 'fecha'},
       {id: 'factura_proveedor', et: 'Nº de factura del proveedor'},
       {id: 'notas', et: 'Notas', tipo: 'area', ancho: 3}

@@ -3,6 +3,7 @@
 import {h, poner, txt, num, eur, eur2, miles, pct, fechaCorta, normal, suma, hoyISO} from '../util.js';
 import * as api from '../api.js';
 import {tarjeta, tabla, kpi, kpis, etiquetaEstado, marca, ventanaFormulario, aviso, filtros} from '../ui.js';
+import {catalogoCostes, materialesDe, costeApuntado} from '../materiales.js';
 
 const camposOperacion = (cliente) => [
   {separador: 'Qué se vende'},
@@ -82,6 +83,36 @@ export function editorOperacion(operacion, cliente, alTerminar) {
       await alTerminar();
     }
   });
+}
+
+/** Ficha de materiales a pedir con el coste estimado de cada pieza (solo dirección). */
+export function fichaMateriales(o, gastos) {
+  const cat = catalogoCostes(api.estado.config);
+  if (!Object.keys(cat).length) return null;
+  const m = materialesDe(o, cat);
+  if (!m.lineas.length) return h('div', {estilo: {marginTop: '14px'}},
+    h('h4', {estilo: {marginBottom: '6px'}}, 'Materiales a pedir'),
+    h('p.nota', 'Apunta los equipos de la instalación (paneles, inversor, aerotermia…) para calcular la lista.'));
+  const ap = costeApuntado(gastos || []);
+  return h('div', {estilo: {marginTop: '14px'}},
+    h('h4', {estilo: {marginBottom: '6px'}}, 'Materiales a pedir y coste estimado'),
+    h('p.nota', {estilo: {marginTop: 0}}, 'Precios de las últimas facturas de proveedores e instaladores. ' +
+      'Coste para la empresa, no precio de venta.'),
+    tabla([
+      {clave: 'grupo', et: 'Partida'},
+      {clave: 'concepto', et: 'Pieza o trabajo', pinta: x => h('div', h('span', x.concepto),
+        x.nota ? h('div.nota', x.nota) : null, x.falta ? h('div.nota', {estilo: {color: 'var(--mal)'}}, 'Sin precio en el catálogo') : null)},
+      {clave: 'cantidad', et: 'Cant.', num: true, pinta: x => miles(x.cantidad) + ' ' + (x.unidad === 'ud' ? '' : x.unidad)},
+      {clave: 'unitario', et: 'Coste ud. (sin IVA)', num: true, pinta: x => eur2(x.unitario)},
+      {clave: 'importe', et: 'Total (sin IVA)', num: true, pinta: x => eur2(x.importe)},
+      {clave: 'con_iva', et: 'Total IVA incl.', num: true, valor: x => x.importe * (1 + x.iva_pct / 100),
+       pinta: x => h('b', eur2(x.importe * (1 + x.iva_pct / 100)))}
+    ], m.lineas, {vacio: 'Sin piezas.', csv: 'materiales_' + (txt(o.referencia) || o.id) + '.csv'}),
+    h('.triple', {estilo: {marginTop: '10px'}},
+      kpi('Coste estimado', eur(m.total), 'IVA incl. · ' + eur(m.base) + ' sin IVA'),
+      kpi('Gastos reales apuntados', eur(ap.real), ap.nReal + ' facturas (sin IVA)'),
+      kpi('Margen estimado', eur((num(o.base) || num(o.total) / 1.21) - m.base),
+        'venta sin IVA − coste estimado')));
 }
 
 const dato = (et, v) => h('.dato', h('.et', et), h('.v', v === '' || v === null || v === undefined ? '—' : v));
@@ -171,6 +202,9 @@ export function tarjetaOperacion(o, cliente, refrescar) {
           kpi('Coste', eur(coste), gastos.length + ' apuntes'),
           kpi('Margen', eur(margen), pct(base ? margen * 100 / base : 0),
             {estado: margen > 0 ? 'bien' : 'mal'}))) : null,
+
+      /* Materiales a pedir y su coste estimado: solo dirección (05/11/2026). */
+      api.puede('finanzas') ? fichaMateriales(o, gastos) : null,
 
       txt(o.observaciones) ? h('p.nota', {estilo: {marginTop: '12px'}}, o.observaciones) : null,
       txt(o.motivo_perdida) ? h('p', {estilo: {marginTop: '8px', color: 'var(--mal)'}},

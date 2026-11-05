@@ -8,6 +8,29 @@ Esto no sustituye al manual: el manual cuenta cómo se usa el CRM hoy
 luego no hay manera de reconstruir.
 
 
+## 05/11/2026 · Materiales a pedir y costes de cada instalación (solo dirección)
+
+Lo pidió Nando: que a dirección le salga, en cada proyecto, la lista de
+materiales que hay que pedir con lo que cuesta cada pieza, sacado de las
+facturas reales (SeisSolar, PolarStock, Sumsol, Rober Gas, Greenfield,
+legalizaciones), y que las instalaciones ya hechas tengan sus gastos reales.
+
+- **Catálogo de costes** en CONFIG (`catalogo_costes`, JSON). Mediana de lo
+  pagado en las facturas de 02 GASTOS (Drive), sin IVA. Solo viaja a quien
+  tiene las finanzas abiertas: `configVisible_` lo quita al resto.
+- **Ficha de la instalación** (ficha del cliente): «Materiales a pedir y
+  coste estimado» con cada pieza, cantidad, coste unitario y total con y sin
+  IVA, más los gastos reales apuntados y el margen. Las piezas salen de los
+  equipos apuntados en la instalación (paneles, inversor, baterías,
+  aerotermia, depósitos, cargador). La aerotermia de 22 kW se trata como
+  trifásica (no existe monofásica).
+- **Dinero › Materiales y costes**: por pedir, ya instaladas (estimado frente
+  a real) y el catálogo, que dirección puede ajustar a mano.
+- **Gastos «Estimado»**: nuevo estado de pago para costes sin factura. No
+  cuentan como pendientes de pago ni en la previsión de tesorería.
+- Se cargaron en GASTOS las facturas de proveedor que faltaban (91), con su
+  instalación, importe sin IVA y número de factura.
+
 ## 04/11/2026 · Captaciones pendientes de reagendar
 
 Lo pidió un captador: a veces el cliente aún no puede dar fecha por motivos

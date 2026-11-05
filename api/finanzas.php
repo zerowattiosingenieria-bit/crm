@@ -156,7 +156,7 @@ function accFinanzas_(array $u, array $p): array {
     $coste = 0;
     foreach ($gs as $g) $coste += num_($g['importe']);
     $costePendiente = 0;
-    foreach ($gs as $g) if (normal_($g['estado_pago']) !== 'pagado') $costePendiente += num_($g['importe']);
+    foreach ($gs as $g) if (!in_array(normal_($g['estado_pago']), ['pagado', 'estimado'], true)) $costePendiente += num_($g['importe']);
     $margen = redondear_($base - $coste, 2);
     $cli = $clientes[txt_($op['cliente_id'])] ?? [];
     $com = $usuarios[txt_($op['comercial_id'])] ?? [];
@@ -208,7 +208,7 @@ function accFinanzas_(array $u, array $p): array {
     }
   }
   $pendientePago = 0;
-  foreach ($gastos as $g) if (normal_($g['estado_pago']) !== 'pagado') $pendientePago += num_($g['importe']);
+  foreach ($gastos as $g) if (!in_array(normal_($g['estado_pago']), ['pagado', 'estimado'], true)) $pendientePago += num_($g['importe']);
 
   /* --- gastos por categoría --- */
   $porCategoria = [];
@@ -257,7 +257,7 @@ function accFinanzas_(array $u, array $p): array {
     }
     $sale = 0;
     foreach ($gastos as $g) {
-      if (normal_($g['estado_pago']) !== 'pagado' && txt_($g['fecha']) !== '' && strcmp(sumarDias_(txt_($g['fecha']), 30), $limite) <= 0) $sale += num_($g['importe']);
+      if (!in_array(normal_($g['estado_pago']), ['pagado', 'estimado'], true) && txt_($g['fecha']) !== '' && strcmp(sumarDias_(txt_($g['fecha']), 30), $limite) <= 0) $sale += num_($g['importe']);
     }
     $fijos = redondear_($estructuraMes * ($d / 30), 2);
     return ['dias' => $d, 'entra' => redondear_($entra, 2), 'sale' => redondear_($sale, 2), 'estructura' => $fijos,

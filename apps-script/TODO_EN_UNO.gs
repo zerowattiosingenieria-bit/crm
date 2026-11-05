@@ -1553,7 +1553,7 @@ function exigir_(u, permiso) {
 function configVisible_(u) {
   const c = config_();
   if (permisos_(u).finanzas) return c;
-  const fuera = ['coste_estructura_mes', 'margen_objetivo_pct'];
+  const fuera = ['coste_estructura_mes', 'margen_objetivo_pct', 'catalogo_costes'];
   if (!veDirectorio_(u)) fuera.push('directorio_usuarios');
   const o = {};
   Object.keys(c).forEach(function (k) { if (fuera.indexOf(k) < 0) o[k] = c[k]; });
@@ -2422,7 +2422,7 @@ function accFinanzas_(u, p) {
       return !txt_(c.fecha_cobro) && txt_(c.fecha_prevista) && txt_(c.fecha_prevista) < hoy;
     }).reduce(function (a, c) { return a + num_(c.importe); }, 0);
     const coste = gs.reduce(function (a, g) { return a + num_(g.importe); }, 0);
-    const costePendiente = gs.filter(function (g) { return normal_(g.estado_pago) !== 'pagado'; })
+    const costePendiente = gs.filter(function (g) { return ['pagado', 'estimado'].indexOf(normal_(g.estado_pago)) < 0; })
                              .reduce(function (a, g) { return a + num_(g.importe); }, 0);
     const margen = redondear_(base - coste, 2);
     const cli = clientes[String(op.cliente_id)] || {};
@@ -2466,7 +2466,7 @@ function accFinanzas_(u, p) {
   const vencidoCobro = cobros.filter(function (c) {
     return !txt_(c.fecha_cobro) && txt_(c.fecha_prevista) && txt_(c.fecha_prevista) < hoy;
   }).reduce(function (a, c) { return a + num_(c.importe); }, 0);
-  const pendientePago = gastos.filter(function (g) { return normal_(g.estado_pago) !== 'pagado'; })
+  const pendientePago = gastos.filter(function (g) { return ['pagado', 'estimado'].indexOf(normal_(g.estado_pago)) < 0; })
                               .reduce(function (a, g) { return a + num_(g.importe); }, 0);
 
   /* --- gastos por categoría --- */
@@ -2511,7 +2511,7 @@ function accFinanzas_(u, p) {
       return !txt_(c.fecha_cobro) && txt_(c.fecha_prevista) && txt_(c.fecha_prevista) <= limite;
     }).reduce(function (a, c) { return a + num_(c.importe); }, 0);
     const sale = gastos.filter(function (g) {
-      return normal_(g.estado_pago) !== 'pagado' && txt_(g.fecha) && sumarDias_(txt_(g.fecha), 30) <= limite;
+      return ['pagado', 'estimado'].indexOf(normal_(g.estado_pago)) < 0 && txt_(g.fecha) && sumarDias_(txt_(g.fecha), 30) <= limite;
     }).reduce(function (a, g) { return a + num_(g.importe); }, 0);
     const fijos = redondear_(estructuraMes * (d / 30), 2);
     return {dias: d, entra: redondear_(entra, 2), sale: redondear_(sale, 2), estructura: fijos,

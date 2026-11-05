@@ -401,7 +401,7 @@ function exigir_(u, permiso) {
 function configVisible_(u) {
   const c = config_();
   if (permisos_(u).finanzas) return c;
-  const fuera = ['coste_estructura_mes', 'margen_objetivo_pct'];
+  const fuera = ['coste_estructura_mes', 'margen_objetivo_pct', 'catalogo_costes'];
   if (!veDirectorio_(u)) fuera.push('directorio_usuarios');
   const o = {};
   Object.keys(c).forEach(function (k) { if (fuera.indexOf(k) < 0) o[k] = c[k]; });
