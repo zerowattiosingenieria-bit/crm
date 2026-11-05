@@ -24,6 +24,9 @@ legalizaciones), y que las instalaciones ya hechas tengan sus gastos reales.
   equipos apuntados en la instalación (paneles, inversor, baterías,
   aerotermia, depósitos, cargador). La aerotermia de 22 kW se trata como
   trifásica (no existe monofásica).
+- **Pedido por proveedor**: en la misma ficha, el texto del pedido para cada
+  proveedor (SeisSolar, PolarStock…) con las piezas y el coste estimado, con
+  un botón para copiarlo y mandarlo por correo o WhatsApp.
 - **Dinero › Materiales y costes**: por pedir, ya instaladas (estimado frente
   a real) y el catálogo, que dirección puede ajustar a mano.
 - **Gastos «Estimado»**: nuevo estado de pago para costes sin factura. No

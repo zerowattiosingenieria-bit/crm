@@ -85,6 +85,39 @@ export function editorOperacion(operacion, cliente, alTerminar) {
   });
 }
 
+/** Texto del pedido para cada proveedor, listo para copiar y mandar (05/11/2026). */
+function pedidosProveedor(o, m) {
+  const cli = api.cliente(o.cliente_id) || {};
+  const piezas = m.lineas.filter(l => !['Mano de obra', 'Legalización'].includes(l.grupo));
+  const porProv = {};
+  piezas.forEach(l => {
+    const p = txt(((api.estado.config && catalogoCostes(api.estado.config)[l.clave]) || {}).proveedor).split(',')[0].trim() || 'Proveedor';
+    (porProv[p] = porProv[p] || []).push(l);
+  });
+  const textos = Object.entries(porProv).map(([p, ls]) => {
+    const base = ls.reduce((s, l) => s + l.importe, 0);
+    const t = 'Pedido para ' + p + ' · ZERO WATTIOS INGENIERÍA, S.L.\n' +
+      'Obra: ' + [txt(cli.direccion), txt(cli.municipio)].filter(Boolean).join(', ') +
+      (txt(o.referencia) ? ' (ref. ' + o.referencia + ')' : '') + '\n\n' +
+      ls.map(l => '• ' + miles(l.cantidad) + ' × ' + l.concepto + ' — aprox. ' + eur2(l.unitario) + '/ud sin IVA').join('\n') +
+      '\n\nImporte estimado: ' + eur2(base) + ' sin IVA (' + eur2(base * 1.21) + ' IVA incl.)\n' +
+      'Por favor, confirmadnos precio y plazo de entrega. Gracias.';
+    return {p, ls, base, t};
+  });
+  if (!textos.length) return null;
+  return h('div', {estilo: {marginTop: '12px'}},
+    h('h4', {estilo: {marginBottom: '6px'}}, 'Pedido por proveedor'),
+    h('p.nota', {estilo: {marginTop: 0}}, 'Lista de lo que hay que pedir a cada proveedor con el coste estimado. Copia el texto y pégalo en el correo o el WhatsApp.'),
+    h('.doble', textos.map(x => h('div.tarjeta', {estilo: {padding: '10px 12px'}},
+      h('div', {estilo: {display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px'}},
+        h('b', x.p + ' · ' + eur(x.base * 1.21) + ' IVA incl.'),
+        h('button.btn.mini', {onclick: async () => {
+          try { await navigator.clipboard.writeText(x.t); aviso('Pedido para ' + x.p + ' copiado.'); }
+          catch (e) { aviso('No se ha podido copiar: selecciona el texto a mano.', 'error'); }
+        }}, 'Copiar pedido')),
+      h('pre', {estilo: {whiteSpace: 'pre-wrap', fontSize: '12.5px', margin: '8px 0 0', fontFamily: 'inherit'}}, x.t)))));
+}
+
 /** Ficha de materiales a pedir con el coste estimado de cada pieza (solo dirección). */
 export function fichaMateriales(o, gastos) {
   const cat = catalogoCostes(api.estado.config);
@@ -108,6 +141,7 @@ export function fichaMateriales(o, gastos) {
       {clave: 'con_iva', et: 'Total IVA incl.', num: true, valor: x => x.importe * (1 + x.iva_pct / 100),
        pinta: x => h('b', eur2(x.importe * (1 + x.iva_pct / 100)))}
     ], m.lineas, {vacio: 'Sin piezas.', csv: 'materiales_' + (txt(o.referencia) || o.id) + '.csv'}),
+    pedidosProveedor(o, m),
     h('.triple', {estilo: {marginTop: '10px'}},
       kpi('Coste estimado', eur(m.total), 'IVA incl. · ' + eur(m.base) + ' sin IVA'),
       kpi('Gastos reales apuntados', eur(ap.real), ap.nReal + ' facturas (sin IVA)'),
