@@ -172,7 +172,7 @@ export function margenEstimado(o, cat) {
   const iva = Number(o.iva_pct) || 21;
   const venta = Number(o.base) || (Number(o.total) || 0) / (1 + iva / 100);
   if (!m.lineas.length || !venta) return null;
-  return {venta, coste: m.base, margen: venta - m.base, pct: (venta - m.base) / venta, faltan: m.faltan, bajo: (venta - m.base) / venta < MARGEN_MINIMO};
+  return {venta, coste: m.base, margen: venta - m.base, pct: (venta - m.base) / venta, faltan: (m.faltan || []).length, bajo: (venta - m.base) / venta < MARGEN_MINIMO};
 }
 
 /** Operaciones vivas con el margen estimado por debajo del mínimo, de peor a mejor. */

@@ -617,7 +617,7 @@ function tarjetaMargenBajo(ir) {
       return h('li', {estilo: {cursor: 'pointer'}, onclick: () => ir('cliente/' + o.cliente_id)},
         h('span.nivel.' + (m.pct < 0.25 ? 'alto' : 'medio')),
         h('span', h('b', txt(c.direccion) || txt(c.nombre) || o.id), ' · ' + api.etiquetaCatalogo('estadosOperacion', o.estado) +
-          ' · margen estimado ' + Math.round(m.pct * 100) + ' % (' + eur(m.margen) + ' sobre ' + eur(m.venta) + ' sin IVA)' +
+          ' · margen estimado ' + (m.pct * 100).toFixed(1).replace('.', ',') + ' % (' + eur(m.margen) + ' sobre ' + eur(m.venta) + ' sin IVA)' +
           (m.faltan ? ' · faltan precios en el catálogo' : '')));
     })),
     {subtitulo: 'Coste estimado con el catálogo de facturas de proveedores. Revisa precio o equipo antes de enviar o firmar.',

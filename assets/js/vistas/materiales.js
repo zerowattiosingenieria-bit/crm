@@ -60,7 +60,7 @@ export async function vistaMateriales({ir}) {
       {clave: 'margen', et: 'Margen', num: true, pinta: x => {
         const p = x.venta ? x.margen / x.venta : 0; const bajo = p < MARGEN_MINIMO;
         return h('div', h('b', {estilo: {color: bajo ? 'var(--mal)' : 'var(--bien)'}}, eur(x.margen)),
-          h('div.nota', {estilo: bajo ? {color: 'var(--mal)'} : {}}, Math.round(p * 100) + ' %' + (bajo ? ' · bajo el 35 %' : '')));
+          h('div.nota', {estilo: bajo ? {color: 'var(--mal)'} : {}}, (p * 100).toFixed(1).replace('.', ',') + ' %' + (bajo ? ' · bajo el 35 %' : '')));
       }}
     ], filas, {alPulsar: x => ir('cliente/' + x.o.cliente_id), csv: 'materiales_costes.csv',
                vacio: 'No hay instalaciones en este grupo.'});
