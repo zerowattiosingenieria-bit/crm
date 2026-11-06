@@ -320,6 +320,7 @@ table.datos tfoot td{font-weight:700; background:var(--papel-2); border-top:2px 
   border-bottom:1px solid var(--linea); font-size:13.5px}
 .lista-avisos li:last-child{border-bottom:0}
 .lista-avisos .nivel{width:7px; height:7px; border-radius:50%; margin-top:7px; flex:none}
+.lista-avisos .nivel.mal{background:var(--mal)} .lista-avisos .nivel.aviso{background:var(--aviso)} .lista-avisos .nivel.bien{background:var(--bien)}
 .lista-avisos .alto{background:var(--mal)} .lista-avisos .medio{background:var(--aviso)}
 .lista-avisos .bajo{background:var(--tx-3)}
 

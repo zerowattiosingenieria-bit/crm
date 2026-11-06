@@ -8,7 +8,7 @@
 import {h, poner, txt, num, eur, eur2, miles, fechaCorta, normal} from '../util.js';
 import * as api from '../api.js';
 import {tarjeta, tabla, kpi, kpis, etiquetaEstado, aviso, filtros} from '../ui.js';
-import {catalogoCostes, materialesDe, costeApuntado} from '../materiales.js';
+import {catalogoCostes, materialesDe, costeApuntado, MARGEN_MINIMO, ESTADOS_VIGILAR} from '../materiales.js';
 
 const ESTADOS_PEDIR = ['firmada', 'tramite', 'material', 'instalacion'];
 const ESTADOS_HECHAS = ['instalada', 'legalizada', 'cerrada'];
@@ -19,7 +19,7 @@ export async function vistaMateriales({ir}) {
   const est = {vista: 'pedir', texto: ''};
   const f = filtros([
     {id: 'vista', tipo: 'select', opciones: [['pedir', 'Por pedir (firmadas, en trámite, en instalación)'],
-      ['hechas', 'Ya instaladas: estimado frente a real'], ['todas', 'Todas las vendidas'], ['catalogo', 'Catálogo de costes']]},
+      ['hechas', 'Ya instaladas: estimado frente a real'], ['todas', 'Todas las vendidas'], ['bajo', 'Margen por debajo del 35 % (propuestas y en curso)'], ['catalogo', 'Catálogo de costes']]},
     {id: 'texto', et: 'Buscar por dirección o cliente…'}
   ], v => { Object.assign(est, v); pinta(); });
 
@@ -31,7 +31,7 @@ export async function vistaMateriales({ir}) {
     if (est.vista === 'catalogo') return poner(contenedor, vistaCatalogo(cat));
 
     const q = normal(est.texto);
-    const estados = est.vista === 'pedir' ? ESTADOS_PEDIR : (est.vista === 'hechas' ? ESTADOS_HECHAS : ESTADOS_PEDIR.concat(ESTADOS_HECHAS));
+    const estados = est.vista === 'pedir' ? ESTADOS_PEDIR : (est.vista === 'hechas' ? ESTADOS_HECHAS : (est.vista === 'bajo' ? ESTADOS_VIGILAR : ESTADOS_PEDIR.concat(ESTADOS_HECHAS)));
     const filas = api.estado.operaciones.filter(o => estados.includes(normal(o.estado))).map(o => {
       const c = api.cliente(o.cliente_id) || {};
       const m = materialesDe(o, cat);
@@ -40,7 +40,8 @@ export async function vistaMateriales({ir}) {
       const coste = ap.real || ap.estimado || m.base;
       return {o, c, m, ap, venta, coste, margen: venta - coste,
               nombre: [txt(c.direccion), txt(c.nombre)].filter(Boolean).join(' · ') || (txt(o.referencia) || o.id)};
-    }).filter(x => !q || normal(x.nombre + ' ' + txt(x.c.municipio)).includes(q))
+    }).filter(x => est.vista !== 'bajo' || (x.m.lineas.length && x.venta && (x.venta - x.m.base) / x.venta < MARGEN_MINIMO))
+      .filter(x => !q || normal(x.nombre + ' ' + txt(x.c.municipio)).includes(q))
       .sort((a, b) => txt(b.o.fecha_firma || b.o.creado).localeCompare(txt(a.o.fecha_firma || a.o.creado)));
 
     const t = tabla([
@@ -56,8 +57,11 @@ export async function vistaMateriales({ir}) {
       {clave: 'real', et: 'Coste real apuntado', num: true, valor: x => x.ap.real,
        pinta: x => x.ap.nReal ? h('div', h('b', eur(x.ap.real)), h('div.nota', x.ap.nReal + ' facturas'))
          : (x.ap.nEstimado ? h('div', h('span', eur(x.ap.estimado)), h('div.nota', 'estimado')) : h('span.nota', '—'))},
-      {clave: 'margen', et: 'Margen', num: true, pinta: x => h('b', {estilo: {color: x.margen >= 0 ? 'var(--bien)' : 'var(--mal)'}},
-        eur(x.margen))}
+      {clave: 'margen', et: 'Margen', num: true, pinta: x => {
+        const p = x.venta ? x.margen / x.venta : 0; const bajo = p < MARGEN_MINIMO;
+        return h('div', h('b', {estilo: {color: bajo ? 'var(--mal)' : 'var(--bien)'}}, eur(x.margen)),
+          h('div.nota', {estilo: bajo ? {color: 'var(--mal)'} : {}}, Math.round(p * 100) + ' %' + (bajo ? ' · bajo el 35 %' : '')));
+      }}
     ], filas, {alPulsar: x => ir('cliente/' + x.o.cliente_id), csv: 'materiales_costes.csv',
                vacio: 'No hay instalaciones en este grupo.'});
 

@@ -8,6 +8,7 @@ import {lineas, barras, embudo, progreso, anillo} from '../graficos.js';
 import {abrirArchivo} from './proyecto.js';
 import {bloqueLeadsCaptador, tarjetaLeadsDireccion} from './leads.js';
 import {avisoError} from '../ui.js';
+import {catalogoCostes, margenesBajos} from '../materiales.js';
 
 export async function vistaPanel({ir}) {
   const u = api.estado.usuario;
@@ -268,6 +269,8 @@ function panelDireccion({cabecera, r, al, an, fin, listos, esperando, solicitado
     tarjetaProyectosListos(listos, ir),
 
     tarjetaProyectosEnviados(enviados, ir),
+
+    tarjetaMargenBajo(ir),
 
     tarjetaProyectosEsperando(esperando, ir),
 
@@ -599,4 +602,24 @@ function tarjetaProyectosEnviados(enviados, ir) {
       return li;
     })),
     {subtitulo: 'Quién ha mandado qué. Marcarlo no manda nada al cliente: solo lo apunta'});
+}
+
+/** Propuestas y obras en curso cuyo margen estimado no llega al 35 %. Solo dirección. */
+function tarjetaMargenBajo(ir) {
+  if (!api.puede('finanzas')) return null;
+  const cat = catalogoCostes(api.estado.config);
+  if (!Object.keys(cat).length) return null;
+  const lista = margenesBajos(api.estado.operaciones, cat);
+  if (!lista.length) return null;
+  return tarjeta('Margen por debajo del 35 % (' + lista.length + ')',
+    h('ul.lista-avisos', lista.slice(0, 8).map(({o, m}) => {
+      const c = api.cliente(o.cliente_id) || {};
+      return h('li', {estilo: {cursor: 'pointer'}, onclick: () => ir('cliente/' + o.cliente_id)},
+        h('span.nivel.' + (m.pct < 0.25 ? 'alto' : 'medio')),
+        h('span', h('b', txt(c.direccion) || txt(c.nombre) || o.id), ' · ' + api.etiquetaCatalogo('estadosOperacion', o.estado) +
+          ' · margen estimado ' + Math.round(m.pct * 100) + ' % (' + eur(m.margen) + ' sobre ' + eur(m.venta) + ' sin IVA)' +
+          (m.faltan ? ' · faltan precios en el catálogo' : '')));
+    })),
+    {subtitulo: 'Coste estimado con el catálogo de facturas de proveedores. Revisa precio o equipo antes de enviar o firmar.',
+     acciones: [h('button.btn.mini', {onclick: () => ir('materiales')}, 'Ver todas')]});
 }

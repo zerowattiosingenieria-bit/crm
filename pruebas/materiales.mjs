@@ -1,5 +1,5 @@
 /* Prueba de la lista de materiales (assets/js/materiales.js): node pruebas/materiales.mjs */
-import {catalogoCostes, materialesDe, esTrifasica, costeApuntado} from '../assets/js/materiales.js';
+import {catalogoCostes, materialesDe, esTrifasica, costeApuntado, margenEstimado, margenesBajos} from '../assets/js/materiales.js';
 let fallos = 0;
 const ok = (c, m) => { if (!c) { fallos++; console.log('✗ ' + m); } else console.log('✓ ' + m); };
 const cat = catalogoCostes({catalogo_costes: JSON.stringify([
@@ -28,5 +28,13 @@ ok(tasas.iva_pct === 0, 'las tasas de Industria van sin IVA');
 ok(Math.abs(ae.total - (ae.base + ae.lineas.reduce((s, x) => s + x.importe * x.iva_pct / 100, 0))) < 0.02, 'total = base + IVA');
 const ap = costeApuntado([{importe: 100, estado_pago: 'pagado'}, {importe: 50, estado_pago: 'estimado'}]);
 ok(ap.real === 100 && ap.estimado === 50, 'separa gastos reales de estimados');
+const opA = {id: 'A', estado: 'propuesta', tipo: 'aero', aero_kw: 22, deposito_acs: 200, deposito_inercia: 100, total: ae.base * 1.21 * 1.2};
+const opB = {id: 'B', estado: 'propuesta', tipo: 'aero', aero_kw: 22, deposito_acs: 200, deposito_inercia: 100, total: ae.base * 1.21 * 2};
+const opC = {id: 'C', estado: 'legalizada', tipo: 'aero', aero_kw: 22, deposito_acs: 200, deposito_inercia: 100, total: ae.base * 1.21 * 1.1};
+ok(Math.abs(margenEstimado(opA, cat).pct - (1 - 1 / 1.2)) < 0.001 && margenEstimado(opA, cat).bajo, 'margen estimado del 17 % = bajo');
+ok(!margenEstimado(opB, cat).bajo, 'margen del 50 % no avisa');
+const bajos = margenesBajos([opA, opB, opC], cat);
+ok(bajos.length === 1 && bajos[0].o.id === 'A', 'solo avisa de propuestas y obras en curso, no de las ya legalizadas');
+ok(margenEstimado({estado: 'propuesta', total: 1000}, cat) === null, 'sin equipos no hay margen que estimar');
 console.log(fallos ? fallos + ' fallo(s)' : 'Todo bien.');
 process.exit(fallos ? 1 : 0);

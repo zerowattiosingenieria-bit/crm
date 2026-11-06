@@ -8,6 +8,23 @@ Esto no sustituye al manual: el manual cuenta cómo se usa el CRM hoy
 luego no hay manera de reconstruir.
 
 
+## 06/11/2026 · Aviso de margen por debajo del 35 %
+
+Lo pidió Nando: que el CRM le avise cuando una propuesta salga con un
+margen estimado inferior al 35 %. El margen se estima con el mismo
+catálogo de costes de las facturas de proveedores (venta sin IVA frente
+al coste estimado de material, montaje y legalización).
+
+- Panel de dirección: tarjeta «Margen por debajo del 35 %» con las
+  operaciones en propuesta, financiación, firmadas o en curso que no
+  llegan, de peor a mejor. Pulsando se abre la ficha.
+- Ficha del cliente: aviso en rojo encima de «Materiales a pedir» y el
+  porcentaje en el indicador de margen.
+- Materiales y costes: filtro nuevo «Margen por debajo del 35 %» y el
+  porcentaje en cada fila.
+- Solo lo ve quien tiene las finanzas abiertas (dirección). Las
+  operaciones sin equipos apuntados no se pueden estimar y no avisan.
+
 ## 05/11/2026 · Materiales a pedir y costes de cada instalación (solo dirección)
 
 Lo pidió Nando: que a dirección le salga, en cada proyecto, la lista de

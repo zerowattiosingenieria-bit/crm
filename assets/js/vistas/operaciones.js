@@ -3,7 +3,7 @@
 import {h, poner, txt, num, eur, eur2, miles, pct, fechaCorta, normal, suma, hoyISO} from '../util.js';
 import * as api from '../api.js';
 import {tarjeta, tabla, kpi, kpis, etiquetaEstado, marca, ventanaFormulario, aviso, filtros} from '../ui.js';
-import {catalogoCostes, materialesDe, costeApuntado} from '../materiales.js';
+import {catalogoCostes, materialesDe, costeApuntado, margenEstimado} from '../materiales.js';
 
 const camposOperacion = (cliente) => [
   {separador: 'Qué se vende'},
@@ -127,7 +127,11 @@ export function fichaMateriales(o, gastos) {
     h('h4', {estilo: {marginBottom: '6px'}}, 'Materiales a pedir'),
     h('p.nota', 'Apunta los equipos de la instalación (paneles, inversor, aerotermia…) para calcular la lista.'));
   const ap = costeApuntado(gastos || []);
+  const me = margenEstimado(o, cat);
   return h('div', {estilo: {marginTop: '14px'}},
+    me && me.bajo ? h('div', {estilo: {background: '#FDECEA', border: '1px solid var(--mal)', borderRadius: '8px', padding: '8px 12px', marginBottom: '10px'}},
+      h('b', {estilo: {color: 'var(--mal)'}}, 'Margen estimado ' + Math.round(me.pct * 100) + ' %: por debajo del 35 %. '),
+      h('span', 'Revisa el precio o el equipo antes de enviar o firmar.')) : null,
     h('h4', {estilo: {marginBottom: '6px'}}, 'Materiales a pedir y coste estimado'),
     h('p.nota', {estilo: {marginTop: 0}}, 'Precios de las últimas facturas de proveedores e instaladores. ' +
       'Coste para la empresa, no precio de venta.'),
@@ -146,7 +150,7 @@ export function fichaMateriales(o, gastos) {
       kpi('Coste estimado', eur(m.total), 'IVA incl. · ' + eur(m.base) + ' sin IVA'),
       kpi('Gastos reales apuntados', eur(ap.real), ap.nReal + ' facturas (sin IVA)'),
       kpi('Margen estimado', eur((num(o.base) || num(o.total) / 1.21) - m.base),
-        'venta sin IVA − coste estimado')));
+        me ? Math.round(me.pct * 100) + ' % · mínimo 35 %' : 'venta sin IVA − coste estimado', me ? {estado: me.bajo ? 'mal' : 'bien'} : undefined)));
 }
 
 const dato = (et, v) => h('.dato', h('.et', et), h('.v', v === '' || v === null || v === undefined ? '—' : v));

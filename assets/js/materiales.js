@@ -160,3 +160,24 @@ export function costeApuntado(gastos) {
   const suma = xs => Math.round(xs.reduce((s, g) => s + num(g.importe), 0) * 100) / 100;
   return {real: suma(real), estimado: suma(est), nReal: real.length, nEstimado: est.length};
 }
+
+/** Margen mínimo que acepta la dirección en una propuesta (06/11/2026). */
+export const MARGEN_MINIMO = 0.35;
+/** Estados en los que todavía se puede corregir el precio o el equipo. */
+export const ESTADOS_VIGILAR = ['propuesta', 'financiacion', 'firmada', 'tramite', 'material', 'instalacion'];
+
+/** Margen estimado de una operación: venta sin IVA frente al coste estimado del catálogo. */
+export function margenEstimado(o, cat) {
+  const m = materialesDe(o, cat);
+  const iva = Number(o.iva_pct) || 21;
+  const venta = Number(o.base) || (Number(o.total) || 0) / (1 + iva / 100);
+  if (!m.lineas.length || !venta) return null;
+  return {venta, coste: m.base, margen: venta - m.base, pct: (venta - m.base) / venta, faltan: m.faltan, bajo: (venta - m.base) / venta < MARGEN_MINIMO};
+}
+
+/** Operaciones vivas con el margen estimado por debajo del mínimo, de peor a mejor. */
+export function margenesBajos(operaciones, cat) {
+  return (operaciones || []).filter(o => ESTADOS_VIGILAR.includes(String(o.estado || '').toLowerCase()))
+    .map(o => ({o, m: margenEstimado(o, cat)})).filter(x => x.m && x.m.bajo)
+    .sort((a, b) => a.m.pct - b.m.pct);
+}
