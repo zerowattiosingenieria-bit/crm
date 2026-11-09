@@ -8,6 +8,34 @@ Esto no sustituye al manual: el manual cuenta cómo se usa el CRM hoy
 luego no hay manera de reconstruir.
 
 
+## 09/11/2026 · Visor 3D de la vivienda
+
+Lo pidió Nando: un visor como el de Open Solar al que se le da la
+dirección y saca la casa y el tejado, con el logo de Zero Wattios y el
+material que montamos de fotovoltaica y aerotermia, para enseñarlo en la
+visita.
+
+- Menú «Visor 3D» (dirección y comerciales) y botón «⌂ Visor 3D» en la
+  ficha del cliente, que lo abre ya con su dirección o coordenadas.
+- Dirección → coordenadas: las de la ficha o CartoCiudad (IGN), con
+  Nominatim de reserva. Planta y nº de plantas de cada volumen: Catastro
+  INSPIRE WFS (BuildingPart). Foto aérea: ortofoto PNOA del IGN pegada al
+  suelo y a los tejados. Todo público y sin clave, desde el navegador.
+- El tejado (2 aguas, 4 aguas, 1 agua o plano, inclinación y vuelo) se
+  dibuja sobre el rectángulo mínimo de cada volumen; la orientación real
+  de cada faldón sale de la planta. Por defecto se marcan los paneles en
+  el faldón principal que más mira al sur.
+- Paneles (Hanersun 625/620, Risen 590, Full Black 500, 450 W), inversor
+  SolaX/Deye automático o elegido, baterías T58, cargador; aerotermia
+  Domusa HT/HTT/EC PRO, Saunier Duval o Panasonic, cascada, ACS e inercia.
+  Si el cliente tiene instalación en el CRM, sale ya con sus equipos.
+- Sol por hora y mes con sombras, kWp, producción orientativa
+  (≈1.650 kWh/kWp corregido por orientación e inclinación), lista de
+  material, «Descargar imagen» (con logo) y «Copiar resumen».
+- three.js r128 va en assets/vendor/three. Prueba: pruebas/visor-navegador.js
+  (servicios externos simulados).
+
+
 ## 06/11/2026 · Aviso de margen por debajo del 35 %
 
 Lo pidió Nando: que el CRM le avise cuando una propuesta salga con un

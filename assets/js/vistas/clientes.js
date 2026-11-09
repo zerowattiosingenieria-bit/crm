@@ -397,6 +397,9 @@ export async function vistaCliente({id, ir, refrescar}) {
         ? h('a.btn', {href: comoLlegarHref(destinoDe(c)), target: '_blank', rel: 'noopener'}, '🚗 Ir')
         : null,
       h('button.btn', {onclick: acc.visita}, '📋 Modo visita'),
+      txt(c.coordenadas) || txt(c.direccion)
+        ? h('button.btn', {onclick: () => ir('visor/' + encodeURIComponent(c.id)), title: 'Casa en 3D con el tejado, las placas y la aerotermia'}, '⌂ Visor 3D')
+        : null,
       h('button.btn', {onclick: () => ir('avisar/' + encodeURIComponent(c.id)), title: 'Avisar a dirección de un problema con este cliente'}, '⚠ Incidencia'),
       h('button.btn.primario', {onclick: apuntar}, '+ Apuntar')));
 
@@ -466,7 +469,8 @@ function panelResumen(c, ops, seg, refrescar, {acc, abrir, ir}) {
             ? h('.acciones', {estilo: {marginTop: '8px'}},
                 h('a.btn.mini.lima', {href: comoLlegarHref(destinoDe(c)), target: '_blank',
                   rel: 'noopener'}, '🚗 Ir en coche'),
-                h('a.btn.mini', {href: mapsHref(destinoDe(c)), target: '_blank'}, 'Ver en el mapa'))
+                h('a.btn.mini', {href: mapsHref(destinoDe(c)), target: '_blank'}, 'Ver en el mapa'),
+                h('button.btn.mini', {onclick: () => ir('visor/' + encodeURIComponent(c.id))}, '⌂ Visor 3D'))
             : null)),
       dato('Coordenadas', txt(c.coordenadas)
         ? h('a', {href: mapsHref(c.coordenadas), target: '_blank'}, c.coordenadas) : ''),
