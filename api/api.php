@@ -153,7 +153,10 @@ function acciones_(): array {
     'historialCambios' => 'accHistorialCambios_', 'coordenadasZona' => 'accCoordenadasZona_',
     /* Incidencias para Rubén y dirección (incidencias.php, 03/11/2026) */
     'incidencias' => 'accIncidencias_', 'guardarIncidencia' => 'accGuardarIncidencia_', 'resolverIncidencia' => 'accResolverIncidencia_',
-    'guardarAvisoIncidencia' => 'accGuardarAvisoIncidencia_'
+    'guardarAvisoIncidencia' => 'accGuardarAvisoIncidencia_',
+    /* CAEs (Novawatt) y WIXER, y estado de la sincronización contable (tramites.php, 09/11/2026) */
+    'tramites' => 'accTramites_', 'guardarTramite' => 'accGuardarTramite_', 'importarTramites' => 'accImportarTramites_',
+    'syncContabilidad' => 'accSyncContabilidad_'
   ];
 }
 

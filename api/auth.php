@@ -389,7 +389,7 @@ function exigir_(array $u, string $permiso): void {
 function configVisible_(array $u): array {
   $c = config_();
   if (!empty(permisos_($u)['finanzas'])) return $c;
-  $fuera = ['coste_estructura_mes', 'margen_objetivo_pct', 'catalogo_costes', 'margen_min_pct', 'margen_max_pct'];
+  $fuera = ['coste_estructura_mes', 'margen_objetivo_pct', 'catalogo_costes', 'margen_min_pct', 'margen_max_pct', 'sync_contabilidad'];
   if (!veDirectorio_($u)) $fuera[] = 'directorio_usuarios';
   $o = [];
   foreach ($c as $k => $v) { if (!in_array($k, $fuera, true)) $o[$k] = $v; }

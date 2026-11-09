@@ -366,3 +366,10 @@ export function pasoPendiente(c) {
   if (_norm(c.proxima_accion) === 'sentada concertada') return false;
   return !yaCompro(c);
 }
+
+/* CAEs (Novawatt) y WIXER (09/11/2026): solo dirección; importes solo finanzas. */
+export const tramites = (tipo = '') => pedir('tramites', {tipo});
+export const guardarTramite = tramite => pedir('guardarTramite', {tramite});
+export const importarTramites = (tramites, opciones = {}) => pedir('importarTramites', {tramites, ...opciones});
+/* Estado de la sincronización de la contabilidad con BankTrack y Drive › FACTURACIÓN. */
+export const syncContabilidad = guardar => pedir('syncContabilidad', guardar ? {guardar} : {});

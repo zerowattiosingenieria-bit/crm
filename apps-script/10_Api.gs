@@ -148,7 +148,9 @@ function acciones_() {
     reagendarCita: accReagendarCita_, cancelarCita: accCancelarCita_, estadisticas: accEstadisticas_,
     historialCambios: accHistorialCambios_, coordenadasZona: accCoordenadasZona_,
     incidencias: accIncidencias_, guardarIncidencia: accGuardarIncidencia_, resolverIncidencia: accResolverIncidencia_,
-    guardarAvisoIncidencia: accGuardarAvisoIncidencia_
+    guardarAvisoIncidencia: accGuardarAvisoIncidencia_,
+    tramites: accTramites_, guardarTramite: accGuardarTramite_, importarTramites: accImportarTramites_,
+    syncContabilidad: accSyncContabilidad_
   };
 }
 

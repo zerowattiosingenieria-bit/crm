@@ -81,6 +81,7 @@ const ESQUEMA = [
   "CITAS_CAMBIOS" => ['id', 'captacion_id', 'cliente_id', 'captador_id', 'comercial_id', 'tipo', 'fecha_antes', 'hora_antes', 'fecha_nueva', 'hora_nueva', 'motivo', 'usuario_id', 'creado'],
   "CAMBIOS" => ['id', 'fecha', 'usuario_id', 'cliente_id', 'entidad', 'entidad_id', 'campo', 'antes', 'despues'],
   "COTIZACIONES" => ['id', 'cliente_id', 'version', 'datos', 'total', 'resumen', 'creado', 'creado_por'],
+  "TRAMITES" => ['id', 'tipo', 'numero', 'cliente_id', 'nombre', 'direccion', 'poblacion', 'producto', 'estado', 'progreso', 'checklist', 'datos', 'importe', 'fecha_cobro', 'carpeta_id', 'notas', 'creado', 'creado_por', 'modificado', 'modificado_por'],
   "INCIDENCIAS" => ['id', 'creado', 'creado_por', 'fecha', 'titulo', 'detalle', 'cliente_id', 'urgencia', 'estado', 'responsable_id', 'actualizacion', 'bitacora', 'solucion', 'resuelta', 'resuelta_por', 'origen', 'origen_id', 'modificado', 'modificado_por'],
   "PARTES" => ['id', 'fecha', 'usuario_id', 'rol', 'visitas', 'puertas', 'fichas', 'sentadas', 'sentadas_detalle', 'ventas', 'importe_vendido', 'resumen', 'analisis', 'propuestas_aplicadas', 'estado', 'creado', 'modificado'],
   "NOMINAS" => ['id', 'usuario_id', 'periodo', 'bruto', 'dietas', 'comisiones', 'otros', 'bruto_total', 'irpf_pct', 'irpf', 'ss_pct', 'ss', 'neto', 'estado', 'fecha_pago', 'url', 'archivo_id', 'archivo_nombre', 'subida_por', 'subida_fecha', 'detalle', 'notas', 'creado'],

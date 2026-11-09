@@ -28,13 +28,32 @@ export async function vistaContabilidad({ir}) {
   async function cargar(r) {
     poner(contenedor, cargando('Echando cuentas…'));
     const d = await api.pedir('finanzas', {desde: r.desde || '', hasta: r.hasta || hoyISO()});
+    const sync = await api.syncContabilidad().catch(() => null);
     poner(contenedor, h('div', h('.acciones', {estilo: {marginBottom: '10px'}}, botonPaqueteGestoria(d)),
-      h('.doble', tarjetaReserva(d), tarjetaFacturasProveedor(d)), pinta(d, ir)));
+      tarjetaSync(sync && sync.sync), h('.doble', tarjetaReserva(d), tarjetaFacturasProveedor(d)), pinta(d, ir)));
   }
 
   poner(caja, f.nodo, contenedor);
   await cargar(rango);
   return caja;
+}
+
+/* Fuentes de la contabilidad (09/11/2026, orden de Nando): «para la parte de
+   contabilidad siempre sincronízate con BankTrack, es donde Rubén suele subir
+   todo, y también en el Drive (dentro de FACTURACIÓN)». Lo escribe la tarea
+   diaria de sincronización; aquí se ve cuándo fue y qué no cuadra. */
+function tarjetaSync(s) {
+  const fila = (nombre, x) => h('li', h('b', nombre + ': '), x ? txt(x) : h('span.nota', 'sin datos'));
+  if (!s || !s.fecha) return tarjeta('Sincronización con BankTrack y Drive',
+    h('p.nota', 'Aún no se ha sincronizado. Se hace cada día laborable con los movimientos de BankTrack y las facturas de Drive › 01-FACTURACION.'));
+  const bt = s.banktrack || [], dr = s.drive || [], av = s.avisos || [];
+  return tarjeta('Sincronización con BankTrack y Drive', h('div',
+    h('ul', {estilo: {margin: '0 0 6px', paddingLeft: '18px'}},
+      bt.map(x => fila('BankTrack · ' + (x.cuenta || 'cuenta'), x.resumen)),
+      dr.map(x => fila('Drive · ' + (x.carpeta || 'FACTURACIÓN'), x.resumen))),
+    av.length ? h('div', h('b', 'No cuadra:'), h('ul', {estilo: {margin: '4px 0 0', paddingLeft: '18px'}}, av.map(a => h('li', a))))
+      : h('p.nota', 'Todo cuadra con el CRM.')),
+    {subtitulo: 'Última sincronización: ' + fechaCorta(s.fecha.slice(0, 10)) + ' ' + s.fecha.slice(11, 16)});
 }
 
 function pinta(d, ir) {

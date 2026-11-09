@@ -11,6 +11,7 @@ import {vistaOperaciones} from './vistas/operaciones.js';
 import {vistaCaptaciones} from './vistas/captaciones.js';
 import {vistaEstadisticas} from './vistas/estadisticas.js';
 import {vistaIncidencias, vistaAvisarIncidencia} from './vistas/incidencias.js';
+import {vistaTramites} from './vistas/tramites.js';
 import {vistaMapa} from './vistas/mapa.js';
 import {vistaDirectorio} from './vistas/directorio.js';
 import {vistaContabilidad, vistaFacturas, vistaGastos, vistaCobros} from './vistas/finanzas.js';
@@ -47,6 +48,7 @@ const VISTAS = {
   captaciones:  {titulo: 'Captaciones',        pinta: vistaCaptaciones},
   estadisticas: {titulo: 'Estadísticas',       pinta: vistaEstadisticas},
   incidencias:  {titulo: 'Incidencias',        pinta: vistaIncidencias,   permiso: 'direccion'},
+  tramites:     {titulo: 'CAEs y WIXER',       pinta: vistaTramites,      permiso: 'direccion'},
   avisar:       {titulo: 'Avisar de una incidencia', pinta: vistaAvisarIncidencia},
   mapa:         {titulo: 'Mapa de clientes',   pinta: vistaMapa,          permiso: 'direccion'},
   directorio:   {titulo: 'Directorio y puertas', pinta: vistaDirectorio,  permiso: 'directorio'},
@@ -133,6 +135,7 @@ function menuDe(rol) {
     {id: 'visor', et: 'Visor 3D', ico: '⌂'},
     {id: 'cotizador', et: 'Cotizador', ico: '€'},
     {id: 'operaciones', et: 'Instalaciones', ico: '⚡'},
+    {id: 'tramites', et: 'CAEs y WIXER', ico: '♻'},
     {id: 'captaciones', et: 'Captaciones', ico: '⚑'},
     {id: 'estadisticas', et: 'Estadísticas', ico: '▥'},
     {id: 'mapa', et: 'Mapa', ico: '◎'},
@@ -172,7 +175,7 @@ const K_MENU = 'zw.crm.menuSimple';
 const MENU_CORTO = {
   captador: ['hoy', 'agenda', 'captaciones', 'estadisticas', 'clientes', 'parte', 'avisar', 'perfil'],
   comercial: ['hoy', 'agenda', 'clientes', 'visor', 'cotizador', 'operaciones', 'parte', 'avisar', 'perfil'],
-  otro: ['hoy', 'panel', 'tablero', 'incidencias', 'agenda', 'clientes', 'operaciones', 'captaciones', 'estadisticas', 'cobros', 'banco', 'perfil']
+  otro: ['hoy', 'panel', 'tablero', 'incidencias', 'agenda', 'clientes', 'operaciones', 'tramites', 'captaciones', 'estadisticas', 'cobros', 'banco', 'perfil']
 };
 const menuCorto = () => { try { return localStorage.getItem(K_MENU) === '1'; } catch (e) { return false; } };
 

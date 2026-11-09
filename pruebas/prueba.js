@@ -1602,7 +1602,7 @@ comprobar('el ping no se apunta', logAhora().length === antes);
 
 /* Cada acción tiene su tipo: si mañana aparece una nueva que lee, hay que
    decidir aquí qué es. */
-const lecturas = ['misEquipos','datos','buscar','proyecto','descargarArchivo','proyectosPendientes',
+const lecturas = ['misEquipos','tramites','datos','buscar','proyecto','descargarArchivo','proyectosPendientes',
   'cifras','tareas','finanzas','partes','resumen','equipo','analitica','alertas','nominas','nominaDias',
   'descargarNomina','vacaciones','mapa','usuarios','registro','directorio','directorioFicha','puertas',
   'banco','copias','descargarCopia','agendaHuecos','comprobarCita','alertasBanco','catastro','duplicados','estadisticas','historialCambios','incidencias','cotizaciones','fichaTecnica'];

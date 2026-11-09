@@ -22,6 +22,7 @@ const INDICES = [
   'CITAS_CAMBIOS' => ['captacion_id', 'cliente_id', 'captador_id'],
   'CAMBIOS' => ['cliente_id'],
   'INCIDENCIAS' => ['estado', 'urgencia'],
+  'TRAMITES' => ['tipo', 'cliente_id'],
   'PARTES' => ['usuario_id', 'fecha'],
   'NOMINAS' => ['usuario_id', 'periodo'],
   'JORNADAS' => ['usuario_id', 'fecha'],

@@ -8,6 +8,30 @@ Esto no sustituye al manual: el manual cuenta cómo se usa el CRM hoy
 luego no hay manera de reconstruir.
 
 
+## 09/11/2026 · CAEs (Novawatt), WIXER y sincronización de la contabilidad
+
+Lo pidió Nando: «para la parte de contabilidad siempre sincronízate con
+BankTrack, es donde Rubén suele subir todo, y también en el Drive (dentro de
+facturación). Crea un apartado también para WIXER y para los CAEs», que Rubén
+lleva en Drive › 10-CAES (NOVAWATT) y 11 - WIXER con un Excel de seguimiento
+y una carpeta por casa.
+
+- Menú «CAEs y WIXER» (solo dirección; tabla TRAMITES, tipo cae | wixer).
+  CAE: los 10 papeles que pide Novawatt marcables uno a uno; el progreso sale
+  solo y con todos pasa a «Papeles completos». Estados: documentación,
+  completo, presentado, cobrado, cancelado. WIXER: compañía actual → nueva,
+  tarifa, potencia, peaje, CUPS, factura; estados pendiente, solicitado,
+  pte. facturar, finalizado, cancelado.
+- Cada expediente enlaza su carpeta de Drive y la ficha del cliente (se casa
+  por la dirección, aunque esté escrita distinto).
+- Importes (CAE a cobrar, WIXER facturado) solo con permiso de finanzas.
+- Nunca se guardan IBAN ni DNI: se quedan en el Excel y en Drive.
+- «importarTramites» da de alta o actualiza en bloque sin duplicar (por
+  carpeta, dirección o número): es lo que usa la sincronización diaria.
+- Contabilidad enseña la última sincronización con BankTrack y con Drive ›
+  01-FACTURACION y lo que no cuadra (acción «syncContabilidad», solo
+  finanzas; la escribe la tarea programada diaria).
+
 ## 09/11/2026 · Cotizador desde una dirección (y visor 3D en pruebas)
 
 Lo pidió Nando: un cotizador con nuestros precios y márgenes, que salga de
