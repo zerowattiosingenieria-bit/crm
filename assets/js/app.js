@@ -27,7 +27,7 @@ import {vistaTablero, tituloTablero} from './vistas/tablero.js';
 import {vistaHoy} from './vistas/hoy.js';
 import {vistaVisita, vaciarColaVisita} from './vistas/visita.js';
 import {vistaVisor3d, veVisor} from './vistas/visor3d.js';
-import {vistaCotizador} from './vistas/cotizador.js';
+import {vistaCotizador, veCotizador} from './vistas/cotizador.js';
 import {dictadoEnTodo} from './voz.js';
 
 export const VERSION = '1.0.0';
@@ -37,7 +37,7 @@ const VISTAS = {
   hoy:          {titulo: 'Hoy',                pinta: vistaHoy},
   visita:       {titulo: 'Modo visita',        pinta: vistaVisita},
   visor:        {titulo: 'Visor 3D',           pinta: vistaVisor3d,       permiso: 'visor'},
-  cotizador:    {titulo: 'Cotizador',          pinta: vistaCotizador},
+  cotizador:    {titulo: 'Cotizador',          pinta: vistaCotizador,     permiso: 'cotizador'},
   panel:        {titulo: 'Panel',              pinta: vistaPanel},
   tablero:      {titulo: 'Mi tablero',         pinta: vistaTablero},
   agenda:       {titulo: 'Agenda',             pinta: vistaAgenda},
@@ -193,6 +193,7 @@ function pintaMenu() {
     const def = VISTAS[x.id];
     if (def && def.permiso === 'direccion' && !api.esDireccion()) return null;
     if (def && def.permiso === 'visor') { if (!veVisor()) return null; }
+    else if (def && def.permiso === 'cotizador') { if (!veCotizador()) return null; }
     else if (def && def.permiso && def.permiso !== 'direccion' && !api.puede(def.permiso)) return null;
     return h('a.nav' + (vista === x.id ? '.activo' : ''),
       {onclick: () => { ir(x.id); $('#lateral').classList.remove('abierto'); }},
@@ -279,7 +280,7 @@ export async function pintar() {
   pintaMenu();
 
   const fuera = (def.permiso === 'direccion' && !api.esDireccion()) ||
-                (def.permiso === 'visor' ? !veVisor() : (def.permiso && def.permiso !== 'direccion' && !api.puede(def.permiso)));
+                (def.permiso === 'visor' ? !veVisor() : def.permiso === 'cotizador' ? !veCotizador() : (def.permiso && def.permiso !== 'direccion' && !api.puede(def.permiso)));
   if (fuera) {
     return poner($('#vista'), h('.tarjeta', h('.cuerpo',
       h('h2', 'Esta parte del CRM no está abierta para tu usuario'),

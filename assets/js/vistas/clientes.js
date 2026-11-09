@@ -1,6 +1,7 @@
 /* vistas/clientes.js — listado de clientes y ficha completa. */
 
 import {veVisor} from './visor3d.js';
+import {veCotizador} from './cotizador.js';
 import {h, poner, txt, num, eur, eur2, miles, pct, fechaCorta, fechaLarga, haceDias,
         normal, telHref, waHref, mapsHref, comoLlegarHref, destinoDe, suma, hoyISO,
         etiquetaCliente, recortar} from '../util.js';
@@ -411,7 +412,7 @@ export async function vistaCliente({id, ir, refrescar}) {
     ['vivienda', 'Vivienda y consumo', () => panelVivienda(c, acc.vivienda)],
     ['dimensionado', 'Ficha de dimensionado', () => panelFicha(c)],
     ['proyecto', 'Proyecto', () => panelProyecto(c)],
-    ['cotizar', 'Cotizar', () => { const caja = h('div', h('p.nota', 'Cargando el cotizador…'));
+    veCotizador() && ['cotizar', 'Cotizar', () => { const caja = h('div', h('p.nota', 'Cargando el cotizador…'));
       import('./cotizador.js').then(m => m.vistaCotizador({id: c.id})).then(n => poner(caja, n))
         .catch(e => poner(caja, h('p.nota', 'No se ha podido abrir el cotizador: ' + e.message))); return caja; }],
     veVisor() && ['simulacion', 'Simulación 3D', () => { const caja = h('div', h('p.nota', 'Cargando la simulación…'));

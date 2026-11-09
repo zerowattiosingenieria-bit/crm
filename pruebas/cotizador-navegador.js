@@ -50,6 +50,11 @@ async function entrar(nav, usuario) {
     if (!esDir && /Visor 3D/.test(menu)) fallos.push(u + ': un comercial (no Nando) ve el visor 3D');
     fallos.push(...p.errores);
   }
+  { const p = await entrar(nav, 'sandra');
+    await p.evaluate(() => { location.hash = '#cotizador'; }); await p.waitForTimeout(1200);
+    const menu = await p.textContent('#menu'); const hay = await p.locator('.cot-buscar').count();
+    console.log('sandra | cotizador en menú:', /Cotizador/.test(menu), '| abre:', hay);
+    if (/Cotizador/.test(menu) || hay) fallos.push('una captadora ve el cotizador'); }
   await nav.close();
   if (fallos.length) { console.log('FALLOS:\n' + fallos.join('\n')); process.exit(1); }
   console.log('Todo bien.');

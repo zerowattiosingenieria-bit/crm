@@ -15,7 +15,8 @@ una dirección con los datos del Catastro; los márgenes no los pueden ver
 comerciales ni captadores, y los directivos pueden moverlos para las
 propuestas futuras.
 
-- Menú «Cotizador» y pestaña «Cotizar» en la ficha del cliente.
+- Menú «Cotizador» y pestaña «Cotizar» en la ficha del cliente, solo para
+  comerciales y dirección (los captadores no lo ven).
 - Dirección → Catastro (m² construidos, año y uso por la sede electrónica;
   planta del tejado y plantas por el WFS de edificios) → equipo
   recomendado: aerotermia por m² y época de la casa (12/16/19/22 kW; la de

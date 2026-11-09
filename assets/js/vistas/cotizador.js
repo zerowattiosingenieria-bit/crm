@@ -53,7 +53,11 @@ function aeroKw(m2, anyo, plantas) {
   return kw <= 12 ? 12 : kw <= 16 ? 16 : kw <= 19 ? 19 : 22;
 }
 
+/** Solo comerciales y dirección (los captadores no). */
+export const veCotizador = () => normal((api.estado.usuario || {}).rol) !== 'captador';
+
 export async function vistaCotizador({id}) {
+  if (!veCotizador()) return h('.tarjeta', h('.cuerpo', h('p.nota', 'El cotizador es solo para comerciales y dirección.')));
   const cli = id ? api.cliente(id) : null;
   const dir = api.puede('finanzas');
   const cat = dir ? catalogoCostes(api.estado.config) : {};
