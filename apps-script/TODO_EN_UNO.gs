@@ -9374,7 +9374,20 @@ const DATOS_TRAMITE = {
 };
 const PROHIBIDOS_TRAMITE = ['iban', 'dni', 'cuenta', 'tarjeta'];
 
-function exigirDireccionTra_(u) { if ((permisos_(u).alcance || '') !== 'todo') throw new Error('Los CAEs y WIXER solo los ve dirección.'); }
+const RESPONSABLE_TRAMITE = {cae: 'abraham', wixer: 'sandra'};
+const VEN_TRAMITE = {cae: 'abraham', wixer: 'sandra,abraham'};
+function tiposVisiblesTra_(u) {
+  if ((permisos_(u).alcance || '') === 'todo') return TIPOS_TRAMITE.slice();
+  const yo = normal_(u.usuario), cfg = config_();
+  return TIPOS_TRAMITE.filter(function (t) {
+    const lista = (txt_(cfg['tramites_' + t + '_usuarios']) || VEN_TRAMITE[t]).split(',').map(normal_);
+    return yo && lista.indexOf(yo) >= 0;
+  });
+}
+function exigirDireccionTra_(u, tipo) {
+  const ve = tiposVisiblesTra_(u);
+  if (!ve.length || (tipo && ve.indexOf(tipo) < 0)) throw new Error('Este apartado no está abierto para tu usuario.');
+}
 function jsonTra_(v) {
   if (v && typeof v === 'object') return v;
   const s = txt_(v); if (!s) return {};
@@ -9456,7 +9469,8 @@ function accTramites_(u, p) {
   const fin = !!permisos_(u).finanzas;
   const clientes = indexar_(leer_('CLIENTES')), usuarios = indexar_(leer_('USUARIOS'));
   const tipo = normal_(p.tipo);
-  const lista = leer_('TRAMITES').filter(function (t) { return !tipo || normal_(t.tipo) === tipo; })
+  const ve = tiposVisiblesTra_(u);
+  const lista = leer_('TRAMITES').filter(function (t) { return ve.indexOf(normal_(t.tipo)) >= 0 && (!tipo || normal_(t.tipo) === tipo); })
     .map(function (t) { return tramitePublico_(t, clientes, usuarios, fin); })
     .sort(function (a, b) {
       const ca = a.estado === 'cancelado' ? 1 : 0, cb = b.estado === 'cancelado' ? 1 : 0;
@@ -9465,7 +9479,7 @@ function accTramites_(u, p) {
       return (parseInt(b.numero, 10) || 0) - (parseInt(a.numero, 10) || 0) || b.creado.localeCompare(a.creado);
     });
   const cuentas = {};
-  TIPOS_TRAMITE.forEach(function (t) {
+  ve.forEach(function (t) {
     const de = lista.filter(function (x) { return x.tipo === t && x.estado !== 'cancelado'; });
     const c = {total: de.length};
     ESTADOS_TRAMITE[t].forEach(function (e) { c[e] = de.filter(function (x) { return x.estado === e; }).length; });
@@ -9478,7 +9492,12 @@ function accTramites_(u, p) {
     cuentas[t] = c;
   });
   const cfg = config_();
-  return {ok: true, tramites: lista, cuentas: cuentas, finanzas: fin, docs_cae: DOCS_CAE, estados: ESTADOS_TRAMITE,
+  const resp = {};
+  ve.forEach(function (t) {
+    const r = leer_('USUARIOS').filter(function (x) { return normal_(x.usuario) === RESPONSABLE_TRAMITE[t]; })[0];
+    resp[t] = txt_(r && r.nombre) || RESPONSABLE_TRAMITE[t];
+  });
+  return {ok: true, tramites: lista, cuentas: cuentas, finanzas: fin, tipos: ve, responsables: resp, docs_cae: DOCS_CAE, estados: ESTADOS_TRAMITE,
     carpetas: {cae: txt_(cfg.drive_caes) || '1NjmgQN7WI7ytY7rfr4e-xXL3asco03Bs', wixer: txt_(cfg.drive_wixer) || '1zhxXbPrhJSWuQAuBj6ce-4EARvQAcgRr'},
     sincronizado: txt_(cfg.tramites_sincronizado)};
 }
@@ -9529,6 +9548,7 @@ function accGuardarTramite_(u, p) {
     actual = leer_('TRAMITES').filter(function (t) { return txt_(t.id) === txt_(d.id); })[0] || null;
     if (!actual) return {ok: false, error: 'Ese trámite ya no existe.'};
   }
+  exigirDireccionTra_(u, actual ? txt_(actual.tipo) : normal_(d.tipo));
   if (txt_(d.cliente_id) && !leer_('CLIENTES').some(function (c) { return txt_(c.id) === txt_(d.cliente_id); })) return {ok: false, error: 'Ese cliente no existe.'};
   const c = cambiosTra_(d, actual, fin, false);
   if ((actual ? actual.tipo : c.tipo) === 'cae' && c.checklist) {
@@ -9567,7 +9587,7 @@ function accImportarTramites_(u, p) {
   filas.forEach(function (d) {
     if (!d || typeof d !== 'object') return;
     const tipo = normal_(d.tipo);
-    if (TIPOS_TRAMITE.indexOf(tipo) < 0) return;
+    if (tiposVisiblesTra_(u).indexOf(tipo) < 0) return;
     const k = claveDireccionTra_(d.direccion);
     let actual = txt_(d.carpeta_id) ? todos.filter(function (t) { return normal_(t.tipo) === tipo && txt_(t.carpeta_id) === txt_(d.carpeta_id); })[0] : null;
     if (!actual && k) actual = todos.filter(function (t) { return normal_(t.tipo) === tipo && mismaDireccionTra_(k, claveDireccionTra_(t.direccion)); })[0];

@@ -37,9 +37,27 @@ const DATOS_TRAMITE = [
 /* Lo que no entra nunca, venga de donde venga. */
 const PROHIBIDOS_TRAMITE = ['iban', 'dni', 'cuenta', 'tarjeta'];
 
+/* Quién ve qué (orden de Nando, 09/11/2026): «el responsable de los CAEs es
+   Abraham, y lo ve también dirección, el resto no. Y el responsable de WIXER
+   es Sandra, y lo ve dirección y Abraham, el resto no». Se puede cambiar en
+   la configuración (tramites_cae_usuarios / tramites_wixer_usuarios, por
+   usuario de entrada separados por comas). */
+const RESPONSABLE_TRAMITE = ['cae' => 'abraham', 'wixer' => 'sandra'];
+const VEN_TRAMITE = ['cae' => 'abraham', 'wixer' => 'sandra,abraham'];
+
 function esDireccionTra_(array $u): bool { return (permisos_($u)['alcance'] ?? '') === 'todo'; }
-function exigirDireccionTra_(array $u): void {
-  if (!esDireccionTra_($u)) throw new Exception('Los CAEs y WIXER solo los ve dirección.');
+function tiposVisiblesTra_(array $u): array {
+  if (esDireccionTra_($u)) return TIPOS_TRAMITE;
+  $yo = normal_($u['usuario'] ?? '');
+  $cfg = config_();
+  return array_values(array_filter(TIPOS_TRAMITE, function ($t) use ($yo, $cfg) {
+    $lista = array_map('normal_', explode(',', txt_($cfg['tramites_' . $t . '_usuarios'] ?? '') ?: VEN_TRAMITE[$t]));
+    return $yo !== '' && in_array($yo, $lista, true);
+  }));
+}
+function exigirDireccionTra_(array $u, string $tipo = ''): void {
+  $ve = tiposVisiblesTra_($u);
+  if (!count($ve) || ($tipo !== '' && !in_array($tipo, $ve, true))) throw new Exception('Este apartado no está abierto para tu usuario.');
 }
 
 function jsonTra_($v): array {
@@ -131,8 +149,9 @@ function accTramites_(array $u, array $p): array {
   $clientes = indexar_(leer_('CLIENTES'));
   $usuarios = indexar_(leer_('USUARIOS'));
   $tipo = normal_($p['tipo'] ?? '');
+  $ve = tiposVisiblesTra_($u);
   $lista = array_map(fn($t) => tramitePublico_($t, $clientes, $usuarios, $fin),
-    array_values(array_filter(leer_('TRAMITES'), fn($t) => $tipo === '' || normal_($t['tipo'] ?? '') === $tipo)));
+    array_values(array_filter(leer_('TRAMITES'), fn($t) => in_array(normal_($t['tipo'] ?? ''), $ve, true) && ($tipo === '' || normal_($t['tipo'] ?? '') === $tipo))));
   $lista = ordenar_($lista, function ($a, $b) {
     $ca = $a['estado'] === 'cancelado' ? 1 : 0; $cb = $b['estado'] === 'cancelado' ? 1 : 0;
     if ($ca !== $cb) return $ca - $cb;
@@ -140,7 +159,7 @@ function accTramites_(array $u, array $p): array {
     return (int)$b['numero'] <=> (int)$a['numero'] ?: strcmp($b['creado'], $a['creado']);
   });
   $cuentas = [];
-  foreach (TIPOS_TRAMITE as $t) {
+  foreach ($ve as $t) {
     $de = array_values(array_filter($lista, fn($x) => $x['tipo'] === $t && $x['estado'] !== 'cancelado'));
     $c = ['total' => count($de)];
     foreach (ESTADOS_TRAMITE[$t] as $e) $c[$e] = count(array_filter($de, fn($x) => $x['estado'] === $e));
@@ -153,7 +172,12 @@ function accTramites_(array $u, array $p): array {
     $cuentas[$t] = $c;
   }
   $cfg = config_();
-  return ['ok' => true, 'tramites' => $lista, 'cuentas' => $cuentas, 'finanzas' => $fin,
+  $resp = [];
+  foreach ($ve as $t) {
+    $r = buscar1_('USUARIOS', fn($x) => normal_($x['usuario'] ?? '') === RESPONSABLE_TRAMITE[$t]);
+    $resp[$t] = txt_($r['nombre'] ?? '') ?: ucfirst(RESPONSABLE_TRAMITE[$t]);
+  }
+  return ['ok' => true, 'tramites' => $lista, 'cuentas' => $cuentas, 'finanzas' => $fin, 'tipos' => $ve, 'responsables' => $resp,
     'docs_cae' => DOCS_CAE, 'estados' => ESTADOS_TRAMITE,
     'carpetas' => ['cae' => txt_($cfg['drive_caes'] ?? '') ?: '1NjmgQN7WI7ytY7rfr4e-xXL3asco03Bs',
                    'wixer' => txt_($cfg['drive_wixer'] ?? '') ?: '1zhxXbPrhJSWuQAuBj6ce-4EARvQAcgRr'],
@@ -210,6 +234,7 @@ function accGuardarTramite_(array $u, array $p): array {
     $actual = buscar1_('TRAMITES', fn($t) => mismo_($t['id'], $d['id']));
     if (!$actual) return ['ok' => false, 'error' => 'Ese trámite ya no existe.'];
   }
+  exigirDireccionTra_($u, $actual ? txt_($actual['tipo']) : normal_($d['tipo'] ?? ''));
   if (($d['cliente_id'] ?? '') !== '' && !buscar1_('CLIENTES', fn($c) => mismo_($c['id'], $d['cliente_id']))) {
     return ['ok' => false, 'error' => 'Ese cliente no existe.'];
   }
@@ -256,7 +281,7 @@ function accImportarTramites_(array $u, array $p): array {
   foreach ($filas as $d) {
     if (!is_array($d)) continue;
     $tipo = normal_($d['tipo'] ?? '');
-    if (!in_array($tipo, TIPOS_TRAMITE, true)) continue;
+    if (!in_array($tipo, tiposVisiblesTra_($u), true)) continue;
     $actual = null;
     $k = claveDireccionTra_($d['direccion'] ?? '');
     foreach ($todos as $t) {

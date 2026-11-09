@@ -11,7 +11,7 @@ import {vistaOperaciones} from './vistas/operaciones.js';
 import {vistaCaptaciones} from './vistas/captaciones.js';
 import {vistaEstadisticas} from './vistas/estadisticas.js';
 import {vistaIncidencias, vistaAvisarIncidencia} from './vistas/incidencias.js';
-import {vistaTramites} from './vistas/tramites.js';
+import {vistaTramites, veTramites} from './vistas/tramites.js';
 import {vistaMapa} from './vistas/mapa.js';
 import {vistaDirectorio} from './vistas/directorio.js';
 import {vistaContabilidad, vistaFacturas, vistaGastos, vistaCobros} from './vistas/finanzas.js';
@@ -48,7 +48,7 @@ const VISTAS = {
   captaciones:  {titulo: 'Captaciones',        pinta: vistaCaptaciones},
   estadisticas: {titulo: 'Estadísticas',       pinta: vistaEstadisticas},
   incidencias:  {titulo: 'Incidencias',        pinta: vistaIncidencias,   permiso: 'direccion'},
-  tramites:     {titulo: 'CAEs y WIXER',       pinta: vistaTramites,      permiso: 'direccion'},
+  tramites:     {titulo: 'CAEs y WIXER',       pinta: vistaTramites,      permiso: 'tramites'},
   avisar:       {titulo: 'Avisar de una incidencia', pinta: vistaAvisarIncidencia},
   mapa:         {titulo: 'Mapa de clientes',   pinta: vistaMapa,          permiso: 'direccion'},
   directorio:   {titulo: 'Directorio y puertas', pinta: vistaDirectorio,  permiso: 'directorio'},
@@ -93,6 +93,7 @@ function menuDe(rol) {
       {id: 'estadisticas', et: 'Estadísticas del equipo', ico: '▥'},
       {id: 'clientes', et: 'Mis clientes', ico: '☰'},
       {id: 'parte', et: 'Parte del día', ico: '✓'},
+      {id: 'tramites', et: 'CAEs y WIXER', ico: '♻'},
       {id: 'avisar', et: 'Avisar incidencia', ico: '⚠'},
       {grupo: 'Lo mío'},
       {id: 'resumen', et: 'Mi resumen', ico: '◔'},
@@ -173,7 +174,7 @@ function rutaActual() {
    abajo del menú y queda guardado en ese aparato. */
 const K_MENU = 'zw.crm.menuSimple';
 const MENU_CORTO = {
-  captador: ['hoy', 'agenda', 'captaciones', 'estadisticas', 'clientes', 'parte', 'avisar', 'perfil'],
+  captador: ['hoy', 'agenda', 'captaciones', 'estadisticas', 'clientes', 'parte', 'tramites', 'avisar', 'perfil'],
   comercial: ['hoy', 'agenda', 'clientes', 'visor', 'cotizador', 'operaciones', 'parte', 'avisar', 'perfil'],
   otro: ['hoy', 'panel', 'tablero', 'incidencias', 'agenda', 'clientes', 'operaciones', 'tramites', 'captaciones', 'estadisticas', 'cobros', 'banco', 'perfil']
 };
@@ -197,6 +198,7 @@ function pintaMenu() {
     if (def && def.permiso === 'direccion' && !api.esDireccion()) return null;
     if (def && def.permiso === 'visor') { if (!veVisor()) return null; }
     else if (def && def.permiso === 'cotizador') { if (!veCotizador()) return null; }
+    else if (def && def.permiso === 'tramites') { if (!veTramites()) return null; }
     else if (def && def.permiso && def.permiso !== 'direccion' && !api.puede(def.permiso)) return null;
     return h('a.nav' + (vista === x.id ? '.activo' : ''),
       {onclick: () => { ir(x.id); $('#lateral').classList.remove('abierto'); }},
@@ -283,7 +285,7 @@ export async function pintar() {
   pintaMenu();
 
   const fuera = (def.permiso === 'direccion' && !api.esDireccion()) ||
-                (def.permiso === 'visor' ? !veVisor() : def.permiso === 'cotizador' ? !veCotizador() : (def.permiso && def.permiso !== 'direccion' && !api.puede(def.permiso)));
+                (def.permiso === 'visor' ? !veVisor() : def.permiso === 'cotizador' ? !veCotizador() : def.permiso === 'tramites' ? !veTramites() : (def.permiso && def.permiso !== 'direccion' && !api.puede(def.permiso)));
   if (fuera) {
     return poner($('#vista'), h('.tarjeta', h('.cuerpo',
       h('h2', 'Esta parte del CRM no está abierta para tu usuario'),

@@ -16,7 +16,14 @@ facturación). Crea un apartado también para WIXER y para los CAEs», que Rubé
 lleva en Drive › 10-CAES (NOVAWATT) y 11 - WIXER con un Excel de seguimiento
 y una carpeta por casa.
 
-- Menú «CAEs y WIXER» (solo dirección; tabla TRAMITES, tipo cae | wixer).
+- Menú «CAEs y WIXER» (tabla TRAMITES, tipo cae | wixer). Quién lo ve
+  (orden de Nando): CAEs → responsable Abraham + dirección; WIXER →
+  responsable Sandra, lo ven también Abraham y dirección; nadie más. Se
+  cambia en configuración (tramites_cae_usuarios, tramites_wixer_usuarios).
+- Muy visual: arriba un embudo con cuántos hay en cada paso (tocar uno
+  filtra) y en cada expediente una fila de pasos coloreada; un toque en el
+  paso cambia el estado. Lo actualizan el responsable y dirección, y queda
+  quién y cuándo.
   CAE: los 10 papeles que pide Novawatt marcables uno a uno; el progreso sale
   solo y con todos pasa a «Papeles completos». Estados: documentación,
   completo, presentado, cobrado, cancelado. WIXER: compañía actual → nueva,

@@ -27,16 +27,22 @@ const DATOS_WIXER = [['compania_actual', 'Compañía actual'], ['compania_nueva'
   ['ref_catastral', 'Ref. catastral'], ['factura', 'Nº factura']];
 const DATOS_CAE = [['contrato', 'Nº contrato'], ['fecha_financiacion', 'Fecha financiación']];
 const carpetaUrl = id => id ? 'https://drive.google.com/drive/folders/' + id : '';
+/* Mismo reparto que el servidor: CAEs → Abraham (+ dirección); WIXER → Sandra y Abraham (+ dirección). */
+const VEN = {cae: ['abraham'], wixer: ['sandra', 'abraham']};
+export const tiposTramites = () => api.esDireccion() ? ['cae', 'wixer']
+  : ['cae', 'wixer'].filter(t => VEN[t].includes(normal((api.estado.usuario || {}).usuario)));
+export const veTramites = () => tiposTramites().length > 0;
 const etEstado = e => marca((ESTADO[e] || [e])[0], (ESTADO[e] || [])[1]);
 
 export async function vistaTramites({ir, id}) {
   const caja = h('div', cargando('Cargando CAEs y WIXER…'));
-  const est = {tipo: id === 'wixer' ? 'wixer' : 'cae', buscar: '', ver: 'activos'};
+  const est = {tipo: id === 'wixer' ? 'wixer' : 'cae', buscar: '', ver: 'activos', estado: ''};
   let datos = null;
 
   async function cargar() {
     try { datos = await api.tramites(); } catch (e) { return poner(caja, h('p.nota', 'No se han podido cargar: ' + e.message)); }
     if (!datos || !datos.ok) return poner(caja, h('p.nota', (datos && datos.error) || 'No se han podido cargar.'));
+    if (!(datos.tipos || []).includes(est.tipo)) est.tipo = (datos.tipos || ['cae'])[0];
     pinta();
   }
 
@@ -112,17 +118,43 @@ export async function vistaTramites({ir, id}) {
     ]);
   }
 
+  /* El estado se ve y se cambia de un toque: una fila de pasos (los hechos en
+     verde, el actual resaltado). Lo mueve el responsable o dirección. */
+  async function cambiarEstado(t, e, boton) {
+    if (e === t.estado) return;
+    boton.disabled = true;
+    try {
+      const r = await api.guardarTramite({id: t.id, estado: e});
+      if (!r.ok) throw new Error(r.error);
+      aviso((t.direccion || 'Expediente') + ' → ' + ESTADO[e][0]);
+      const d2 = await api.tramites(); if (d2 && d2.ok) datos = d2;
+      pinta();
+    } catch (err) { avisoError(err); boton.disabled = false; }
+  }
+
+  function pasos(t) {
+    const orden = datos.estados[t.tipo].filter(e => e !== 'cancelado');
+    const i = orden.indexOf(t.estado);
+    if (t.estado === 'cancelado') return h('.tr-pasos', h('span.tr-paso.cancelado', '✕ Cancelado'),
+      h('button.tr-paso.reabrir', {onclick: ev => cambiarEstado(t, orden[0], ev.currentTarget)}, '↺ Reactivar'));
+    return h('.tr-pasos', orden.map((e, k) => h('button.tr-paso' + (k < i ? '.hecho' : k === i ? '.actual' : ''),
+      {title: k === i ? 'Estado actual' : 'Pasar a «' + ESTADO[e][0] + '»', onclick: ev => cambiarEstado(t, e, ev.currentTarget)},
+      h('span.tr-num', k < i ? '✓' : String(k + 1)), ESTADO[e][0])));
+  }
+
   function filaBase(t, cuerpo) {
     const cli = t.cliente_id ? h('a', {href: '#cliente/' + encodeURIComponent(t.cliente_id)}, 'Ficha') : h('span.nota', 'sin ficha en el CRM');
-    return h('.tr-fila' + (t.estado === 'cancelado' ? '.cancelado' : ''),
+    return h('.tr-fila.e-' + t.estado,
       h('.tr-cab',
         h('div', {estilo: {minWidth: 0}},
           h('b', (t.numero ? t.numero + ' · ' : '') + (t.direccion || '—')), t.poblacion ? h('span.nota', ' · ' + t.poblacion) : null,
           h('div.nota', t.nombre || t.cliente || '')),
-        h('.tr-der', etEstado(t.estado),
+        h('.tr-der',
           datos.finanzas && t.importe ? h('b', eur2(t.importe)) : null)),
+      pasos(t),
       ...cuerpo,
       t.notas ? h('div.nota', '📝 ' + t.notas) : null,
+      t.modificado && t.modificado_por ? h('div.nota', 'Actualizado por ' + t.modificado_por + ' el ' + fechaCorta(t.modificado.slice(0, 10)) + ' ' + t.modificado.slice(11, 16)) : null,
       h('.acciones.tr-acc',
         cli,
         t.carpeta_url ? h('a', {href: t.carpeta_url, target: '_blank', rel: 'noopener'}, '📁 Drive') : h('span.nota', 'sin carpeta'),
@@ -132,33 +164,35 @@ export async function vistaTramites({ir, id}) {
   const listaCaja = h('div');
   function pintaLista() {
     const lista = datos.tramites.filter(t => t.tipo === est.tipo)
-      .filter(t => est.ver === 'todos' || (est.ver === 'activos' ? !['cancelado', 'cobrado', 'finalizado'].includes(t.estado) : ['cobrado', 'finalizado'].includes(t.estado)))
+      .filter(t => est.estado ? t.estado === est.estado : (est.ver === 'todos' || (est.ver === 'activos' ? !['cancelado', 'cobrado', 'finalizado'].includes(t.estado) : ['cobrado', 'finalizado'].includes(t.estado))))
       .filter(t => !est.buscar || normal([t.direccion, t.nombre, t.cliente, t.poblacion, t.numero, t.producto].join(' ')).includes(normal(est.buscar)));
     poner(listaCaja, tarjeta(est.tipo === 'cae' ? 'Expedientes CAE' : 'Cambios de compañía eléctrica',
       lista.length ? h('.tr-lista', lista.map(est.tipo === 'cae' ? filaCae : filaWixer)) : h('p.nota', 'No hay nada con ese filtro.'),
-      {subtitulo: datos.sincronizado ? 'Sincronizado con el Drive de Rubén el ' + fechaCorta(datos.sincronizado.slice(0, 10)) + ' ' + datos.sincronizado.slice(11, 16) : 'Aún sin sincronizar con Drive'}));
+      {subtitulo: 'Responsable: ' + ((datos.responsables || {})[est.tipo] || '—') + ' · ' + (datos.sincronizado ? 'Sincronizado con el Drive de Rubén el ' + fechaCorta(datos.sincronizado.slice(0, 10)) + ' ' + datos.sincronizado.slice(11, 16) : 'Aún sin sincronizar con Drive')}));
   }
 
   function pinta() {
     const c = datos.cuentas[est.tipo] || {};
     const pestanas = h('.acciones.tr-pest',
-      ['cae', 'wixer'].map(tp => h('button.btn' + (est.tipo === tp ? '.primario' : ''), {onclick: () => { est.tipo = tp; pinta(); }},
+      (datos.tipos || ['cae', 'wixer']).map(tp => h('button.btn' + (est.tipo === tp ? '.primario' : ''), {onclick: () => { est.tipo = tp; est.estado = ''; pinta(); }},
         tp === 'cae' ? 'CAEs (Novawatt)' : 'WIXER (cambio de compañía)')),
       h('a.btn', {href: carpetaUrl(datos.carpetas[est.tipo]), target: '_blank', rel: 'noopener'}, '📁 Carpeta en Drive'),
       h('button.btn', {onclick: () => ventanaTramite(null)}, '+ Nuevo'));
-    const resumen = est.tipo === 'cae'
-      ? kpis(kpi('Expedientes', c.total || 0), kpi('Faltan papeles', c.docs_pendientes || 0, null, {estado: c.docs_pendientes ? 'aviso' : ''}),
-          kpi('Completos', c.completo || 0), kpi('Presentados', c.presentado || 0), kpi('Cobrados', c.cobrado || 0),
-          datos.finanzas ? kpi('Pendiente de cobrar', eur2(c.importe_pendiente || 0), 'IVA incluido') : null)
-      : kpis(kpi('Cambios', c.total || 0), kpi('Pendiente de solicitar', c.pendiente || 0, null, {estado: c.pendiente ? 'aviso' : ''}),
-          kpi('Solicitados', c.solicitado || 0), kpi('Pte. facturar', c.pte_facturar || 0), kpi('Finalizados', c.finalizado || 0),
-          datos.finanzas ? kpi('Facturado', eur2(c.importe || 0), 'IVA incluido') : null);
+    /* Embudo: cuántos hay en cada paso; tocar uno filtra la lista. */
+    const embudo = h('.tr-embudo', datos.estados[est.tipo].map(e => h('button.tr-etapa.e-' + e + (est.estado === e ? '.sel' : ''),
+      {onclick: () => { est.estado = est.estado === e ? '' : e; pinta(); }},
+      h('b', String(c[e] ?? datos.tramites.filter(t => t.tipo === est.tipo && t.estado === e).length)), h('span', ESTADO[e][0]))));
+    const resumen = datos.finanzas ? kpis(est.tipo === 'cae'
+      ? [kpi('Pendiente de cobrar (CAEs)', eur2(c.importe_pendiente || 0), 'IVA incluido · solo dirección'), kpi('Total CAEs', eur2(c.importe || 0), 'IVA incluido')]
+      : [kpi('Facturado WIXER', eur2(c.importe || 0), 'IVA incluido · solo dirección'), kpi('Pendiente', eur2(c.importe_pendiente || 0), 'IVA incluido')]) : null;
     const f = filtros([
       {id: 'buscar', et: 'Buscar dirección o titular', valor: est.buscar},
       {id: 'ver', tipo: 'select', valor: est.ver, opciones: [['activos', 'En curso'], ['hechos', est.tipo === 'cae' ? 'Cobrados' : 'Finalizados'], ['todos', 'Todos']]}
     ], v => { Object.assign(est, v); pintaLista(); });
     pintaLista();
-    poner(caja, h('style', CSS), pestanas, resumen, f.nodo, listaCaja);
+    poner(caja, h('style', CSS), pestanas, embudo, resumen, f.nodo,
+      est.estado ? h('p.nota', 'Filtrando por «' + ESTADO[est.estado][0] + '» · ', h('a', {href: 'javascript:void 0', onclick: () => { est.estado = ''; pinta(); }}, 'quitar filtro')) : null,
+      listaCaja);
   }
 
   await cargar();
@@ -169,7 +203,22 @@ const CSS = `
 .tr-pest{margin-bottom:12px;flex-wrap:wrap}
 .tr-lista{display:flex;flex-direction:column;gap:10px}
 .tr-fila{border:1px solid var(--borde,#e3e6ea);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
-.tr-fila.cancelado{opacity:.55}
+.tr-fila{border-left:5px solid var(--borde,#e3e6ea)}
+.tr-fila.e-cancelado{opacity:.55}
+.e-documentacion,.e-pendiente{--c:#d98a00}.e-completo,.e-solicitado{--c:#2f6fd6}.e-presentado,.e-pte_facturar{--c:#7a4fd6}
+.e-cobrado,.e-finalizado{--c:#1a9a55}.e-cancelado{--c:#8a9099}
+.tr-fila[class*=e-]{border-left-color:var(--c)}
+.tr-embudo{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin:0 0 12px}
+.tr-etapa{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:10px 12px;border-radius:10px;border:1px solid var(--borde,#e3e6ea);border-top:5px solid var(--c);background:var(--fondo-tarjeta,#fff);cursor:pointer;text-align:left;font:inherit;color:inherit}
+.tr-etapa b{font-size:1.6em;line-height:1;color:var(--c)}.tr-etapa span{font-size:.82em}
+.tr-etapa.sel{outline:2px solid var(--c);outline-offset:1px}
+.tr-pasos{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.tr-paso{display:inline-flex;align-items:center;gap:6px;padding:4px 10px 4px 4px;border-radius:999px;border:1px solid var(--borde,#e3e6ea);background:transparent;font:inherit;font-size:.82em;cursor:pointer;color:inherit}
+.tr-num{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--borde,#e3e6ea);font-size:.85em;font-weight:600}
+.tr-paso.hecho{color:#1a9a55;border-color:#1a9a55}.tr-paso.hecho .tr-num{background:#1a9a55;color:#fff}
+.tr-paso.actual{background:var(--c);border-color:var(--c);color:#fff;font-weight:600}.tr-paso.actual .tr-num{background:#fff;color:var(--c)}
+.tr-paso.cancelado{padding:4px 10px;color:#8a9099}.tr-paso.reabrir{padding:4px 10px}
+.tr-paso:disabled{opacity:.5}
 .tr-cab{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap}
 .tr-der{display:flex;gap:8px;align-items:center}
 .tr-prog{display:flex;gap:8px;align-items:center}.tr-prog>*:first-child{flex:1}
