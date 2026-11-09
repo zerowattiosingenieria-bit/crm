@@ -165,25 +165,33 @@ const nombreAz = a => { const n = [[0, 'Sur'], [45, 'Suroeste'], [90, 'Oeste'], 
   [-90, 'Este'], [-135, 'Noreste'], [-180, 'Norte']]; let b = n[0]; for (const x of n) if (Math.abs(a - x[0]) < Math.abs(a - b[0])) b = x; return b[1]; };
 
 /* ======================================================================= */
-export async function vistaVisor3d({id}) {
+export async function vistaVisor3d({id, embebido}) {
   const cli = id ? api.cliente(id) : null;
   const op = cli ? (api.estado.operaciones || []).filter(o => o.cliente_id === cli.id).slice(-1)[0] : null;
   const dirIni = cli ? [txt(cli.direccion), txt(cli.municipio)].filter(Boolean).join(', ') : '';
-  const caja = h('.visor3d');
+  /* Sin instalación apuntada: lo que diga el proyecto que pasó el comercial o el captador. */
+  let pry = {};
+  if (cli && !op) { try { const r = await api.proyectoDe(cli.id); const t = normal(((r && r.proyecto) || {}).descripcion || '');
+    const m1 = t.match(/(\d+)\s*(?:placas|paneles|modulos)/), m2 = t.match(/(\d{3})\s*w\b/), m3 = t.match(/(\d+(?:[.,]\d+)?)\s*kw[^p]*aerot|aerot[^.]*?(\d+(?:[.,]\d+)?)\s*kw/),
+      m4 = t.match(/(\d)\s*(?:x\s*)?(?:baterias|t58)/);
+    pry = {n: m1 ? +m1[1] : 0, wp: m2 ? +m2[1] : 0, aerokw: m3 ? num(m3[1] || m3[2]) : 0, bat: m4 ? +m4[1] : 0, aero: /aerotermia/.test(t)}; } catch (e) { pry = {}; } }
+  const caja = h('.visor3d' + (embebido ? '.embebido' : ''));
   const logo = h('img.v3-logo', {src: 'assets/img/logo.png', alt: 'Zero Wattios'});
   const logoOsc = h('img.v3-logo.osc', {src: 'assets/img/logo-dark.png', alt: 'Zero Wattios'});
 
   /* --- estado --- */
-  const panIni = PANELES.find(p => op && num(op.panel_wp) && Math.abs(p.w - num(op.panel_wp)) < 3) || PANELES[0];
-  const aeroIni = (() => { if (!op) return 'no'; const m = normal(op.aero_modelo), kw = num(op.aero_kw);
+  const wpIni = op ? num(op.panel_wp) : pry.wp;
+  const panIni = PANELES.find(p => wpIni && Math.abs(p.w - wpIni) < 3) || PANELES[0];
+  const aeroIni = (() => { if (!op) { if (!pry.aero && !pry.aerokw) return 'no'; const kw = pry.aerokw; return kw >= 21 ? 'htt22' : kw >= 18 ? 'htt19' : kw && kw <= 12 ? 'ht12' : 'ht16'; }
+    const m = normal(op.aero_modelo), kw = num(op.aero_kw);
     if (!m && !kw) return 'no'; if (m.includes('saunier')) return 'sd15'; if (m.includes('panasonic')) return 'pana';
     if (m.includes('ec pro')) return 'ecpro16'; if (kw >= 21) return 'htt22'; if (kw >= 18) return 'htt19';
     if (m.includes('htt') || m.includes('trif')) return 'htt16'; return kw && kw <= 12 ? 'ht12' : 'ht16'; })();
   const E = {
-    lat: null, lon: null, partes: [], principal: null, direccion: dirIni,
+    lat: null, lon: null, partes: [], principal: null, direccion: dirIni, altura: 6, casaIds: new Set(), alturaRc: {},
     tejado: normal(op && op.tejado).includes('plan') ? 'plana' : 'dos', incl: 30, giro: false, alero: 0.4,
-    panel: panIni.id, vertical: true, nPan: op ? num(op.paneles_num) || 0 : 0, margen: 0.3, caras: {},
-    inversor: 'auto', baterias: op && num(op.bateria_kwh) ? Math.max(1, Math.round(num(op.bateria_kwh) / 5.8)) : 0,
+    panel: panIni.id, vertical: true, nPan: op ? num(op.paneles_num) || 0 : (pry.n || 0), margen: 0.3, caras: {},
+    inversor: 'auto', baterias: op && num(op.bateria_kwh) ? Math.max(1, Math.round(num(op.bateria_kwh) / 5.8)) : (pry.bat || 0),
     cargador: !!(op && txt(op.cargador_modelo)),
     aero: aeroIni, cascada: aeroIni === 'ecpro16' ? 2 : 1,
     acs: num(op && op.deposito_acs) || (aeroIni === 'no' ? 0 : 200), inercia: num(op && op.deposito_inercia) || (aeroIni === 'no' ? 0 : 100),
@@ -211,6 +219,7 @@ export async function vistaVisor3d({id}) {
     i.addEventListener('change', () => alCambiar(i.checked)); return i; };
   const campo = (et, ctl) => h('label.v3-campo', h('span', et), ctl);
   const vInc = h('b', E.incl + '°');
+  const altInp = numero(6, v => { if (v > 1) { E.altura = v; construir(); } }, 'v3alt', {step: 0.1, min: 2, max: 30});
 
   const re = () => { construir(); };
   const panelMando = h('aside.v3-mando',
@@ -219,8 +228,8 @@ export async function vistaVisor3d({id}) {
         h('button', {type: 'button', datos: {v}, 'aria-pressed': String(E.tejado === v), onclick: e => {
           E.tejado = v; [...e.target.parentNode.children].forEach(b => b.setAttribute('aria-pressed', String(b === e.target))); E.caras = {}; re(); }}, t))),
       campo(h('span', 'Inclinación ', vInc), rango(5, 45, 1, E.incl, v => { E.incl = v; vInc.textContent = v + '°'; re(); }, 'v3incl')),
-      h('.v3-fila', campo('Vuelo alero (m)', numero(E.alero, v => { E.alero = v; re(); }, 'v3alero', {step: 0.1, min: 0, max: 1.5})),
-        h('label.v3-chk', casilla(E.giro, v => { E.giro = v; E.caras = {}; re(); }, 'v3giro'), 'Girar cumbrera 90°')),
+      h('.v3-fila', campo('Altura alero (m)', altInp), campo('Vuelo alero (m)', numero(E.alero, v => { E.alero = v; re(); }, 'v3alero', {step: 0.1, min: 0, max: 1.5}))),
+      h('label.v3-chk', casilla(E.giro, v => { E.giro = v; E.caras = {}; re(); }, 'v3giro'), 'Girar cumbrera 90°'),
       h('p.nota', 'La planta y las alturas vienen del Catastro; la forma del tejado se elige aquí.')),
     h('.v3-grupo', h('h4', 'Fotovoltaica'),
       campo('Panel', sel(PANELES.map(p => [p.id, `${p.n} · ${p.l}×${p.a}`]), E.panel, v => { E.panel = v; re(); }, 'v3panel')),
@@ -259,7 +268,9 @@ export async function vistaVisor3d({id}) {
   poner(caja,
     h('style', CSS),
     h('.v3-cabecera',
-      h('div', h('h2', 'Visor 3D de la vivienda'), h('p.nota', cli ? (txt(cli.nombre) || txt(cli.direccion)) : 'Planta del Catastro + foto aérea del IGN')),
+      h('div', h('h2', embebido ? 'Simulación 3D' : 'Visor 3D de la vivienda'),
+        h('p.nota', embebido ? 'Uso interno para la visita: no se incluye en el PDF de la propuesta. ' + (op ? 'Equipos de la instalación apuntada.' : (pry.n || pry.aero ? 'Equipos sacados del proyecto pedido.' : ''))
+          : (cli ? (txt(cli.nombre) || txt(cli.direccion)) : 'Planta del Catastro + foto aérea del IGN'))),
       h('.v3-buscar', entradaDir, botonBuscar)),
     estado, tiraKpi,
     h('.v3-cuerpo', panelMando, escena));
@@ -373,17 +384,14 @@ export async function vistaVisor3d({id}) {
     mundo = new THREE.Group();
     const capTex = texTecho ? new THREE.MeshLambertMaterial({map: texTecho}) : M.vecino;
     // vecinos
-    E.partes.filter(p => p.rc !== E.principal.rc && p.plantas > 0).forEach(p => mundo.add(extruir(p, p.plantas * ALTURA_PLANTA, capTex, M.vecino)));
+    E.partes.filter(p => !E.casaIds.has(p.id) && p.plantas > 0).forEach(p => mundo.add(extruir(p, (E.alturaRc[p.rc] || p.plantas * ALTURA_PLANTA), capTex, M.vecino)));
     // la casa
-    const propias = E.partes.filter(p => p.rc === E.principal.rc && p.plantas > 0 && area(p.ext) > 6);
-    const caras = [], tejados = [];
-    propias.forEach(p => {
-      const H = p.plantas * ALTURA_PLANTA;
-      const pared = extruir(p, H, E.tejado === 'plana' ? capTex : M.pared, M.pared); mundo.add(pared);
-      if (area(p.ext) < 18) return; // casetas y porches pequeños: cubierta plana
-      const t = tejadoDe(p, H); mundo.add(t.grupo); tejados.push({p, t, H});
-      t.caras.forEach((f, i) => { f.clave = p.id + '·' + f.k; f.vol = p === E.principal ? 'principal' : 'otro'; caras.push(f); });
-    });
+    const propias = E.principal.partes;
+    const caras = [];
+    const H = E.altura;
+    propias.forEach(p => mundo.add(extruir(p, H, E.tejado === 'plana' ? capTex : M.pared, M.pared)));
+    { const t = tejadoDe(E.principal, H); mundo.add(t.grupo);
+      t.caras.forEach(f => { f.clave = 'casa·' + f.k; f.vol = 'principal'; caras.push(f); }); }
     // caras marcadas por defecto: las del volumen principal que miran al sur (±100°)
     caras.forEach(f => { if (!(f.clave in E.caras)) E.caras[f.clave] = f.vol === 'principal' && Math.abs(f.az) <= 100 && (caras.filter(g => g.vol === 'principal' && Math.abs(g.az) <= 100).sort((a, b) => Math.abs(a.az) - Math.abs(b.az))[0] === f); });
     poner(listaCaras, caras.length ? [h('span.nota', 'Faldones con paneles:'),
@@ -413,14 +421,14 @@ export async function vistaVisor3d({id}) {
       if (k) porCara.push({n: k, incl: f.incl, az: f.az});
     }
     if (E.tejado === 'plana') { // filas al sur en el volumen principal
-      const p = E.principal, H = p.plantas * ALTURA_PLANTA, t = 30 * D2R, hmin = (90 - 40.4 - 23.45) * D2R;
+      const p = E.principal, t = 30 * D2R, hmin = (90 - 40.4 - 23.45) * D2R;
       const fondo = pv * Math.cos(t), alto = pv * Math.sin(t), paso = fondo + alto / Math.tan(hmin);
       let e1 = Infinity, e2 = -Infinity, n1 = Infinity, n2 = -Infinity; p.ext.forEach(([e, nn]) => { e1 = Math.min(e1, e); e2 = Math.max(e2, e); n1 = Math.min(n1, nn); n2 = Math.max(n2, nn); });
       let k = 0;
       for (let nn = n1 + E.margen + 0.3; nn + fondo <= n2 - E.margen && n < max; nn += paso) {
         for (let e = e1 + E.margen + 0.3; e + pu <= e2 - E.margen && n < max; e += pu + gap) {
           const cE = e + pu / 2, cN = nn + fondo / 2;
-          if (![[e, nn], [e + pu, nn], [e, nn + fondo], [e + pu, nn + fondo]].every(q => dentro(q, p.ext))) continue;
+          if (![[e, nn], [e + pu, nn], [e, nn + fondo], [e + pu, nn + fondo]].every(q => p.partes.some(pp => dentro(q, pp.ext)))) continue;
           const m = new THREE.Mesh(geo, M.panel); m.castShadow = true; m.scale.set(pu, pv, 1);
           m.rotation.x = -(Math.PI / 2 - t); m.position.copy(V(cE, H + 0.35 + alto / 2, cN)); mundo.add(m); n++; k++;
         }
@@ -512,7 +520,7 @@ export async function vistaVisor3d({id}) {
 
   function vista(tipo) {
     const p = E.principal; if (!p) return;
-    const r = rectanguloMinimo(p.ext); const c = V(r.cE, (p.plantas || 2) * ALTURA_PLANTA * 0.7, r.cN);
+    const r = rectanguloMinimo(p.ext); const c = V(r.cE, E.altura * 0.7, r.cN);
     const d = Math.max(r.largo, r.ancho, 10);
     if (tipo === 'planta') camera.position.set(c.x + 0.01, d * 3.2, c.z + 0.01);
     else if (tipo === 'calle') camera.position.set(c.x, 4, c.z + d * 2.2);
@@ -539,8 +547,19 @@ export async function vistaVisor3d({id}) {
       // la casa: el volumen que contiene el punto (o el más cercano con plantas)
       const conPl = partes.filter(p => p.plantas > 0);
       let casa = conPl.find(p => dentro([0, 0], p.ext)) || conPl.sort((a, b) => dist2([0, 0], a.ext) - dist2([0, 0], b.ext))[0];
-      const mismas = conPl.filter(p => p.rc === casa.rc);
-      E.principal = mismas.sort((a, b) => area(b.ext) * b.plantas - area(a.ext) * a.plantas)[0];
+      // la casa = los volúmenes de esa parcela unidos al encontrado (un adosado es un bloque de volúmenes)
+      const cerca = (a, b) => a.ext.some(p => b.ext.some(q => (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 < 0.5));
+      const mismas = [casa]; const pend = partes.filter(p => p !== casa && p.rc === casa.rc && area(p.ext) >= 1);
+      for (let i = 0; i < mismas.length; i++) for (let j = pend.length - 1; j >= 0; j--) if (cerca(mismas[i], pend[j])) mismas.push(pend.splice(j, 1)[0]);
+      const sup = mismas.reduce((s, p) => s + area(p.ext), 0);
+      const pl = Math.max(1, Math.round(mismas.reduce((s, p) => s + area(p.ext) * Math.min(p.plantas, 3), 0) / (sup || 1)));
+      E.altura = Math.round(pl * 2.9 * 10) / 10; altInp.value = E.altura;
+      E.principal = {partes: mismas.filter(p => p.plantas > 0), ext: mismas.flatMap(p => p.ext), plantas: pl, rc: casa.rc};
+      E.casaIds = new Set(mismas.map(p => p.id));
+      // vecinos: misma altura en toda su parcela (el Catastro trocea cada casa por plantas)
+      E.alturaRc = {}; const porRc = {}; partes.forEach(p => { if (p.plantas > 0) (porRc[p.rc] = porRc[p.rc] || []).push(p); });
+      Object.entries(porRc).forEach(([rc, ps]) => { const a = ps.reduce((s, p) => s + area(p.ext), 0);
+        E.alturaRc[rc] = Math.max(1, Math.round(ps.reduce((s, p) => s + area(p.ext) * Math.min(p.plantas, 6), 0) / (a || 1))) * 2.9; });
       E.partes = partes; E.caras = {};
       if (texFoto) texFoto.dispose(); if (texTecho) texTecho.dispose();
       texFoto = tex; texTecho = null;
@@ -549,7 +568,7 @@ export async function vistaVisor3d({id}) {
       suelo.rotation.x = -Math.PI / 2; suelo.receiveShadow = true; scene.add(suelo);
       if (tex) { texTecho = tex.clone(); texTecho.needsUpdate = true; texTecho.repeat.set(1 / (2 * R), 1 / (2 * R)); texTecho.offset.set(0.5, 0.5); }
       construir(); vista('3d');
-      estado.textContent = `Casa encontrada (${fuente}). Ref. catastral ${casa.rc} · ${mismas.length} volumen(es), ${E.principal.plantas} planta(s).`;
+      estado.textContent = `Casa encontrada (${fuente}). Ref. catastral ${casa.rc} · ${fmt(sup)} m² de planta · ${pl} planta(s) · alero a ${fmt(E.altura, 1)} m (ajústalo si hace falta).`;
     } catch (e) {
       estado.textContent = e.message || 'No se ha podido cargar la casa.';
     } finally { botonBuscar.disabled = false; escena.querySelector('.v3-cargando').hidden = true; }
@@ -630,6 +649,7 @@ const CSS = `
 .v3-tabla td{padding:4px 4px;border-bottom:1px solid var(--linea,#e2e6e0);vertical-align:top}
 .v3-tabla td:first-child{width:28px;font-weight:700;text-align:right;padding-right:8px}
 .v3-acciones{display:flex;gap:8px;flex-wrap:wrap}
+.visor3d.embebido .v3-escena{height:62vh}
 .v3-escena{position:relative;border-radius:12px;overflow:hidden;border:1px solid var(--linea,#e2e6e0);height:72vh;min-height:360px;background:linear-gradient(#bcd7ea,#eef3ee)}
 @media (max-width:980px){.v3-escena{height:60vh}}
 .v3-lienzo{display:block;width:100%;height:100%;touch-action:none}

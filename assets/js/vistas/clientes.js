@@ -410,6 +410,9 @@ export async function vistaCliente({id, ir, refrescar}) {
     ['vivienda', 'Vivienda y consumo', () => panelVivienda(c, acc.vivienda)],
     ['dimensionado', 'Ficha de dimensionado', () => panelFicha(c)],
     ['proyecto', 'Proyecto', () => panelProyecto(c)],
+    ['simulacion', 'Simulación 3D', () => { const caja = h('div', h('p.nota', 'Cargando la simulación…'));
+      import('./visor3d.js').then(m => m.vistaVisor3d({id: c.id, embebido: true})).then(n => poner(caja, n))
+        .catch(e => poner(caja, h('p.nota', 'No se ha podido abrir la simulación: ' + e.message))); return caja; }],
     ['instalaciones', 'Instalaciones (' + ops.length + ')', () => panelOperaciones(c, ops, refrescar, acc.instalacion)]
   ];
   tabs.forEach(([clave, nombre, pinta], i) => {

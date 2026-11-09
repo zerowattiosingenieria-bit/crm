@@ -55,7 +55,15 @@ function gml(x0, y0) {
   const mat = await pag.textContent('.v3-mat'); console.log('material:', mat.slice(0, 300));
   await pag.setViewportSize({width: 400, height: 860}); await pag.waitForTimeout(800);
   await pag.screenshot({path: path.join(SALIDA, 'visor-movil.png')});
+  await pag.setViewportSize({width: 1400, height: 950});
+  const cid = await pag.evaluate(async () => { const A = await import('/assets/js/api.js'); const c = A.estado.clientes.find(x => x.direccion) || A.estado.clientes[0]; return c.id; });
+  await pag.evaluate(x => { location.hash = '#cliente/' + x; }, cid); await pag.waitForTimeout(1500);
+  await pag.click('.pestanas button:has-text("Simulación 3D")'); await pag.waitForTimeout(3500);
+  const emb = await pag.textContent('.visor3d.embebido .v3-cabecera');
+  console.log('ficha:', emb.slice(0, 140));
+  await pag.screenshot({path: path.join(SALIDA, 'visor-ficha.png')});
   const fallos = [];
+  if (!/no se incluye en el PDF/.test(emb)) fallos.push('la simulación de la ficha no avisa de que es interna');
   if (!/1234567VK1234N/.test(estado)) fallos.push('no encuentra la casa');
   if (!(+n > 0)) fallos.push('no coloca paneles');
   if (!/Domusa/.test(mat)) fallos.push('falta la aerotermia en el material');

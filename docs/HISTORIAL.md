@@ -32,6 +32,13 @@ visita.
 - Sol por hora y mes con sombras, kWp, producción orientativa
   (≈1.650 kWh/kWp corregido por orientación e inclinación), lista de
   material, «Descargar imagen» (con logo) y «Copiar resumen».
+- La casa es el conjunto de volúmenes de la parcela pegados al punto (el
+  Catastro trocea cada vivienda por nº de plantas); la altura del alero se
+  calcula con la media de plantas y se puede corregir.
+- Pestaña «Simulación 3D» en la ficha del cliente: sale con los equipos de
+  la instalación apuntada o, si no hay, con lo que diga el proyecto pedido
+  por el comercial o el captador. Es solo de uso interno: no entra en el PDF
+  de la propuesta.
 - three.js r128 va en assets/vendor/three. Prueba: pruebas/visor-navegador.js
   (servicios externos simulados).
 
