@@ -539,3 +539,41 @@ function accProyectosPendientes_(u, p) {
   });
   return {ok: true, proyectos: lista};
 }
+
+/* ---------- cotizaciones (09/11/2026): versiones del cotizador ---------- */
+function accCotizaciones_(u, p) {
+  const v = clienteVisible_(u, p.cliente_id);
+  if (v.error) return {ok: false, error: v.error};
+  const nombres = {};
+  leer_('USUARIOS').forEach(function (x) { nombres[String(x.id)] = x.nombre; });
+  const l = leer_('COTIZACIONES').filter(function (x) { return String(x.cliente_id) === String(v.cliente.id); })
+    .map(function (x) { let d = {}; try { d = JSON.parse(String(x.datos || '{}')); } catch (e) { d = {}; }
+      return Object.assign({}, x, {datos: d, quien: nombres[String(x.creado_por)] || ''}); })
+    .sort(function (a, b) { return Number(b.version) - Number(a.version); });
+  return {ok: true, cotizaciones: l};
+}
+
+function accGuardarCotizacion_(u, p) {
+  const v = clienteVisible_(u, p.cliente_id);
+  if (v.error) return {ok: false, error: v.error};
+  if (String(u.rol || '').toLowerCase() === 'captador') return {ok: false, error: 'El cotizador es solo para comerciales y dirección.'};
+  const cli = v.cliente;
+  let n = 1;
+  leer_('COTIZACIONES').forEach(function (x) { if (String(x.cliente_id) === String(cli.id)) n = Math.max(n, Number(x.version) + 1); });
+  const datos = (p.datos && typeof p.datos === 'object') ? p.datos : {};
+  ['coste', 'margen', 'margen_pct', 'margenObj'].forEach(function (k) { delete datos[k]; });
+  const resumen = txt_(p.resumen).slice(0, 3000);
+  const c = insertar_('COTIZACIONES', {cliente_id: cli.id, version: n, datos: JSON.stringify(datos), total: Number(p.total) || 0,
+    resumen: resumen, creado: ahora_(), creado_por: u.id});
+  registrar_(u, 'guardar_cotizacion', 'COTIZACIONES', c.id, (cli.direccion || cli.nombre || '') + ' · v' + n);
+  try {
+    const proy = proyectoDe_(cli, u);
+    const bloque = '⟦Cotización v' + n + ' · ' + String(ahora_()).slice(0, 10) + '⟧\n' + resumen + '\n⟦fin cotización⟧';
+    let desc = txt_(proy.descripcion);
+    const re = /⟦Cotización v[\s\S]*?⟦fin cotización⟧/;
+    desc = re.test(desc) ? desc.replace(re, function () { return bloque; }) : (desc + '\n\n' + bloque).trim();
+    actualizar_('PROYECTOS', proy.id, {descripcion: desc, modificado: ahora_(), modificado_por: u.id});
+  } catch (e) { /* la cotización ya está guardada */ }
+  c.datos = datos;
+  return {ok: true, cotizacion: c};
+}

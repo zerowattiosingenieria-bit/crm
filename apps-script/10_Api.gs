@@ -30,6 +30,8 @@ function acciones_() {
     /* carpeta del cliente y proyecto */
     proyecto: accProyecto_,
     guardarProyecto: accGuardarProyecto_,
+    cotizaciones: accCotizaciones_,
+    guardarCotizacion: accGuardarCotizacion_,
     subirArchivo: accSubirArchivo_,
     descargarArchivo: accDescargarArchivo_,
     borrarArchivo: accBorrarArchivo_,

@@ -299,7 +299,7 @@ const PREFIJO = [
   'GASTOS' => 'G', 'SEGUIMIENTO' => 'S', 'CAPTACIONES' => 'CA', 'PARTES' => 'P', 'NOMINAS' => 'N', 'JORNADAS' => 'J',
   'BANCO' => 'B', 'VACACIONES' => 'V', 'SESIONES' => 'SE', 'LOG' => 'L',
   'DIRECTORIO' => 'D', 'DIR_VISITAS' => 'DV', 'PUERTAS' => 'PU', 'EQUIPOS' => 'EQ',
-  'PROYECTOS' => 'PR', 'ARCHIVOS' => 'AR', 'TAREAS' => 'T', 'CITAS_CAMBIOS' => 'CC', 'CAMBIOS' => 'CB', 'INCIDENCIAS' => 'IN'
+  'PROYECTOS' => 'PR', 'ARCHIVOS' => 'AR', 'TAREAS' => 'T', 'CITAS_CAMBIOS' => 'CC', 'CAMBIOS' => 'CB', 'INCIDENCIAS' => 'IN', 'COTIZACIONES' => 'CZ'
 ];
 
 /** Identificador corto, legible y único: C-000412. */

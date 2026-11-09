@@ -50,6 +50,23 @@ async function entrar(nav, usuario) {
     if (!esDir && /Visor 3D/.test(menu)) fallos.push(u + ': un comercial (no Nando) ve el visor 3D');
     fallos.push(...p.errores);
   }
+  { const p = await entrar(nav, 'nando');
+    const cid = await p.evaluate(async () => { const A = await import('/assets/js/api.js'); return (A.estado.clientes.find(x => x.direccion) || {}).id; });
+    await p.evaluate(x => { location.hash = '#cliente/' + x; }, cid); await p.waitForTimeout(1500);
+    await p.click('.pestanas button:has-text("Cotizar")'); await p.waitForTimeout(3500);
+    const t1 = await p.textContent('.cot-tabla tr.total');
+    await p.selectOption('#cotacs', '300'); await p.waitForTimeout(400);
+    const t2 = await p.textContent('.cot-tabla tr.total');
+    console.log('nando ficha | total', t1.trim(), '→ con ACS 300 L', t2.trim());
+    if (t1 === t2) fallos.push('el depósito no cambia el precio');
+    await p.click('button:has-text("Guardar versión")'); await p.waitForTimeout(1500);
+    await p.click('button:has-text("Guardar versión")'); await p.waitForTimeout(1500);
+    const vers = await p.textContent('.cot-versiones');
+    const desc = await p.evaluate(async x => { const A = await import('/assets/js/api.js'); const r = await A.proyectoDe(x); return r.proyecto.descripcion; }, cid);
+    console.log('versiones:', vers.slice(0, 160), '| proyecto:', desc.slice(0, 120).replace(/\n/g, ' / '));
+    if (!/v2/.test(vers)) fallos.push('no guarda dos versiones');
+    if (!/Cotización v2/.test(desc) || /Cotización v1/.test(desc)) fallos.push('el proyecto no lleva la última cotización');
+    fallos.push(...p.errores); }
   { const p = await entrar(nav, 'sandra');
     await p.evaluate(() => { location.hash = '#cotizador'; }); await p.waitForTimeout(1200);
     const menu = await p.textContent('#menu'); const hay = await p.locator('.cot-buscar').count();

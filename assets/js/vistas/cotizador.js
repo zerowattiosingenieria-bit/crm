@@ -67,7 +67,7 @@ export async function vistaCotizador({id}) {
     personas: cli ? num(cli.personas) || 4 : 4, luzMes: cli ? num(cli.gasto_luz_mes) || 120 : 120,
     combustible: cli ? num(cli.gasto_combustible) || 2000 : 2000,
     suelo: false, quiereFv: true, quiereAero: true, panel: 625, nPan: 0, aero: 0, baterias: 0, cargador: false,
-    deposGrande: false, distancia: false, trifasico: false, margenObj: null
+    acs: 200, inercia: 100, distancia: false, trifasico: false, margenObj: null
   };
 
   const entrada = h('input#cotdir', {type: 'text', placeholder: 'Calle, número, municipio',
@@ -75,6 +75,17 @@ export async function vistaCotizador({id}) {
   const bBuscar = h('button.btn.lima', {type: 'button'}, 'Cotizar esta casa');
   const estado = h('p.nota.cot-estado', 'Escribe la dirección: cojo los m², el año y el tejado del Catastro.');
   const datosCasa = h('.cot-datos');
+  const versiones = h('.cot-versiones');
+  let lista = [];
+  async function cargarVersiones() {
+    if (!cli) return;
+    try { const r = await api.cotizacionesDe(cli.id); lista = (r && r.cotizaciones) || []; } catch (e) { lista = []; }
+    poner(versiones, lista.length ? [h('b', 'Versiones guardadas'), ...lista.map(v => h('.cot-ver',
+      h('span', `v${v.version} · ${txt(v.creado).slice(0, 16).replace('T', ' ')} · ${txt(v.quien)} · ${eur(num(v.total))}`),
+      h('button.btn.mini', {type: 'button', onclick: () => { Object.assign(E, v.datos.estado || {}); entrada.value = v.datos.direccion || entrada.value;
+        E.margenObj = null; pinta(); aviso('Cargada la versión ' + v.version + '.'); }}, 'Cargar')))]
+      : h('span.nota', 'Aún no hay versiones guardadas de este cliente.'));
+  }
   const cuerpo = h('.cot-cuerpo');
 
   const numero = (val, f, idEl, extra = {}) => { const i = h('input', {type: 'number', id: idEl, ...extra}); i.value = val;
@@ -87,7 +98,8 @@ export async function vistaCotizador({id}) {
   poner(caja, h('style', CSS),
     h('.cot-cab', h('div', h('h2', 'Cotizador'), h('p.nota', cli ? txt(cli.nombre) : 'Precio a partir de la dirección y del Catastro')),
       h('.cot-buscar', entrada, bBuscar)),
-    estado, datosCasa, cuerpo);
+    estado, datosCasa, cuerpo, cli ? versiones : null);
+  cargarVersiones();
 
   async function buscar() {
     const q = txt(entrada.value); if (!q) { estado.textContent = 'Escribe una dirección.'; return; }
@@ -131,6 +143,8 @@ export async function vistaCotizador({id}) {
   /** Equipo recomendado según la casa y el consumo. */
   function recomendar() {
     E.aero = aeroKw(E.m2, E.anyo, E.plantas);
+    E.acs = E.personas > 5 ? 300 : 200;                    // ACS: 300 L con más de 5 personas
+    E.inercia = E.suelo || E.m2 > 400 ? 200 : 100;         // inercia: 200 L con suelo radiante o casa > 400 m²
     if (E.aero === 22) E.trifasico = true;
     const pan = PANELES.find(p => p.w === E.panel);
     const caben = E.techo ? Math.floor(E.techo.faldon * 0.72 / pan.m2) : 24;
@@ -148,8 +162,8 @@ export async function vistaCotizador({id}) {
     if (E.quiereFv && E.baterias) lineas.push({k: 'bat', concepto: `Baterías ${E.baterias} × 5,8 kWh`, precio: E.baterias * T.bateria});
     if (E.cargador) lineas.push({k: 'carg', concepto: 'Cargador de vehículo eléctrico', precio: T.cargador});
     if (E.quiereAero) {
-      lineas.push({k: 'aero', concepto: `Aerotermia Domusa ${E.aero} kW ${E.aero >= 16 && E.trifasico ? 'trifásica' : 'monofásica'} · ACS ${E.personas > 5 ? 300 : 200} L · inercia ${E.suelo || E.m2 > 400 ? 200 : 100} L`, precio: T.aero[E.aero]});
-      if (E.deposGrande) lineas.push({k: 'sup1', concepto: 'Suplemento depósitos mayores', precio: T.suplemento});
+      lineas.push({k: 'aero', concepto: `Aerotermia Domusa ${E.aero} kW ${E.aero >= 16 && E.trifasico ? 'trifásica' : 'monofásica'} · ACS ${E.acs} L · ${E.inercia ? 'inercia ' + E.inercia + ' L' : 'sin inercia'}`, precio: T.aero[E.aero]});
+      if (E.acs > 200 || E.inercia > 100) lineas.push({k: 'sup1', concepto: `Suplemento depósitos mayores (ACS ${E.acs} L / inercia ${E.inercia} L)`, precio: T.suplemento * (E.acs >= 500 ? 2 : 1)});
       if (E.distancia) lineas.push({k: 'sup2', concepto: 'Suplemento distancias (caldera / unidad exterior)', precio: T.suplemento});
     }
     const pvp = lineas.reduce((s, l) => s + l.precio, 0);
@@ -157,7 +171,7 @@ export async function vistaCotizador({id}) {
     const op = {tipo: n && E.quiereAero ? 'fv_aero' : n ? 'fv' : E.quiereAero ? 'aero' : '', paneles_num: n, panel_wp: pan.w,
       inversor_modelo: E.trifasico ? 'X3' : 'X1', inversor_kw: kwp > 6 ? 10 : 6, bateria_kwh: E.quiereFv ? E.baterias * 5.8 : 0,
       cargador_modelo: E.cargador ? 'cargador' : '', aero_kw: E.quiereAero ? E.aero : 0, aero_modelo: E.quiereAero ? 'Domusa ' + E.aero : '',
-      deposito_acs: E.quiereAero ? (E.personas > 5 ? 300 : 200) : 0, deposito_inercia: E.quiereAero ? (E.suelo || E.m2 > 400 ? 200 : 100) : 0, tejado: ''};
+      deposito_acs: E.quiereAero ? E.acs : 0, deposito_inercia: E.quiereAero ? E.inercia : 0, tejado: ''};
     const mat = dir ? materialesDe(op, cat) : null;
     // ayudas y ahorro orientativos
     const kwh = kwp * 1650 * factor(30, E.techo ? E.techo.az : 0);
@@ -193,7 +207,12 @@ export async function vistaCotizador({id}) {
       chk(casilla(E.quiereAero, v => { E.quiereAero = v; }, 'cotaero'), 'Incluir aerotermia'),
       campo('Potencia', (() => { const s = h('select#cotkw', [12, 16, 19, 22].map(k => h('option', {value: k}, k + ' kW' + (k === 22 ? ' (solo trifásica)' : ''))));
         s.value = E.aero; s.addEventListener('change', () => { E.aero = +s.value; if (E.aero === 22) E.trifasico = true; pinta(); }); return s; })()),
-      chk(casilla(E.deposGrande, v => { E.deposGrande = v; }, 'cotdep'), 'Depósitos mayores (+1.000 €)'),
+      h('.cot-fila',
+        campo('Depósito ACS', (() => { const s = h('select#cotacs', [150, 200, 300, 500].map(l => h('option', {value: l}, l + ' L'))); s.value = E.acs;
+          s.addEventListener('change', () => { E.acs = +s.value; pinta(); }); return s; })()),
+        campo('Depósito de inercia', (() => { const s = h('select#cotinercia', [0, 100, 150, 200].map(l => h('option', {value: l}, l ? l + ' L' : 'Sin inercia'))); s.value = E.inercia;
+          s.addEventListener('change', () => { E.inercia = +s.value; pinta(); }); return s; })())),
+      h('p.nota', `Recomendado: ACS ${E.personas > 5 ? 300 : 200} L e inercia ${E.suelo || E.m2 > 400 ? 200 : 100} L. Por encima de 200/100 L se suma el suplemento de 1.000 € (2.000 € con ACS de 500 L) y el precio se recalcula.`),
       chk(casilla(E.distancia, v => { E.distancia = v; }, 'cotdist'), 'Distancias largas (+1.000 €)'));
 
     const precioFinal = dir && E.margenObj !== null && c.mat && c.mat.base ? c.mat.base / (1 - E.margenObj) * IVA : c.pvp;
@@ -211,7 +230,9 @@ export async function vistaCotizador({id}) {
         k('Coste tras ayudas', eur(neto), 'CAE aparte (aproximado)'),
         k('Ahorro estimado', eur(c.ahorro) + '/año', c.kwp ? `${Math.round(c.kwh).toLocaleString('es-ES')} kWh/año FV` : ''),
         k('Retorno', c.ahorro ? (neto / c.ahorro).toLocaleString('es-ES', {maximumFractionDigits: 1}) + ' años' : '—', 'después de ayudas')),
-      h('.cot-acciones', h('button.btn', {type: 'button', onclick: () => copiar(c, precioFinal, cuota, ayudaIrpf)}, 'Copiar resumen'),
+      h('.cot-acciones',
+        cli ? h('button.btn.lima', {type: 'button', onclick: () => guardar(c, precioFinal, cuota, ayudaIrpf)}, 'Guardar versión') : null,
+        h('button.btn', {type: 'button', onclick: () => copiar(c, precioFinal, cuota, ayudaIrpf)}, 'Copiar resumen'),
         cli ? h('button.btn', {type: 'button', onclick: () => { location.hash = '#visor/' + cli.id; }}, '⌂ Ver en 3D') : null),
       h('p.nota', 'Precios de la tarifa vigente. Producción y ahorro orientativos.'),
       dir ? panelDireccion(c, precioFinal, base) : null);
@@ -269,6 +290,22 @@ export async function vistaCotizador({id}) {
     catch (e) { aviso(e.message, 'error'); }
   }
 
+  function texto(c, precio, cuota, irpf) {
+    return [`Cotización · ${txt(entrada.value)}`, ...c.lineas.map(l => `- ${l.concepto}: ${eur(l.precio)}`),
+      `Total (IVA incluido): ${eur(precio)}`, `Cuota a 10 años: ${eur(cuota)}/mes (amortización anticipada a coste 0)`,
+      `Deducción IRPF 60 %: ${eur(irpf)}`,
+      E.techo ? `Casa: ${E.m2} m² construidos, ${E.anyo || 'año sin dato'}, mejor faldón al ${nombreAz(E.techo.az)}` : ''].filter(Boolean).join('\n');
+  }
+  async function guardar(c, precio, cuota, irpf) {
+    const estadoGuardado = {}; ['m2', 'anyo', 'plantas', 'personas', 'luzMes', 'combustible', 'suelo', 'quiereFv', 'quiereAero', 'panel', 'nPan',
+      'aero', 'baterias', 'cargador', 'acs', 'inercia', 'distancia', 'trifasico', 'techo', 'catastro'].forEach(k => { estadoGuardado[k] = E[k]; });
+    try {
+      const r = await api.guardarCotizacion({cliente_id: cli.id, total: Math.round(precio), resumen: texto(c, precio, cuota, irpf),
+        datos: {direccion: txt(entrada.value), estado: estadoGuardado, lineas: c.lineas, kwp: c.kwp, cuota: Math.round(cuota)}});
+      if (!r || !r.ok) throw new Error((r && r.error) || 'No se ha podido guardar.');
+      aviso(`Guardada la versión ${r.cotizacion.version}: queda en la ficha y en el proyecto.`); cargarVersiones();
+    } catch (e) { aviso(e.message, 'error'); }
+  }
   async function copiar(c, precio, cuota, irpf) {
     const t = [`Cotización · ${txt(entrada.value)}`, ...c.lineas.map(l => `- ${l.concepto}: ${eur(l.precio)}`),
       `Total (IVA incluido): ${eur(precio)}`, `Cuota a 10 años: ${eur(cuota)}/mes (amortización anticipada a coste 0)`,
@@ -309,5 +346,7 @@ const CSS = `
 .cot-tabla tr.total td{font-weight:700;font-size:15px;border-bottom:0}
 .cot-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
 .cot-acciones{display:flex;gap:8px;flex-wrap:wrap}
+.cot-versiones{display:flex;flex-direction:column;gap:6px;background:var(--papel,#fff);border:1px solid var(--linea,#e2e6e0);border-radius:12px;padding:12px}
+.cot-ver{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--linea,#e2e6e0);padding-bottom:6px;font-size:13px}
 .cot-dir{margin-top:6px;border-top:2px dashed var(--linea,#e2e6e0);padding-top:10px;display:flex;flex-direction:column;gap:9px}
 `;

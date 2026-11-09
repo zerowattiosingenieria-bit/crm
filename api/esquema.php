@@ -32,6 +32,7 @@ const INDICES = [
   'DIRECTORIO' => ['ref', 'telefono'],
   'DIR_VISITAS' => ['ref'],
   'PROYECTOS' => ['cliente_id'],
+  'COTIZACIONES' => ['cliente_id'],
   'ARCHIVOS' => ['cliente_id', 'proyecto_id'],
   'TAREAS' => ['usuario_id', 'estado'],
   'LOG' => ['fecha', 'usuario_id'],
@@ -42,7 +43,7 @@ const INDICES = [
 /* Columnas que pueden ser largas (textos, JSON, miniaturas en base64). */
 function tipoColumna_(string $tabla, string $col): string {
   if ($col === 'id' || substr($col, -3) === '_id' || in_array($col, INDICES[$tabla] ?? [], true) || in_array($col, ['token', 'clave', 'ref', 'huella', 'pendiente', 'periodo', 'fecha', 'usuario', 'estado', 'tipo', 'numero'], true)) return 'VARCHAR(191) NOT NULL DEFAULT \'\'';
-  if (in_array($col, ['miniatura', 'detalle', 'analisis', 'resumen', 'sentadas_detalle', 'propuestas_aplicadas', 'nota', 'notas', 'otros', 'tarjeta'], true)) return 'MEDIUMTEXT NULL';
+  if (in_array($col, ['miniatura', 'detalle', 'analisis', 'resumen', 'sentadas_detalle', 'propuestas_aplicadas', 'nota', 'notas', 'otros', 'tarjeta', 'datos'], true)) return 'MEDIUMTEXT NULL';
   return 'TEXT NULL';
 }
 

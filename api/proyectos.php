@@ -524,3 +524,47 @@ function accProyectosPendientes_(array $u, array $p): array {
   });
   return ['ok' => true, 'proyectos' => $lista];
 }
+
+/* ---------- cotizaciones (09/11/2026) ----------
+   Cada «Guardar» del cotizador es una versión nueva (v1, v2…). La última
+   se copia en la descripción del proyecto, entre dos marcas, para que el
+   ingeniero la tenga en cuenta al hacer la propuesta. No se guardan costes
+   ni márgenes: solo equipos, precios de tarifa y total. */
+function accCotizaciones_(array $u, array $p): array {
+  $v = clienteVisible_($u, $p['cliente_id'] ?? '');
+  if (isset($v['error'])) return ['ok' => false, 'error' => $v['error']];
+  $l = array_values(array_filter(leer_('COTIZACIONES'), fn($x) => mismo_($x['cliente_id'], $v['cliente']['id'])));
+  $nombres = [];
+  foreach (leer_('USUARIOS') as $x) $nombres[txt_($x['id'])] = txt_($x['nombre']);
+  $l = array_map(function ($x) use ($nombres) { $x['datos'] = json_decode(txt_($x['datos']), true) ?: [];
+    $x['quien'] = $nombres[txt_($x['creado_por'])] ?? ''; return $x; }, $l);
+  usort($l, fn($a, $b) => num_($b['version']) <=> num_($a['version']));
+  return ['ok' => true, 'cotizaciones' => $l];
+}
+
+function accGuardarCotizacion_(array $u, array $p): array {
+  $v = clienteVisible_($u, $p['cliente_id'] ?? '');
+  if (isset($v['error'])) return ['ok' => false, 'error' => $v['error']];
+  if (normal_($u['rol'] ?? '') === 'captador') return ['ok' => false, 'error' => 'El cotizador es solo para comerciales y dirección.'];
+  $cli = $v['cliente'];
+  $prev = array_filter(leer_('COTIZACIONES'), fn($x) => mismo_($x['cliente_id'], $cli['id']));
+  $n = 1; foreach ($prev as $x) $n = max($n, (int)num_($x['version']) + 1);
+  $datos = is_array($p['datos'] ?? null) ? $p['datos'] : [];
+  foreach (['coste', 'margen', 'margen_pct', 'margenObj'] as $k) unset($datos[$k]);
+  $resumen = trozo_(txt_($p['resumen'] ?? ''), 0, 3000);
+  $c = insertar_('COTIZACIONES', ['cliente_id' => $cli['id'], 'version' => $n, 'datos' => json_encode($datos, JSON_UNESCAPED_UNICODE),
+    'total' => num_($p['total'] ?? 0), 'resumen' => $resumen, 'creado' => ahora_(), 'creado_por' => $u['id']]);
+  registrar_($u, 'guardar_cotizacion', 'COTIZACIONES', $c['id'], etiquetaCliente_($cli) . ' · v' . $n);
+  // la última versión, dentro de la descripción del proyecto
+  try {
+    $proy = proyectoDe_($cli, $u);
+    $bloque = '⟦Cotización v' . $n . ' · ' . substr(ahora_(), 0, 10) . "⟧\n" . $resumen . "\n⟦fin cotización⟧";
+    $desc = txt_($proy['descripcion'] ?? '');
+    $desc = preg_match('/⟦Cotización v.*?⟦fin cotización⟧/su', $desc)
+      ? preg_replace('/⟦Cotización v.*?⟦fin cotización⟧/su', str_replace(['\\', '$'], ['\\\\', '\\$'], $bloque), $desc)
+      : trim($desc . "\n\n" . $bloque);
+    actualizar_('PROYECTOS', $proy['id'], ['descripcion' => $desc, 'modificado' => ahora_(), 'modificado_por' => $u['id']]);
+  } catch (Throwable $e) { /* la cotización ya está guardada */ }
+  $c['datos'] = $datos;
+  return ['ok' => true, 'cotizacion' => $c];
+}

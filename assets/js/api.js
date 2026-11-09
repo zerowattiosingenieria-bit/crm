@@ -298,6 +298,8 @@ export const borrarCaptacion = ids => pedir('borrarCaptacion', Array.isArray(ids
 
 /* La carpeta del cliente: fotos, documentos y el PDF del proyecto. */
 export const proyectoDe = cliente_id => pedir('proyecto', {cliente_id});
+export const cotizacionesDe = cliente_id => pedir('cotizaciones', {cliente_id});
+export const guardarCotizacion = datos => pedir('guardarCotizacion', datos);
 export const guardarProyecto = datos => pedir('guardarProyecto', datos);
 export const subirArchivo = datos => pedir('subirArchivo', datos);
 export const descargarArchivo = id => pedir('descargarArchivo', {id});

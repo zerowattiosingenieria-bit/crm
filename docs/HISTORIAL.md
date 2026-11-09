@@ -30,6 +30,15 @@ propuestas futuras.
   regla para probar otro margen y «Usar este precio como tarifa», que
   cambia los precios del tramo para las propuestas futuras. El servidor no
   manda la horquilla a quien no tiene finanzas.
+- Versiones: en la pestaña «Cotizar» de la ficha, cada «Guardar versión»
+  crea una cotización nueva (v1, v2…, tabla COTIZACIONES, sin costes ni
+  márgenes) que se puede volver a cargar. La última se copia en la
+  descripción del proyecto entre «⟦Cotización vN⟧» y «⟦fin cotización⟧»
+  para que el ingeniero la tenga en cuenta.
+- Depósitos de aerotermia: se calcula el adecuado (ACS 200/300 L según
+  personas, inercia 100/200 L según suelo radiante o m²) y se pueden
+  cambiar; por encima de 200/100 L se suma el suplemento (1.000 €, 2.000 €
+  con ACS de 500 L) y el precio al cliente se recalcula.
 - Visor 3D y pestaña «Simulación 3D»: en pruebas, solo dirección y el
   comercial Nando.
 
