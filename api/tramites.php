@@ -55,6 +55,18 @@ function esAurusTra_(?array $c): bool {
   return str_contains($e, 'aurus') && !preg_match('/zero ?w?att?ios|\\bzw\\b/', $e);
 }
 
+/* Casas antiguas de Aurus que no tienen ficha en el CRM pero sí carpeta en el
+   Drive de CAEs/WIXER (Nando, 09/11/2026). Se puede ampliar en la
+   configuración «tramites_aurus» (direcciones separadas por «;»). */
+const AURUS_TRAMITE = 'Rosas 3, Brunete;Ángel Somalo 4, Torrelodones;Puerto de Guadarrama 10;Baleares 12, San Agustín de Guadalix';
+function esAurusDirTra_(string $direccion): bool {
+  $k = claveDireccionTra_($direccion);
+  if ($k === '') return false;
+  $lista = AURUS_TRAMITE . ';' . txt_(config_()['tramites_aurus'] ?? '');
+  foreach (explode(';', $lista) as $d) if (mismaDireccionTra_($k, claveDireccionTra_($d))) return true;
+  return false;
+}
+
 function esDireccionTra_(array $u): bool { return (permisos_($u)['alcance'] ?? '') === 'todo'; }
 function tiposVisiblesTra_(array $u): array {
   if (esDireccionTra_($u)) return TIPOS_TRAMITE;
@@ -162,7 +174,7 @@ function accTramites_(array $u, array $p): array {
   $ve = tiposVisiblesTra_($u);
   $lista = array_map(fn($t) => tramitePublico_($t, $clientes, $usuarios, $fin),
     array_values(array_filter(leer_('TRAMITES'), fn($t) => in_array(normal_($t['tipo'] ?? ''), $ve, true) && ($tipo === '' || normal_($t['tipo'] ?? '') === $tipo)
-      && !esAurusTra_($clientes[txt_($t['cliente_id'] ?? '')] ?? null))));
+      && !esAurusTra_($clientes[txt_($t['cliente_id'] ?? '')] ?? null) && !esAurusDirTra_(txt_($t['direccion'] ?? '')))));
   $lista = ordenar_($lista, function ($a, $b) {
     $ca = $a['estado'] === 'cancelado' ? 1 : 0; $cb = $b['estado'] === 'cancelado' ? 1 : 0;
     if ($ca !== $cb) return $ca - $cb;
@@ -310,7 +322,7 @@ function accImportarTramites_(array $u, array $p): array {
     $e = $d;
     $cliIdx = $cliIdx ?? indexar_($clientes);
     $cid = txt_($e['cliente_id'] ?? '') ?: clientePorDireccionTra_(txt_($d['direccion'] ?? ''), $clientes);
-    if ($cid !== '' && esAurusTra_($cliIdx[$cid] ?? null)) { $aurus[] = txt_($d['direccion'] ?? ''); continue; }
+    if (($cid !== '' && esAurusTra_($cliIdx[$cid] ?? null)) || esAurusDirTra_(txt_($d['direccion'] ?? ''))) { $aurus[] = txt_($d['direccion'] ?? ''); continue; }
     if (txt_($e['cliente_id'] ?? '') === '') {
       $e['cliente_id'] = clientePorDireccionTra_(txt_($d['direccion'] ?? ''), $clientes);
       if ($e['cliente_id'] === '') { unset($e['cliente_id']); $sinCliente[] = txt_($d['direccion'] ?? $d['nombre'] ?? ''); }

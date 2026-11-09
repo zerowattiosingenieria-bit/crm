@@ -29,6 +29,13 @@ function esAurusTra_(c) {
   const e = normal_((c.etiquetas || '') + ' ' + (c.origen || ''));
   return e.indexOf('aurus') >= 0 && !/zero ?w?att?ios|\bzw\b/.test(e);
 }
+const AURUS_TRAMITE = 'Rosas 3, Brunete;Ángel Somalo 4, Torrelodones;Puerto de Guadarrama 10;Baleares 12, San Agustín de Guadalix';
+function esAurusDirTra_(direccion) {
+  const k = claveDireccionTra_(direccion);
+  if (!k) return false;
+  return (AURUS_TRAMITE + ';' + txt_(config_().tramites_aurus)).split(';')
+    .some(function (d) { return mismaDireccionTra_(k, claveDireccionTra_(d)); });
+}
 function tiposVisiblesTra_(u) {
   if ((permisos_(u).alcance || '') === 'todo') return TIPOS_TRAMITE.slice();
   const yo = normal_(u.usuario), cfg = config_();
@@ -123,7 +130,7 @@ function accTramites_(u, p) {
   const clientes = indexar_(leer_('CLIENTES')), usuarios = indexar_(leer_('USUARIOS'));
   const tipo = normal_(p.tipo);
   const ve = tiposVisiblesTra_(u);
-  const lista = leer_('TRAMITES').filter(function (t) { return ve.indexOf(normal_(t.tipo)) >= 0 && (!tipo || normal_(t.tipo) === tipo) && !esAurusTra_(clientes[txt_(t.cliente_id)]); })
+  const lista = leer_('TRAMITES').filter(function (t) { return ve.indexOf(normal_(t.tipo)) >= 0 && (!tipo || normal_(t.tipo) === tipo) && !esAurusTra_(clientes[txt_(t.cliente_id)]) && !esAurusDirTra_(t.direccion); })
     .map(function (t) { return tramitePublico_(t, clientes, usuarios, fin); })
     .sort(function (a, b) {
       const ca = a.estado === 'cancelado' ? 1 : 0, cb = b.estado === 'cancelado' ? 1 : 0;
@@ -251,7 +258,7 @@ function accImportarTramites_(u, p) {
     if (!actual && txt_(d.numero) && !k) actual = todos.filter(function (t) { return normal_(t.tipo) === tipo && txt_(t.numero) === txt_(d.numero); })[0];
     const e = Object.assign({}, d);
     const cid = txt_(e.cliente_id) || clientePorDireccionTra_(txt_(d.direccion), clientes);
-    if (cid && esAurusTra_(cliIdx[cid])) { aurus.push(txt_(d.direccion)); return; }
+    if ((cid && esAurusTra_(cliIdx[cid])) || esAurusDirTra_(d.direccion)) { aurus.push(txt_(d.direccion)); return; }
     if (!txt_(e.cliente_id)) {
       e.cliente_id = clientePorDireccionTra_(txt_(d.direccion), clientes);
       if (!e.cliente_id) { delete e.cliente_id; sinCliente.push(txt_(d.direccion || d.nombre)); }

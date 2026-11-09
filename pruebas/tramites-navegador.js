@@ -101,6 +101,8 @@ function comprobar(n, c, x) { hechas++; if (c) console.log('  ok · ' + n); else
   await d.pedir('guardarCliente', {cliente: {id: aur.id, etiquetas: 'Aurus'}});
   const ra2 = await d.pedir('importarTramites', {tramites: [{tipo: 'cae', direccion: aur.direccion, nombre: 'Antiguo de Aurus'}]});
   comprobar('los clientes antiguos de Aurus no entran', ra2.ok && ra2.nuevos === 0 && ra2.aurus_fuera.length === 1, ra2);
+  const ra4 = await d.pedir('importarTramites', {tramites: [{tipo: 'wixer', direccion: 'Puerto de Guadarrama, 10'}, {tipo: 'cae', direccion: 'Rosas, 3', poblacion: 'Brunete'}]});
+  comprobar('las casas de Aurus sin ficha tampoco entran', ra4.ok && ra4.nuevos === 0 && ra4.aurus_fuera.length === 2, ra4);
   const ra3 = await d.pedir('guardarTramite', {tramite: {tipo: 'wixer', cliente_id: aur.id, direccion: aur.direccion}});
   comprobar('ni a mano', !ra3.ok, ra3);
   const sy = await d.pedir('syncContabilidad', {guardar: {banktrack: [{cuenta: 'CaixaBank', resumen: '12 movimientos nuevos'}], avisos: ['Factura FZW2026-120 en Drive sin cobro en el CRM']}});
