@@ -568,3 +568,29 @@ function accGuardarCotizacion_(array $u, array $p): array {
   $c['datos'] = $datos;
   return ['ok' => true, 'cotizacion' => $c];
 }
+
+/* ---------- fichas técnicas de producto (09/11/2026) ----------
+   El comercial descarga desde el cotizador la ficha técnica del producto
+   propuesto. Los PDF están en el Drive de la empresa; la lista se puede
+   cambiar en Ajustes con la clave «fichas_tecnicas» (JSON clave → id). */
+const FICHAS_TECNICAS = [
+  'kit_625' => ['1CTVF0frz8MLgM5th8QBGuIAdyXlLJ1xW', 'Kit SolaX X1-VAST + Hanersun 625 W + batería.pdf'],
+  'panel_625' => ['1mIhFwUZfivXWFfxGS6QJUCN3GfSJc8MG', 'Panel Hanersun HN21N-66HT.pdf'],
+  'panel_590' => ['1hrC-VFtns5RliJDQXLx9bh7GTLx3-Wwu', 'Paneles Risen.pdf'],
+  'kit_590' => ['1aGrpa8zc99oAwplm0p3d0d_QYRqlxAtj', 'Kit SolaX X1 + Risen 590 W.pdf'],
+  'inv_x1' => ['1hzuvIAf3AwVJqT8h6M3qbncPLbk__w8a', 'Inversor SolaX X1 Hybrid G4.pdf'],
+  'inv_x3' => ['1bYq630q9vq5mDYX_b3HwIIfk_LRG6GKi', 'Inversor SolaX X3 Hybrid G4.pdf'],
+  'aero_domusa' => ['1iSFw50znj3nDgRvVzGYge5nOlXoPUVAm', 'Aerotermia Domusa Dual Clima.pdf'],
+  'inv_deye' => ['1nMXjmm0J-nVBkySg68mSn-a8vMe8QlQt', 'Inversor Deye SUN 7,6-12K.pdf']
+];
+function accFichaTecnica_(array $u, array $p): array {
+  if (normal_($u['rol'] ?? '') === 'captador') return ['ok' => false, 'error' => 'Las fichas técnicas son para comerciales y dirección.'];
+  $lista = FICHAS_TECNICAS;
+  $extra = json_decode(txt_(config_()['fichas_tecnicas'] ?? ''), true);
+  if (is_array($extra)) foreach ($extra as $k => $v) $lista[$k] = is_array($v) ? $v : [$v, $k . '.pdf'];
+  $k = txt_($p['clave'] ?? '');
+  if (!isset($lista[$k])) return ['ok' => false, 'error' => 'No hay ficha técnica para ese producto.'];
+  try { $a = driveDescargar_($lista[$k][0]); }
+  catch (Throwable $e) { return ['ok' => false, 'error' => 'La ficha técnica ya no está en el Drive de la empresa.']; }
+  return ['ok' => true, 'nombre' => $lista[$k][1], 'mime' => 'application/pdf', 'datos' => $a['base64'] ?? ''];
+}

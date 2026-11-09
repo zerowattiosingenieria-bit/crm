@@ -1605,7 +1605,7 @@ comprobar('el ping no se apunta', logAhora().length === antes);
 const lecturas = ['misEquipos','datos','buscar','proyecto','descargarArchivo','proyectosPendientes',
   'cifras','tareas','finanzas','partes','resumen','equipo','analitica','alertas','nominas','nominaDias',
   'descargarNomina','vacaciones','mapa','usuarios','registro','directorio','directorioFicha','puertas',
-  'banco','copias','descargarCopia','agendaHuecos','comprobarCita','alertasBanco','catastro','duplicados','estadisticas','historialCambios','incidencias','cotizaciones'];
+  'banco','copias','descargarCopia','agendaHuecos','comprobarCita','alertasBanco','catastro','duplicados','estadisticas','historialCambios','incidencias','cotizaciones','fichaTecnica'];
 const malClasificadas = Object.keys(acciones_()).filter(a => a !== 'salir' &&
   (tipoDePeticion_(a) === 'consulta') !== lecturas.includes(a));
 comprobar('cada acción está clasificada como consulta o modificación', malClasificadas.length === 0,

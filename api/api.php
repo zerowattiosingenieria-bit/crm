@@ -36,6 +36,7 @@ function acciones_(): array {
     'proyecto' => 'accProyecto_',
     'guardarProyecto' => 'accGuardarProyecto_',
     'cotizaciones' => 'accCotizaciones_',
+    'fichaTecnica' => 'accFichaTecnica_',
     'guardarCotizacion' => 'accGuardarCotizacion_',
     'subirArchivo' => 'accSubirArchivo_',
     'descargarArchivo' => 'accDescargarArchivo_',

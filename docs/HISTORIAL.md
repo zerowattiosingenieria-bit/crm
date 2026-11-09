@@ -39,6 +39,14 @@ propuestas futuras.
   personas, inercia 100/200 L según suelo radiante o m²) y se pueden
   cambiar; por encima de 200/100 L se suma el suplemento (1.000 €, 2.000 €
   con ACS de 500 L) y el precio al cliente se recalcula.
+- Elección de producto: panel, inversor y potencia (SolaX X1 Hybrid 6,
+  X1-VAST 10, X3 Hybrid 5/10/15, Deye 10 o automático), máquina Domusa (HT,
+  HTT, EC PRO o All in One con su modelo y ACS integrado), depósitos de
+  ACS e inercia y modelo de cargador (SolaX X1/X3-HAC).
+- Documentación del producto propuesto: «Ficha técnica» descarga el PDF
+  del Drive de la empresa (acción fichaTecnica; la lista se puede ampliar
+  con la clave fichas_tecnicas en Ajustes) y «Manual» abre el de la web
+  oficial del fabricante (SolaX, Deye; Domusa abre su buscador oficial).
 - Visor 3D y pestaña «Simulación 3D»: en pruebas, solo dirección y el
   comercial Nando.
 

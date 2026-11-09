@@ -25,6 +25,37 @@ const eur = n => Math.round(n || 0).toLocaleString('es-ES') + ' €';
 const pct = n => (Math.round((n || 0) * 1000) / 10).toLocaleString('es-ES') + ' %';
 const IVA = 1.21;
 const COEF_10 = 0.012894;            // Finlight, 10 años (sin mostrar condiciones al cliente)
+const INVERSORES = [
+  {id: 'auto', n: 'Automático según potencia'},
+  {id: 'x1h6', n: 'SolaX X1 Hybrid 6 kW', kw: 6, tri: false, ficha: 'inv_x1'},
+  {id: 'x1v10', n: 'SolaX X1-VAST 10 kW', kw: 10, tri: false, ficha: 'kit_625'},
+  {id: 'x3h5', n: 'SolaX X3 Hybrid 5 kW (trifásico)', kw: 5, tri: true, ficha: 'inv_x3'},
+  {id: 'x3h10', n: 'SolaX X3 Hybrid 10 kW (trifásico)', kw: 10, tri: true, ficha: 'inv_x3'},
+  {id: 'x3h15', n: 'SolaX X3 Hybrid 15 kW (trifásico)', kw: 15, tri: true, ficha: 'inv_x3'},
+  {id: 'deye10', n: 'Deye 10 kW', kw: 10, tri: false, ficha: 'inv_deye'}
+];
+/* Manuales en las webs oficiales de los fabricantes (SolaX, Deye, Domusa). */
+const MANUALES = {
+  x1v10: 'https://uk.solaxpower.com/uploads/file/x1-vast-series-user-manual-en.pdf',
+  inv_x1: 'https://www.solaxpower.com/uploads/file/x1-hybrid-g4-user-manual-en.pdf',
+  inv_x3: 'https://www.solaxpower.com/uploads/file/x3-hybrid-g4-user-manual-en.pdf',
+  inv_deye: 'https://www.deyeinverter.com/deyeinverter/2025/08/12/[b]manual_sun-7.6-12k-sg02lp1-eu-am3-p_20250812_en.pdf',
+  bateria: 'https://ar.solaxpower.com/uploads/file/t-bat-sys-hv-5.8-user-manual-en.pdf',
+  cargador: 'https://www.solaxpower.com/uploads/file/x1-x3-hac-series-user-manual-en.pdf',
+  domusa: 'https://www.domusateknik.com/es/documentos-tecnicos'
+};
+const CARGADORES = [
+  {id: 'hac7', n: 'Cargador SolaX X1-HAC 7 kW (monofásico)'},
+  {id: 'hac11', n: 'Cargador SolaX X3-HAC 11 kW (trifásico)'},
+  {id: 'hac22', n: 'Cargador SolaX X3-HAC 22 kW (trifásico)'}
+];
+const MAQUINAS = [
+  {id: 'ht', n: 'Domusa Dual Clima HT (monofásica)'},
+  {id: 'htt', n: 'Domusa Dual Clima HTT (trifásica)'},
+  {id: 'ecpro', n: 'Domusa Dual Clima EC PRO'},
+  {id: 'aio', n: 'Domusa All in One (ACS integrado)'}
+];
+const AIO = [{id: 'aio190', n: 'All in One con ACS integrado 190 L', acs: 190}, {id: 'aio250', n: 'All in One con ACS integrado 250 L', acs: 250}];
 const PANELES = [{w: 625, n: 'Hanersun 625 W', m2: 2.70}, {w: 590, n: 'Risen 590 W bifacial', m2: 2.58}, {w: 500, n: 'Full Black 500 W', m2: 2.22}];
 
 /* ---------- tarifas (CONFIG) ---------- */
@@ -67,7 +98,7 @@ export async function vistaCotizador({id}) {
     personas: cli ? num(cli.personas) || 4 : 4, luzMes: cli ? num(cli.gasto_luz_mes) || 120 : 120,
     combustible: cli ? num(cli.gasto_combustible) || 2000 : 2000,
     suelo: false, quiereFv: true, quiereAero: true, panel: 625, nPan: 0, aero: 0, baterias: 0, cargador: false,
-    acs: 200, inercia: 100, distancia: false, trifasico: false, margenObj: null
+    acs: 200, inercia: 100, distancia: false, trifasico: false, margenObj: null, inversor: 'auto', maquina: 'ht', aio: 'aio190', modCargador: 'hac7'
   };
 
   const entrada = h('input#cotdir', {type: 'text', placeholder: 'Calle, número, municipio',
@@ -143,6 +174,7 @@ export async function vistaCotizador({id}) {
   /** Equipo recomendado según la casa y el consumo. */
   function recomendar() {
     E.aero = aeroKw(E.m2, E.anyo, E.plantas);
+    if (E.maquina !== 'aio' && E.maquina !== 'ecpro') E.maquina = E.aero === 22 || E.trifasico ? 'htt' : 'ht';
     E.acs = E.personas > 5 ? 300 : 200;                    // ACS: 300 L con más de 5 personas
     E.inercia = E.suelo || E.m2 > 400 ? 200 : 100;         // inercia: 200 L con suelo radiante o casa > 400 m²
     if (E.aero === 22) E.trifasico = true;
@@ -154,30 +186,38 @@ export async function vistaCotizador({id}) {
     E.margenObj = null;
   }
 
+  function inversorElegido(kwp) {
+    if (E.inversor !== 'auto') return INVERSORES.find(i => i.id === E.inversor);
+    const l = INVERSORES.filter(i => i.kw && i.tri === !!E.trifasico && i.id !== 'deye10');
+    return l.find(i => i.kw >= kwp / 1.25) || l[l.length - 1];
+  }
   function cuenta() {
     const T = tarifas(), pan = PANELES.find(p => p.w === E.panel);
     const n = E.quiereFv ? E.nPan : 0, kwp = n * pan.w / 1000;
     const lineas = [];
-    if (n) lineas.push({k: 'fv', concepto: `Fotovoltaica ${n} × ${pan.n} (${kwp.toLocaleString('es-ES', {maximumFractionDigits: 2})} kWp)`, precio: precioFv(n, T)});
+    const inv = n ? inversorElegido(kwp) : null;
+    if (n) lineas.push({k: 'fv', concepto: `Fotovoltaica ${n} × ${pan.n} (${kwp.toLocaleString('es-ES', {maximumFractionDigits: 2})} kWp) · inversor ${inv.n}`, precio: precioFv(n, T)});
     if (E.quiereFv && E.baterias) lineas.push({k: 'bat', concepto: `Baterías ${E.baterias} × 5,8 kWh`, precio: E.baterias * T.bateria});
-    if (E.cargador) lineas.push({k: 'carg', concepto: 'Cargador de vehículo eléctrico', precio: T.cargador});
+    if (E.cargador) lineas.push({k: 'carg', concepto: (CARGADORES.find(x => x.id === E.modCargador) || CARGADORES[0]).n, precio: T.cargador});
     if (E.quiereAero) {
-      lineas.push({k: 'aero', concepto: `Aerotermia Domusa ${E.aero} kW ${E.aero >= 16 && E.trifasico ? 'trifásica' : 'monofásica'} · ACS ${E.acs} L · ${E.inercia ? 'inercia ' + E.inercia + ' L' : 'sin inercia'}`, precio: T.aero[E.aero]});
-      if (E.acs > 200 || E.inercia > 100) lineas.push({k: 'sup1', concepto: `Suplemento depósitos mayores (ACS ${E.acs} L / inercia ${E.inercia} L)`, precio: T.suplemento * (E.acs >= 500 ? 2 : 1)});
+      const maq = MAQUINAS.find(m => m.id === E.maquina), aio = E.maquina === 'aio' ? AIO.find(a => a.id === E.aio) : null;
+      lineas.push({k: 'aero', concepto: `${maq.n} ${E.aero} kW · ${aio ? aio.n : 'ACS ' + E.acs + ' L'} · ${E.inercia ? 'inercia ' + E.inercia + ' L' : 'sin inercia'}`, precio: T.aero[E.aero]});
+      if ((!aio && E.acs > 200) || E.inercia > 100) lineas.push({k: 'sup1', concepto: `Suplemento depósitos mayores (ACS ${E.acs} L / inercia ${E.inercia} L)`, precio: T.suplemento * (E.acs >= 500 ? 2 : 1)});
       if (E.distancia) lineas.push({k: 'sup2', concepto: 'Suplemento distancias (caldera / unidad exterior)', precio: T.suplemento});
     }
     const pvp = lineas.reduce((s, l) => s + l.precio, 0);
     // operación "de mentira" para el catálogo de costes (mismas reglas que Materiales y costes)
     const op = {tipo: n && E.quiereAero ? 'fv_aero' : n ? 'fv' : E.quiereAero ? 'aero' : '', paneles_num: n, panel_wp: pan.w,
-      inversor_modelo: E.trifasico ? 'X3' : 'X1', inversor_kw: kwp > 6 ? 10 : 6, bateria_kwh: E.quiereFv ? E.baterias * 5.8 : 0,
-      cargador_modelo: E.cargador ? 'cargador' : '', aero_kw: E.quiereAero ? E.aero : 0, aero_modelo: E.quiereAero ? 'Domusa ' + E.aero : '',
-      deposito_acs: E.quiereAero ? E.acs : 0, deposito_inercia: E.quiereAero ? E.inercia : 0, tejado: ''};
+      inversor_modelo: inv ? inv.n : '', inversor_kw: inv ? inv.kw : 0, bateria_kwh: E.quiereFv ? E.baterias * 5.8 : 0,
+      cargador_modelo: E.cargador ? (CARGADORES.find(x => x.id === E.modCargador) || CARGADORES[0]).n.replace('X3-HAC', 'X3 HAC') : '', aero_kw: E.quiereAero ? E.aero : 0,
+      aero_modelo: E.quiereAero ? 'Domusa ' + (E.maquina === 'aio' ? 'Fusion all in one ' : E.maquina === 'htt' ? 'HTT ' : E.maquina === 'ecpro' ? 'EC PRO ' : 'HT ') + E.aero : '',
+      deposito_acs: E.quiereAero && E.maquina !== 'aio' ? E.acs : 0, deposito_inercia: E.quiereAero ? E.inercia : 0, tejado: ''};
     const mat = dir ? materialesDe(op, cat) : null;
     // ayudas y ahorro orientativos
     const kwh = kwp * 1650 * factor(30, E.techo ? E.techo.az : 0);
     const ahorroFv = kwh * (0.55 * 0.17 + 0.45 * 0.06);
     const ahorroAero = E.quiereAero ? E.combustible * 0.6 : 0;
-    return {T, lineas, pvp, op, mat, kwp, kwh, ahorro: ahorroFv + ahorroAero, n, pan};
+    return {T, lineas, pvp, op, mat, kwp, kwh, ahorro: ahorroFv + ahorroAero, n, pan, inv};
   }
 
   function pinta() {
@@ -201,14 +241,23 @@ export async function vistaCotizador({id}) {
       h('.cot-fila', campo('Panel', (() => { const s = h('select#cotpanel', PANELES.map(p => h('option', {value: p.w}, p.n))); s.value = E.panel;
         s.addEventListener('change', () => { E.panel = +s.value; pinta(); }); return s; })()),
         campo('Nº paneles', numero(E.nPan, v => { E.nPan = Math.max(0, Math.round(v)); }, 'cotnpan', {min: 0, max: 80, step: 2}))),
+      campo('Inversor', (() => { const s = h('select#cotinv', INVERSORES.map(i => h('option', {value: i.id}, i.n))); s.value = E.inversor;
+        s.addEventListener('change', () => { E.inversor = s.value; const i = INVERSORES.find(x => x.id === s.value); if (i && i.kw) E.trifasico = i.tri; pinta(); }); return s; })()),
       h('.cot-fila', campo('Baterías 5,8 kWh', numero(E.baterias, v => { E.baterias = Math.max(0, Math.round(v)); }, 'cotbat', {min: 0, max: 6})),
         chk(casilla(E.cargador, v => { E.cargador = v; }, 'cotcarg'), 'Cargador VE')),
+      E.cargador ? campo('Modelo de cargador', (() => { const s = h('select#cotmodcarg', CARGADORES.map(x => h('option', {value: x.id}, x.n))); s.value = E.modCargador;
+        s.addEventListener('change', () => { E.modCargador = s.value; if (s.value !== 'hac7') E.trifasico = true; pinta(); }); return s; })()) : null,
       h('h4', 'Aerotermia'),
       chk(casilla(E.quiereAero, v => { E.quiereAero = v; }, 'cotaero'), 'Incluir aerotermia'),
+      campo('Máquina', (() => { const s = h('select#cotmaq', MAQUINAS.map(m => h('option', {value: m.id}, m.n))); s.value = E.maquina;
+        s.addEventListener('change', () => { E.maquina = s.value; if (s.value === 'htt') E.trifasico = true; pinta(); }); return s; })()),
+      E.maquina === 'aio' ? campo('Modelo All in One', (() => { const s = h('select#cotaio', AIO.map(a => h('option', {value: a.id}, a.n))); s.value = E.aio;
+        s.addEventListener('change', () => { E.aio = s.value; pinta(); }); return s; })()) : null,
       campo('Potencia', (() => { const s = h('select#cotkw', [12, 16, 19, 22].map(k => h('option', {value: k}, k + ' kW' + (k === 22 ? ' (solo trifásica)' : ''))));
         s.value = E.aero; s.addEventListener('change', () => { E.aero = +s.value; if (E.aero === 22) E.trifasico = true; pinta(); }); return s; })()),
       h('.cot-fila',
         campo('Depósito ACS', (() => { const s = h('select#cotacs', [150, 200, 300, 500].map(l => h('option', {value: l}, l + ' L'))); s.value = E.acs;
+          if (E.maquina === 'aio') { s.disabled = true; s.title = 'Integrado en el All in One'; }
           s.addEventListener('change', () => { E.acs = +s.value; pinta(); }); return s; })()),
         campo('Depósito de inercia', (() => { const s = h('select#cotinercia', [0, 100, 150, 200].map(l => h('option', {value: l}, l ? l + ' L' : 'Sin inercia'))); s.value = E.inercia;
           s.addEventListener('change', () => { E.inercia = +s.value; pinta(); }); return s; })())),
@@ -234,6 +283,7 @@ export async function vistaCotizador({id}) {
         cli ? h('button.btn.lima', {type: 'button', onclick: () => guardar(c, precioFinal, cuota, ayudaIrpf)}, 'Guardar versión') : null,
         h('button.btn', {type: 'button', onclick: () => copiar(c, precioFinal, cuota, ayudaIrpf)}, 'Copiar resumen'),
         cli ? h('button.btn', {type: 'button', onclick: () => { location.hash = '#visor/' + cli.id; }}, '⌂ Ver en 3D') : null),
+      fichas(c),
       h('p.nota', 'Precios de la tarifa vigente. Producción y ahorro orientativos.'),
       dir ? panelDireccion(c, precioFinal, base) : null);
     poner(cuerpo, izq, der);
@@ -290,6 +340,41 @@ export async function vistaCotizador({id}) {
     catch (e) { aviso(e.message, 'error'); }
   }
 
+  /** Fichas técnicas (PDF) de lo propuesto. */
+  function fichas(c) {
+    // [producto, clave de ficha técnica (Drive) o null, enlace al manual oficial o null]
+    const l = [];
+    if (c.n) {
+      if (c.pan.w >= 600) l.push(['Panel Hanersun ' + c.pan.w + ' W', 'panel_625', null]);
+      else if (c.pan.w === 590) l.push(['Paneles Risen 590 W', 'panel_590', null]);
+      else l.push([c.pan.n, null, null]);
+      const inv = c.inv || {};
+      l.push(['Inversor ' + (inv.n || ''), inv.ficha || null, MANUALES[inv.id === 'x1v10' ? 'x1v10' : inv.ficha] || null]);
+      if (inv.id === 'x1v10' || c.pan.w >= 600) l.push(['Kit SolaX X1-VAST + Hanersun 625 W + batería', 'kit_625', null]);
+      if (E.baterias) l.push(['Baterías SolaX T58', null, MANUALES.bateria]);
+    }
+    if (E.cargador) l.push([(CARGADORES.find(x => x.id === E.modCargador) || CARGADORES[0]).n, null, MANUALES.cargador]);
+    if (E.quiereAero) l.push([(MAQUINAS.find(m => m.id === E.maquina) || {}).n || 'Aerotermia Domusa', 'aero_domusa', MANUALES.domusa]);
+    if (!l.length) return null;
+    return h('.cot-fichas', h('b', 'Documentación del producto propuesto'),
+      h('table.cot-tabla', l.map(([nombre, k, manual]) => h('tr', h('td', nombre), h('td.num',
+        k ? botonFicha(k, nombre) : h('span.nota', 'sin ficha'), ' ',
+        manual ? h('a.btn.mini', {href: manual, target: '_blank', rel: 'noopener'}, '📘 Manual') : null)))),
+      h('p.nota', 'Fichas técnicas del Drive de la empresa; manuales de la web oficial del fabricante (el de Domusa abre su buscador de documentación).'));
+  }
+  function botonFicha(k, t) {
+    return h('button.btn.mini', {type: 'button', onclick: async e => {
+        const b = e.currentTarget; b.disabled = true; const t0 = b.textContent; b.textContent = 'Descargando…';
+        try {
+          const r = await api.pedir('fichaTecnica', {clave: k});
+          if (!r || !r.ok) throw new Error((r && r.error) || 'No se ha podido descargar.');
+          const bin = atob(r.datos), arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+          const url = URL.createObjectURL(new Blob([arr], {type: 'application/pdf'}));
+          const a = document.createElement('a'); a.href = url; a.download = r.nombre || (t + '.pdf'); a.click(); setTimeout(() => URL.revokeObjectURL(url), 5000);
+        } catch (err) { aviso(err.message, 'error'); }
+        finally { b.disabled = false; b.textContent = t0; }
+      }}, '⬇ Ficha técnica');
+  }
   function texto(c, precio, cuota, irpf) {
     return [`Cotización · ${txt(entrada.value)}`, ...c.lineas.map(l => `- ${l.concepto}: ${eur(l.precio)}`),
       `Total (IVA incluido): ${eur(precio)}`, `Cuota a 10 años: ${eur(cuota)}/mes (amortización anticipada a coste 0)`,
@@ -298,7 +383,7 @@ export async function vistaCotizador({id}) {
   }
   async function guardar(c, precio, cuota, irpf) {
     const estadoGuardado = {}; ['m2', 'anyo', 'plantas', 'personas', 'luzMes', 'combustible', 'suelo', 'quiereFv', 'quiereAero', 'panel', 'nPan',
-      'aero', 'baterias', 'cargador', 'acs', 'inercia', 'distancia', 'trifasico', 'techo', 'catastro'].forEach(k => { estadoGuardado[k] = E[k]; });
+      'aero', 'baterias', 'cargador', 'acs', 'inercia', 'distancia', 'trifasico', 'techo', 'catastro', 'inversor', 'maquina', 'aio', 'modCargador'].forEach(k => { estadoGuardado[k] = E[k]; });
     try {
       const r = await api.guardarCotizacion({cliente_id: cli.id, total: Math.round(precio), resumen: texto(c, precio, cuota, irpf),
         datos: {direccion: txt(entrada.value), estado: estadoGuardado, lineas: c.lineas, kwp: c.kwp, cuota: Math.round(cuota)}});
@@ -346,6 +431,7 @@ const CSS = `
 .cot-tabla tr.total td{font-weight:700;font-size:15px;border-bottom:0}
 .cot-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
 .cot-acciones{display:flex;gap:8px;flex-wrap:wrap}
+.cot-fichas{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--linea,#e2e6e0);padding-top:8px}
 .cot-versiones{display:flex;flex-direction:column;gap:6px;background:var(--papel,#fff);border:1px solid var(--linea,#e2e6e0);border-radius:12px;padding:12px}
 .cot-ver{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--linea,#e2e6e0);padding-bottom:6px;font-size:13px}
 .cot-dir{margin-top:6px;border-top:2px dashed var(--linea,#e2e6e0);padding-top:10px;display:flex;flex-direction:column;gap:9px}

@@ -58,6 +58,17 @@ async function entrar(nav, usuario) {
     await p.selectOption('#cotacs', '300'); await p.waitForTimeout(400);
     const t2 = await p.textContent('.cot-tabla tr.total');
     console.log('nando ficha | total', t1.trim(), '→ con ACS 300 L', t2.trim());
+    await p.selectOption('#cotinv', 'x3h10'); await p.selectOption('#cotmaq', 'aio'); await p.waitForTimeout(300);
+    await p.selectOption('#cotaio', 'aio250'); await p.waitForTimeout(400);
+    const lin = await p.textContent('.cot-tabla');
+    console.log('con X3 y All in One:', lin.replace(/\s+/g, ' ').slice(0, 220));
+    if (!/X3 Hybrid 10/.test(lin) || !/All in One con ACS integrado 250/.test(lin)) fallos.push('no cambia inversor o All in One');
+    if (!(await p.locator('#cotacs').isDisabled())) fallos.push('con All in One el ACS tendría que ir integrado');
+    const fichas = await p.textContent('.cot-fichas').catch(() => '');
+    console.log('fichas técnicas:', fichas.trim());
+    if (!/Domusa/.test(fichas) || !/Ficha técnica/.test(fichas) || !/Manual/.test(fichas)) fallos.push('faltan fichas técnicas o manuales del producto propuesto');
+    await p.check('#cotcarg'); await p.waitForTimeout(300); await p.selectOption('#cotmodcarg', 'hac11'); await p.waitForTimeout(300);
+    if (!/X3-HAC 11/.test(await p.textContent('.cot-tabla'))) fallos.push('no sale el modelo de cargador');
     if (t1 === t2) fallos.push('el depósito no cambia el precio');
     await p.click('button:has-text("Guardar versión")'); await p.waitForTimeout(1500);
     await p.click('button:has-text("Guardar versión")'); await p.waitForTimeout(1500);
@@ -65,7 +76,8 @@ async function entrar(nav, usuario) {
     const desc = await p.evaluate(async x => { const A = await import('/assets/js/api.js'); const r = await A.proyectoDe(x); return r.proyecto.descripcion; }, cid);
     console.log('versiones:', vers.slice(0, 160), '| proyecto:', desc.slice(0, 120).replace(/\n/g, ' / '));
     if (!/v2/.test(vers)) fallos.push('no guarda dos versiones');
-    if (!/Cotización v2/.test(desc) || /Cotización v1/.test(desc)) fallos.push('el proyecto no lleva la última cotización');
+    const ult = (vers.match(/v(\d+) ·/) || [])[1];
+    if (!ult || !desc.includes('Cotización v' + ult + ' ') || (desc.match(/⟦Cotización v/g) || []).length !== 1) fallos.push('el proyecto no lleva la última cotización');
     fallos.push(...p.errores); }
   { const p = await entrar(nav, 'sandra');
     await p.evaluate(() => { location.hash = '#cotizador'; }); await p.waitForTimeout(1200);
