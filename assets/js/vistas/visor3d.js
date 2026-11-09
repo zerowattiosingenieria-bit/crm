@@ -524,7 +524,7 @@ export async function vistaVisor3d({id, embebido}) {
     const d = Math.max(r.largo, r.ancho, 10);
     if (tipo === 'planta') camera.position.set(c.x + 0.01, d * 3.2, c.z + 0.01);
     else if (tipo === 'calle') camera.position.set(c.x, 4, c.z + d * 2.2);
-    else camera.position.set(c.x + d * 1.4, d * 1.35, c.z + d * 1.9);
+    else camera.position.set(c.x + d * 0.9, c.y + d * 2.1, c.z + d * 1.5);
     controls.target.copy(c); controls.update();
   }
 
