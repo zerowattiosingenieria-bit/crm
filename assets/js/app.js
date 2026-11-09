@@ -26,7 +26,8 @@ import {vistaDashboard} from './vistas/dashboard.js?v=2';
 import {vistaTablero, tituloTablero} from './vistas/tablero.js';
 import {vistaHoy} from './vistas/hoy.js';
 import {vistaVisita, vaciarColaVisita} from './vistas/visita.js';
-import {vistaVisor3d} from './vistas/visor3d.js';
+import {vistaVisor3d, veVisor} from './vistas/visor3d.js';
+import {vistaCotizador} from './vistas/cotizador.js';
 import {dictadoEnTodo} from './voz.js';
 
 export const VERSION = '1.0.0';
@@ -35,7 +36,8 @@ export const VERSION = '1.0.0';
 const VISTAS = {
   hoy:          {titulo: 'Hoy',                pinta: vistaHoy},
   visita:       {titulo: 'Modo visita',        pinta: vistaVisita},
-  visor:        {titulo: 'Visor 3D',           pinta: vistaVisor3d},
+  visor:        {titulo: 'Visor 3D',           pinta: vistaVisor3d,       permiso: 'visor'},
+  cotizador:    {titulo: 'Cotizador',          pinta: vistaCotizador},
   panel:        {titulo: 'Panel',              pinta: vistaPanel},
   tablero:      {titulo: 'Mi tablero',         pinta: vistaTablero},
   agenda:       {titulo: 'Agenda',             pinta: vistaAgenda},
@@ -106,6 +108,7 @@ function menuDe(rol) {
       {id: 'agenda', et: 'Agenda', ico: '◷'},
       {id: 'clientes', et: 'Mis clientes', ico: '☰'},
       {id: 'visor', et: 'Visor 3D', ico: '⌂'},
+      {id: 'cotizador', et: 'Cotizador', ico: '€'},
       {id: 'operaciones', et: 'Mis instalaciones', ico: '⚡'},
       {id: 'captaciones', et: 'Captaciones', ico: '⚑'},
       {id: 'estadisticas', et: 'Estadísticas', ico: '▥'},
@@ -128,6 +131,7 @@ function menuDe(rol) {
     {id: 'agenda', et: 'Agenda', ico: '◷'},
     {id: 'clientes', et: 'Clientes', ico: '☰'},
     {id: 'visor', et: 'Visor 3D', ico: '⌂'},
+    {id: 'cotizador', et: 'Cotizador', ico: '€'},
     {id: 'operaciones', et: 'Instalaciones', ico: '⚡'},
     {id: 'captaciones', et: 'Captaciones', ico: '⚑'},
     {id: 'estadisticas', et: 'Estadísticas', ico: '▥'},
@@ -167,7 +171,7 @@ function rutaActual() {
 const K_MENU = 'zw.crm.menuSimple';
 const MENU_CORTO = {
   captador: ['hoy', 'agenda', 'captaciones', 'estadisticas', 'clientes', 'parte', 'avisar', 'perfil'],
-  comercial: ['hoy', 'agenda', 'clientes', 'visor', 'operaciones', 'parte', 'avisar', 'perfil'],
+  comercial: ['hoy', 'agenda', 'clientes', 'visor', 'cotizador', 'operaciones', 'parte', 'avisar', 'perfil'],
   otro: ['hoy', 'panel', 'tablero', 'incidencias', 'agenda', 'clientes', 'operaciones', 'captaciones', 'estadisticas', 'cobros', 'banco', 'perfil']
 };
 const menuCorto = () => { try { return localStorage.getItem(K_MENU) === '1'; } catch (e) { return false; } };
@@ -188,7 +192,8 @@ function pintaMenu() {
     if (x.soloSuper && rol !== 'superadmin') return null;
     const def = VISTAS[x.id];
     if (def && def.permiso === 'direccion' && !api.esDireccion()) return null;
-    if (def && def.permiso && def.permiso !== 'direccion' && !api.puede(def.permiso)) return null;
+    if (def && def.permiso === 'visor') { if (!veVisor()) return null; }
+    else if (def && def.permiso && def.permiso !== 'direccion' && !api.puede(def.permiso)) return null;
     return h('a.nav' + (vista === x.id ? '.activo' : ''),
       {onclick: () => { ir(x.id); $('#lateral').classList.remove('abierto'); }},
       h('span.ico', x.ico), x.et);
@@ -274,7 +279,7 @@ export async function pintar() {
   pintaMenu();
 
   const fuera = (def.permiso === 'direccion' && !api.esDireccion()) ||
-                (def.permiso && def.permiso !== 'direccion' && !api.puede(def.permiso));
+                (def.permiso === 'visor' ? !veVisor() : (def.permiso && def.permiso !== 'direccion' && !api.puede(def.permiso)));
   if (fuera) {
     return poner($('#vista'), h('.tarjeta', h('.cuerpo',
       h('h2', 'Esta parte del CRM no está abierta para tu usuario'),

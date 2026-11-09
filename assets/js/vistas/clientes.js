@@ -1,5 +1,6 @@
 /* vistas/clientes.js — listado de clientes y ficha completa. */
 
+import {veVisor} from './visor3d.js';
 import {h, poner, txt, num, eur, eur2, miles, pct, fechaCorta, fechaLarga, haceDias,
         normal, telHref, waHref, mapsHref, comoLlegarHref, destinoDe, suma, hoyISO,
         etiquetaCliente, recortar} from '../util.js';
@@ -397,7 +398,7 @@ export async function vistaCliente({id, ir, refrescar}) {
         ? h('a.btn', {href: comoLlegarHref(destinoDe(c)), target: '_blank', rel: 'noopener'}, '🚗 Ir')
         : null,
       h('button.btn', {onclick: acc.visita}, '📋 Modo visita'),
-      txt(c.coordenadas) || txt(c.direccion)
+      veVisor() && (txt(c.coordenadas) || txt(c.direccion))
         ? h('button.btn', {onclick: () => ir('visor/' + encodeURIComponent(c.id)), title: 'Casa en 3D con el tejado, las placas y la aerotermia'}, '⌂ Visor 3D')
         : null,
       h('button.btn', {onclick: () => ir('avisar/' + encodeURIComponent(c.id)), title: 'Avisar a dirección de un problema con este cliente'}, '⚠ Incidencia'),
@@ -410,11 +411,14 @@ export async function vistaCliente({id, ir, refrescar}) {
     ['vivienda', 'Vivienda y consumo', () => panelVivienda(c, acc.vivienda)],
     ['dimensionado', 'Ficha de dimensionado', () => panelFicha(c)],
     ['proyecto', 'Proyecto', () => panelProyecto(c)],
-    ['simulacion', 'Simulación 3D', () => { const caja = h('div', h('p.nota', 'Cargando la simulación…'));
+    ['cotizar', 'Cotizar', () => { const caja = h('div', h('p.nota', 'Cargando el cotizador…'));
+      import('./cotizador.js').then(m => m.vistaCotizador({id: c.id})).then(n => poner(caja, n))
+        .catch(e => poner(caja, h('p.nota', 'No se ha podido abrir el cotizador: ' + e.message))); return caja; }],
+    veVisor() && ['simulacion', 'Simulación 3D', () => { const caja = h('div', h('p.nota', 'Cargando la simulación…'));
       import('./visor3d.js').then(m => m.vistaVisor3d({id: c.id, embebido: true})).then(n => poner(caja, n))
         .catch(e => poner(caja, h('p.nota', 'No se ha podido abrir la simulación: ' + e.message))); return caja; }],
     ['instalaciones', 'Instalaciones (' + ops.length + ')', () => panelOperaciones(c, ops, refrescar, acc.instalacion)]
-  ];
+  ].filter(Boolean);
   tabs.forEach(([clave, nombre, pinta], i) => {
     const b = h('button', {onclick: () => {
       pestanas.querySelectorAll('button').forEach(x => x.classList.remove('activa'));
@@ -473,7 +477,7 @@ function panelResumen(c, ops, seg, refrescar, {acc, abrir, ir}) {
                 h('a.btn.mini.lima', {href: comoLlegarHref(destinoDe(c)), target: '_blank',
                   rel: 'noopener'}, '🚗 Ir en coche'),
                 h('a.btn.mini', {href: mapsHref(destinoDe(c)), target: '_blank'}, 'Ver en el mapa'),
-                h('button.btn.mini', {onclick: () => ir('visor/' + encodeURIComponent(c.id))}, '⌂ Visor 3D'))
+                veVisor() ? h('button.btn.mini', {onclick: () => ir('visor/' + encodeURIComponent(c.id))}, '⌂ Visor 3D') : null)
             : null)),
       dato('Coordenadas', txt(c.coordenadas)
         ? h('a', {href: mapsHref(c.coordenadas), target: '_blank'}, c.coordenadas) : ''),

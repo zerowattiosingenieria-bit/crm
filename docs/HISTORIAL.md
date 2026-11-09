@@ -8,6 +8,31 @@ Esto no sustituye al manual: el manual cuenta cómo se usa el CRM hoy
 luego no hay manera de reconstruir.
 
 
+## 09/11/2026 · Cotizador desde una dirección (y visor 3D en pruebas)
+
+Lo pidió Nando: un cotizador con nuestros precios y márgenes, que salga de
+una dirección con los datos del Catastro; los márgenes no los pueden ver
+comerciales ni captadores, y los directivos pueden moverlos para las
+propuestas futuras.
+
+- Menú «Cotizador» y pestaña «Cotizar» en la ficha del cliente.
+- Dirección → Catastro (m² construidos, año y uso por la sede electrónica;
+  planta del tejado y plantas por el WFS de edificios) → equipo
+  recomendado: aerotermia por m² y época de la casa (12/16/19/22 kW; la de
+  22 kW solo trifásica), paneles por consumo y lo que cabe en el mejor faldón.
+- Precio con la tarifa de Ajustes (precio_fv_*, precio_aero_*, batería,
+  cargador y suplementos de 1.000 €), IVA incluido, cuota a 10 años,
+  deducción IRPF 60 % (base máx. 15.000 €), ahorro y retorno orientativos.
+- Solo dirección: coste estimado con el catálogo de costes (mismas reglas
+  que Materiales y costes), margen de la tarifa, horquilla de margen
+  (margen_min_pct 35 % / margen_max_pct 45 % por defecto, guardable),
+  regla para probar otro margen y «Usar este precio como tarifa», que
+  cambia los precios del tramo para las propuestas futuras. El servidor no
+  manda la horquilla a quien no tiene finanzas.
+- Visor 3D y pestaña «Simulación 3D»: en pruebas, solo dirección y el
+  comercial Nando.
+
+
 ## 09/11/2026 · Visor 3D de la vivienda
 
 Lo pidió Nando: un visor como el de Open Solar al que se le da la

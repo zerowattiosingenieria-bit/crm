@@ -59,6 +59,9 @@ const ALTURA_PLANTA = 3; // m por planta (Catastro da el nº de plantas)
 const D2R = Math.PI / 180;
 const fmt = (n, d = 0) => Number(n || 0).toLocaleString('es-ES', {minimumFractionDigits: d, maximumFractionDigits: d});
 
+/** En pruebas (09/11/2026): solo dirección y el comercial Nando. */
+export const veVisor = () => api.esDireccion() || normal((api.estado.usuario || {}).usuario) === 'nando';
+
 /* ---------- carga de three.js (va en el repositorio) ---------- */
 let cargado3d = null;
 function cargarThree() {
@@ -87,7 +90,7 @@ export function utm30(lat, lon) {
   return [x, y];
 }
 
-async function geocodificar(texto) {
+export async function geocodificar(texto) {
   const q = txt(texto);
   try {
     const r = await fetch('https://www.cartociudad.es/geocoder/api/geocoder/candidatesJsonp?limit=5&q=' + encodeURIComponent(q));
@@ -105,7 +108,7 @@ async function geocodificar(texto) {
 }
 
 /** Volúmenes del Catastro alrededor del punto (coordenadas locales: E, N en metros). */
-async function edificiosCatastro(x0, y0) {
+export async function edificiosCatastro(x0, y0) {
   const bbox = [x0 - R, y0 - R, x0 + R, y0 + R].map(v => v.toFixed(1)).join(',');
   const url = 'https://ovc.catastro.meh.es/INSPIRE/wfsBU.aspx?service=WFS&version=2.0.0&request=GetFeature' +
     '&typenames=BU:BuildingPart&srsname=EPSG::25830&bbox=' + bbox + ',EPSG::25830';
@@ -129,13 +132,13 @@ async function edificiosCatastro(x0, y0) {
   return partes;
 }
 
-const area = p => { let s = 0; for (let i = 0, j = p.length - 1; i < p.length; j = i++) s += (p[j][0] + p[i][0]) * (p[j][1] - p[i][1]); return Math.abs(s / 2); };
-const dentro = (pt, p) => { let c = false; for (let i = 0, j = p.length - 1; i < p.length; j = i++) {
+export const area = p => { let s = 0; for (let i = 0, j = p.length - 1; i < p.length; j = i++) s += (p[j][0] + p[i][0]) * (p[j][1] - p[i][1]); return Math.abs(s / 2); };
+export const dentro = (pt, p) => { let c = false; for (let i = 0, j = p.length - 1; i < p.length; j = i++) {
   if ((p[i][1] > pt[1]) !== (p[j][1] > pt[1]) && pt[0] < (p[j][0] - p[i][0]) * (pt[1] - p[i][1]) / (p[j][1] - p[i][1]) + p[i][0]) c = !c; } return c; };
 const dist2 = (pt, p) => Math.min(...p.map(q => (q[0] - pt[0]) ** 2 + (q[1] - pt[1]) ** 2));
 
 /** Rectángulo mínimo (calibre giratorio sobre la envolvente). */
-function rectanguloMinimo(pts) {
+export function rectanguloMinimo(pts) {
   const s = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
   const lo = [], hi = [];
@@ -160,12 +163,13 @@ function rectanguloMinimo(pts) {
 }
 
 /* ---------- producción ---------- */
-const factor = (incl, az) => Math.max(0.35, (1 - 0.0001 * (incl - 33) ** 2) * (1 - 0.000025 * az * az * Math.min(1, incl / 30)));
-const nombreAz = a => { const n = [[0, 'Sur'], [45, 'Suroeste'], [90, 'Oeste'], [135, 'Noroeste'], [180, 'Norte'], [-45, 'Sureste'],
+export const factor = (incl, az) => Math.max(0.35, (1 - 0.0001 * (incl - 33) ** 2) * (1 - 0.000025 * az * az * Math.min(1, incl / 30)));
+export const nombreAz = a => { const n = [[0, 'Sur'], [45, 'Suroeste'], [90, 'Oeste'], [135, 'Noroeste'], [180, 'Norte'], [-45, 'Sureste'],
   [-90, 'Este'], [-135, 'Noreste'], [-180, 'Norte']]; let b = n[0]; for (const x of n) if (Math.abs(a - x[0]) < Math.abs(a - b[0])) b = x; return b[1]; };
 
 /* ======================================================================= */
 export async function vistaVisor3d({id, embebido}) {
+  if (!veVisor()) return h('.tarjeta', h('.cuerpo', h('p.nota', 'El visor 3D está en pruebas y todavía no está abierto para tu usuario.')));
   const cli = id ? api.cliente(id) : null;
   const op = cli ? (api.estado.operaciones || []).filter(o => o.cliente_id === cli.id).slice(-1)[0] : null;
   const dirIni = cli ? [txt(cli.direccion), txt(cli.municipio)].filter(Boolean).join(', ') : '';
