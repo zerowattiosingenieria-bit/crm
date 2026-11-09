@@ -60,7 +60,7 @@ const D2R = Math.PI / 180;
 const fmt = (n, d = 0) => Number(n || 0).toLocaleString('es-ES', {minimumFractionDigits: d, maximumFractionDigits: d});
 
 /** En pruebas (09/11/2026): solo dirección y el comercial Nando. */
-export const veVisor = () => api.esDireccion() || normal((api.estado.usuario || {}).usuario) === 'nando';
+export const veVisor = () => api.esDireccion() || (api.estado.usuario || {}).rol === 'comercial';
 
 /* ---------- carga de three.js (va en el repositorio) ---------- */
 let cargado3d = null;
@@ -169,7 +169,7 @@ export const nombreAz = a => { const n = [[0, 'Sur'], [45, 'Suroeste'], [90, 'Oe
 
 /* ======================================================================= */
 export async function vistaVisor3d({id, embebido}) {
-  if (!veVisor()) return h('.tarjeta', h('.cuerpo', h('p.nota', 'El visor 3D está en pruebas y todavía no está abierto para tu usuario.')));
+  if (!veVisor()) return h('.tarjeta', h('.cuerpo', h('p.nota', 'El visor 3D solo está disponible para dirección y comerciales.')));
   const cli = id ? api.cliente(id) : null;
   const op = cli ? (api.estado.operaciones || []).filter(o => o.cliente_id === cli.id).slice(-1)[0] : null;
   const dirIni = cli ? [txt(cli.direccion), txt(cli.municipio)].filter(Boolean).join(', ') : '';

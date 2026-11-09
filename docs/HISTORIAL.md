@@ -8,6 +8,14 @@ Esto no sustituye al manual: el manual cuenta cómo se usa el CRM hoy
 luego no hay manera de reconstruir.
 
 
+
+## 09/11/2026 · Simulación 3D para todos los comerciales
+
+Lo pidió Nando: el Visor 3D y la pestaña «Simulación 3D» de la ficha dejan
+de estar solo para dirección y Nando y se abren a todos los comerciales.
+Los captadores siguen sin verlo. Sigue siendo uso interno: nunca va en el
+PDF de la propuesta.
+
 ## 09/11/2026 · CAEs (Novawatt), WIXER y sincronización de la contabilidad
 
 Lo pidió Nando: «para la parte de contabilidad siempre sincronízate con

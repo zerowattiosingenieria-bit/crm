@@ -1,6 +1,6 @@
 /* Cotizador (09/11/2026): con Catastro/IGN simulados comprueba que cotiza desde
    una dirección, que dirección ve el margen y que un comercial (Rober) no lo ve
-   ni ve el visor 3D. */
+   pero sí ve el visor 3D (abierto a todos los comerciales desde el 09/11/2026). */
 const {chromium} = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -47,7 +47,7 @@ async function entrar(nav, usuario) {
     if (!/€/.test(total)) fallos.push(u + ': no sale total');
     if (esDir && !verMargen) fallos.push(u + ': dirección no ve el margen');
     if (!esDir && verMargen) fallos.push(u + ': un comercial ve el margen');
-    if (!esDir && /Visor 3D/.test(menu)) fallos.push(u + ': un comercial (no Nando) ve el visor 3D');
+    if (!esDir && !/Visor 3D/.test(menu)) fallos.push(u + ': un comercial no ve el visor 3D');
     fallos.push(...p.errores);
   }
   { const p = await entrar(nav, 'nando');
