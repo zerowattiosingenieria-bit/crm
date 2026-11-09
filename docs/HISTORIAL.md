@@ -31,6 +31,8 @@ y una carpeta por casa.
   pte. facturar, finalizado, cancelado.
 - Cada expediente enlaza su carpeta de Drive y la ficha del cliente (se casa
   por la dirección, aunque esté escrita distinto).
+- Solo clientes de Zero Wattios (orden de Nando): los antiguos de Aurus
+  (etiqueta «Aurus» sin etiqueta de Zero Wattios) no entran ni se ven.
 - Importes (CAE a cobrar, WIXER facturado) solo con permiso de finanzas.
 - Nunca se guardan IBAN ni DNI: se quedan en el Excel y en Drive.
 - «importarTramites» da de alta o actualiza en bloque sin duplicar (por

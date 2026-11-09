@@ -97,6 +97,12 @@ function comprobar(n, c, x) { hechas++; if (c) console.log('  ok · ' + n); else
   comprobar('Sandra entra directamente en WIXER', /Cambios de compañía eléctrica/.test(tsa) && !/CAEs \(Novawatt\)/.test(tsa));
   const ru = await entra('rober');
   comprobar('Rober no lo ve', !(await ru.pedir('tramites', {})).ok);
+  const aur = await d.pag.evaluate(async () => { const api = await import('/assets/js/api.js'); return (api.estado.clientes || []).filter(x => /\d/.test(x.direccion || ''))[3]; });
+  await d.pedir('guardarCliente', {cliente: {id: aur.id, etiquetas: 'Aurus'}});
+  const ra2 = await d.pedir('importarTramites', {tramites: [{tipo: 'cae', direccion: aur.direccion, nombre: 'Antiguo de Aurus'}]});
+  comprobar('los clientes antiguos de Aurus no entran', ra2.ok && ra2.nuevos === 0 && ra2.aurus_fuera.length === 1, ra2);
+  const ra3 = await d.pedir('guardarTramite', {tramite: {tipo: 'wixer', cliente_id: aur.id, direccion: aur.direccion}});
+  comprobar('ni a mano', !ra3.ok, ra3);
   const sy = await d.pedir('syncContabilidad', {guardar: {banktrack: [{cuenta: 'CaixaBank', resumen: '12 movimientos nuevos'}], avisos: ['Factura FZW2026-120 en Drive sin cobro en el CRM']}});
   comprobar('guarda el estado de la sincronización contable', sy.ok && sy.sync.avisos.length === 1, sy);
   await d.pag.evaluate(() => { location.hash = '#contabilidad'; }); await d.pag.waitForTimeout(2500);

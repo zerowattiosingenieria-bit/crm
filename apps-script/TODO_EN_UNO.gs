@@ -9376,6 +9376,12 @@ const PROHIBIDOS_TRAMITE = ['iban', 'dni', 'cuenta', 'tarjeta'];
 
 const RESPONSABLE_TRAMITE = {cae: 'abraham', wixer: 'sandra'};
 const VEN_TRAMITE = {cae: 'abraham', wixer: 'sandra,abraham'};
+/* Solo clientes de Zero Wattios: los antiguos de Aurus no cuentan (orden de Nando, 09/11/2026). */
+function esAurusTra_(c) {
+  if (!c) return false;
+  const e = normal_((c.etiquetas || '') + ' ' + (c.origen || ''));
+  return e.indexOf('aurus') >= 0 && !/zero ?w?att?ios|\bzw\b/.test(e);
+}
 function tiposVisiblesTra_(u) {
   if ((permisos_(u).alcance || '') === 'todo') return TIPOS_TRAMITE.slice();
   const yo = normal_(u.usuario), cfg = config_();
@@ -9470,7 +9476,7 @@ function accTramites_(u, p) {
   const clientes = indexar_(leer_('CLIENTES')), usuarios = indexar_(leer_('USUARIOS'));
   const tipo = normal_(p.tipo);
   const ve = tiposVisiblesTra_(u);
-  const lista = leer_('TRAMITES').filter(function (t) { return ve.indexOf(normal_(t.tipo)) >= 0 && (!tipo || normal_(t.tipo) === tipo); })
+  const lista = leer_('TRAMITES').filter(function (t) { return ve.indexOf(normal_(t.tipo)) >= 0 && (!tipo || normal_(t.tipo) === tipo) && !esAurusTra_(clientes[txt_(t.cliente_id)]); })
     .map(function (t) { return tramitePublico_(t, clientes, usuarios, fin); })
     .sort(function (a, b) {
       const ca = a.estado === 'cancelado' ? 1 : 0, cb = b.estado === 'cancelado' ? 1 : 0;
@@ -9549,7 +9555,11 @@ function accGuardarTramite_(u, p) {
     if (!actual) return {ok: false, error: 'Ese trámite ya no existe.'};
   }
   exigirDireccionTra_(u, actual ? txt_(actual.tipo) : normal_(d.tipo));
-  if (txt_(d.cliente_id) && !leer_('CLIENTES').some(function (c) { return txt_(c.id) === txt_(d.cliente_id); })) return {ok: false, error: 'Ese cliente no existe.'};
+  if (txt_(d.cliente_id)) {
+    const cliD = leer_('CLIENTES').filter(function (c) { return txt_(c.id) === txt_(d.cliente_id); })[0];
+    if (!cliD) return {ok: false, error: 'Ese cliente no existe.'};
+    if (esAurusTra_(cliD)) return {ok: false, error: 'Es un cliente antiguo de Aurus: CAEs y WIXER son solo de Zero Wattios.'};
+  }
   const c = cambiosTra_(d, actual, fin, false);
   if ((actual ? actual.tipo : c.tipo) === 'cae' && c.checklist) {
     const mezcla = Object.assign({}, actual || {}, c);
@@ -9583,7 +9593,7 @@ function accImportarTramites_(u, p) {
   if (!filas.length) return {ok: false, error: 'No ha llegado ningún trámite.'};
   const clientes = leer_('CLIENTES');
   const todos = leer_('TRAMITES');
-  let nuevos = 0, cambiados = 0; const sinCliente = [];
+  let nuevos = 0, cambiados = 0; const sinCliente = [], aurus = []; const cliIdx = indexar_(clientes);
   filas.forEach(function (d) {
     if (!d || typeof d !== 'object') return;
     const tipo = normal_(d.tipo);
@@ -9593,6 +9603,8 @@ function accImportarTramites_(u, p) {
     if (!actual && k) actual = todos.filter(function (t) { return normal_(t.tipo) === tipo && mismaDireccionTra_(k, claveDireccionTra_(t.direccion)); })[0];
     if (!actual && txt_(d.numero) && !k) actual = todos.filter(function (t) { return normal_(t.tipo) === tipo && txt_(t.numero) === txt_(d.numero); })[0];
     const e = Object.assign({}, d);
+    const cid = txt_(e.cliente_id) || clientePorDireccionTra_(txt_(d.direccion), clientes);
+    if (cid && esAurusTra_(cliIdx[cid])) { aurus.push(txt_(d.direccion)); return; }
     if (!txt_(e.cliente_id)) {
       e.cliente_id = clientePorDireccionTra_(txt_(d.direccion), clientes);
       if (!e.cliente_id) { delete e.cliente_id; sinCliente.push(txt_(d.direccion || d.nombre)); }
@@ -9615,7 +9627,8 @@ function accImportarTramites_(u, p) {
   guardarConfigTra_('tramites_sincronizado', ahora_());
   registrar_(u, 'importar_tramites', 'TRAMITES', '', nuevos + ' nuevos, ' + cambiados + ' actualizados');
   return {ok: true, nuevos: nuevos, actualizados: cambiados,
-    sin_cliente: sinCliente.filter(function (x, i, a) { return x && a.indexOf(x) === i; })};
+    sin_cliente: sinCliente.filter(function (x, i, a) { return x && a.indexOf(x) === i; }),
+    aurus_fuera: aurus.filter(function (x, i, a) { return x && a.indexOf(x) === i; })};
 }
 
 function guardarConfigTra_(clave, valor) {

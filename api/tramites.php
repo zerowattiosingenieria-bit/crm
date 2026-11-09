@@ -45,6 +45,16 @@ const PROHIBIDOS_TRAMITE = ['iban', 'dni', 'cuenta', 'tarjeta'];
 const RESPONSABLE_TRAMITE = ['cae' => 'abraham', 'wixer' => 'sandra'];
 const VEN_TRAMITE = ['cae' => 'abraham', 'wixer' => 'sandra,abraham'];
 
+/* Orden de Nando (09/11/2026): «las antiguas de Aurus no las tengas en cuenta
+   para WIXER y CAEs; solo las de Zero Wattios». Cliente de Aurus = etiqueta
+   «Aurus» sin etiqueta de Zero Wattios (los que estuvieron en las dos etapas
+   sí cuentan). */
+function esAurusTra_(?array $c): bool {
+  if (!$c) return false;
+  $e = normal_(($c['etiquetas'] ?? '') . ' ' . ($c['origen'] ?? ''));
+  return str_contains($e, 'aurus') && !preg_match('/zero ?w?att?ios|\\bzw\\b/', $e);
+}
+
 function esDireccionTra_(array $u): bool { return (permisos_($u)['alcance'] ?? '') === 'todo'; }
 function tiposVisiblesTra_(array $u): array {
   if (esDireccionTra_($u)) return TIPOS_TRAMITE;
@@ -151,7 +161,8 @@ function accTramites_(array $u, array $p): array {
   $tipo = normal_($p['tipo'] ?? '');
   $ve = tiposVisiblesTra_($u);
   $lista = array_map(fn($t) => tramitePublico_($t, $clientes, $usuarios, $fin),
-    array_values(array_filter(leer_('TRAMITES'), fn($t) => in_array(normal_($t['tipo'] ?? ''), $ve, true) && ($tipo === '' || normal_($t['tipo'] ?? '') === $tipo))));
+    array_values(array_filter(leer_('TRAMITES'), fn($t) => in_array(normal_($t['tipo'] ?? ''), $ve, true) && ($tipo === '' || normal_($t['tipo'] ?? '') === $tipo)
+      && !esAurusTra_($clientes[txt_($t['cliente_id'] ?? '')] ?? null))));
   $lista = ordenar_($lista, function ($a, $b) {
     $ca = $a['estado'] === 'cancelado' ? 1 : 0; $cb = $b['estado'] === 'cancelado' ? 1 : 0;
     if ($ca !== $cb) return $ca - $cb;
@@ -235,8 +246,10 @@ function accGuardarTramite_(array $u, array $p): array {
     if (!$actual) return ['ok' => false, 'error' => 'Ese trámite ya no existe.'];
   }
   exigirDireccionTra_($u, $actual ? txt_($actual['tipo']) : normal_($d['tipo'] ?? ''));
-  if (($d['cliente_id'] ?? '') !== '' && !buscar1_('CLIENTES', fn($c) => mismo_($c['id'], $d['cliente_id']))) {
-    return ['ok' => false, 'error' => 'Ese cliente no existe.'];
+  if (($d['cliente_id'] ?? '') !== '') {
+    $cliD = buscar1_('CLIENTES', fn($c) => mismo_($c['id'], $d['cliente_id']));
+    if (!$cliD) return ['ok' => false, 'error' => 'Ese cliente no existe.'];
+    if (esAurusTra_($cliD)) return ['ok' => false, 'error' => 'Es un cliente antiguo de Aurus: CAEs y WIXER son solo de Zero Wattios.'];
   }
   $c = cambiosTra_($d, $actual, $fin);
   /* Con todos los papeles del CAE, pasa solo a «completo» (si estaba en documentación). */
@@ -277,7 +290,7 @@ function accImportarTramites_(array $u, array $p): array {
   $soloVacios = !empty($p['soloVacios']);
   $clientes = leer_('CLIENTES');
   $todos = leer_('TRAMITES');
-  $nuevos = 0; $cambiados = 0; $sinCliente = [];
+  $nuevos = 0; $cambiados = 0; $sinCliente = []; $aurus = []; $cliIdx = null;
   foreach ($filas as $d) {
     if (!is_array($d)) continue;
     $tipo = normal_($d['tipo'] ?? '');
@@ -295,6 +308,9 @@ function accImportarTramites_(array $u, array $p): array {
       if (normal_($t['tipo'] ?? '') === $tipo && txt_($t['numero'] ?? '') === txt_($d['numero'])) { $actual = $t; break; }
     }
     $e = $d;
+    $cliIdx = $cliIdx ?? indexar_($clientes);
+    $cid = txt_($e['cliente_id'] ?? '') ?: clientePorDireccionTra_(txt_($d['direccion'] ?? ''), $clientes);
+    if ($cid !== '' && esAurusTra_($cliIdx[$cid] ?? null)) { $aurus[] = txt_($d['direccion'] ?? ''); continue; }
     if (txt_($e['cliente_id'] ?? '') === '') {
       $e['cliente_id'] = clientePorDireccionTra_(txt_($d['direccion'] ?? ''), $clientes);
       if ($e['cliente_id'] === '') { unset($e['cliente_id']); $sinCliente[] = txt_($d['direccion'] ?? $d['nombre'] ?? ''); }
@@ -316,7 +332,7 @@ function accImportarTramites_(array $u, array $p): array {
   }
   guardarConfigTra_('tramites_sincronizado', ahora_());
   registrar_($u, 'importar_tramites', 'TRAMITES', '', $nuevos . ' nuevos, ' . $cambiados . ' actualizados');
-  return ['ok' => true, 'nuevos' => $nuevos, 'actualizados' => $cambiados, 'sin_cliente' => array_values(array_unique(array_filter($sinCliente)))];
+  return ['ok' => true, 'nuevos' => $nuevos, 'actualizados' => $cambiados, 'sin_cliente' => array_values(array_unique(array_filter($sinCliente))), 'aurus_fuera' => array_values(array_unique(array_filter($aurus)))];
 }
 
 function guardarConfigTra_(string $clave, string $valor): void {
