@@ -48,8 +48,8 @@ function precioFv(n, T) {
 
 /* ---------- dimensionado ---------- */
 function aeroKw(m2, anyo, plantas) {
-  const wm2 = !anyo ? 80 : anyo < 1980 ? 100 : anyo < 2007 ? 80 : 60;   // aislamiento según época
-  const kw = m2 * wm2 / 1000;
+  const wm2 = !anyo ? 60 : anyo < 1980 ? 80 : anyo < 2007 ? 60 : 45;   // W/m² en Madrid según el aislamiento de la época
+  const kw = m2 * 0.85 * wm2 / 1000;                                    // ≈85 % de la superficie es calefactable
   return kw <= 12 ? 12 : kw <= 16 ? 16 : kw <= 19 ? 19 : 22;
 }
 
