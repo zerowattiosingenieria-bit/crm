@@ -55,6 +55,11 @@ backend y la misma base de datos:
 - El mu-plugin (servidor/zw-crm.php) sirve los dos subdominios y ahora se
   actualiza solo al desplegar (desplegar.php comprueba que es PHP válido y
   guarda el anterior como zw-crm.php.anterior).
+- Direcciones: IONOS solo deja colgar un dominio del WordPress del CRM (conectar
+  otro le quitaría crm.zerowattios.com), así que clientes.zerowattios.com y
+  contratas.zerowattios.com son redirecciones HTTP (con SSL) a
+  crm.zerowattios.com/clientes/ y /contratas/. Si un día tienen alojamiento
+  propio, el mu-plugin ya sabe servirlas por su nombre.
 - Solo PHP: el espejo de Apps Script (00_Config.gs) lleva las tablas, pero
   las acciones del portal no existen en el mock de node.
 
