@@ -36,6 +36,16 @@ async function verArchivo(id, nombre) {
   } catch (e) { avisoError(e); }
 }
 
+/* Las fotos se reducen y llevan miniatura, como en la carpeta del cliente. */
+async function prepararFoto(f) {
+  const url = await new Promise((ok, mal) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => mal(new Error('No se ha podido leer.')); r.readAsDataURL(f); });
+  if (!(f.type || '').startsWith('image/') || /gif|svg/.test(f.type)) return {datos: String(url).split(',')[1], mime: f.type || 'application/pdf', nombre: f.name, miniatura: ''};
+  const img = await new Promise((ok, mal) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => mal(new Error('Imagen no válida.')); i.src = url; });
+  const dibuja = (lado, q) => { const k = Math.min(1, lado / Math.max(img.naturalWidth, img.naturalHeight)); const c = document.createElement('canvas');
+    c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); return c.toDataURL('image/jpeg', q); };
+  return {datos: dibuja(1800, 0.82).split(',')[1], mime: 'image/jpeg', nombre: f.name.replace(/\.[^.]+$/, '') + '.jpg', miniatura: dibuja(220, 0.55)};
+}
+
 function leerComoBase64(f) {
   return new Promise((ok, mal) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.onerror = () => mal(new Error('No se ha podido leer.')); r.readAsDataURL(f); });
 }
@@ -179,15 +189,17 @@ export async function vistaSubcontratas({id}) {
     };
 
     const archivosObra = (o.archivos || []).filter(a => a.obra_id === o.id);
+    const notaFoto = h('input', {placeholder: 'Qué se ve o qué va ahí (p. ej. «la aerotermia va en esta pared»)', estilo: {flex: '1 1 260px'}});
     const subir = h('input', {type: 'file', multiple: true, estilo: {display: 'none'}, onchange: async e => {
       const clase = selClase.value;
       for (const f of Array.from(e.target.files || [])) {
-        try { await api.pedir('subirArchivoObra', {obra_id: o.id, clase, nombre: f.name, mime: f.type || 'application/pdf', datos: await leerComoBase64(f)}); }
+        try { await api.pedir('subirArchivoObra', Object.assign({obra_id: o.id, clase, notas: notaFoto.value}, await prepararFoto(f))); }
         catch (er) { avisoError(er); }
       }
-      aviso('Subido y visible para el cliente'); v.cerrar(); abrirObra(o.id);
+      aviso(['foto_antes', 'documento_instalador', 'documento_obra'].includes(clase) ? 'Subido: lo ve el instalador (el cliente no)' : 'Subido y visible para el cliente');
+      v.cerrar(); abrirObra(o.id);
     }});
-    const selClase = h('select', Object.entries(o.clases || {}).filter(([k]) => k !== 'obra_foto').map(([k, et]) => h('option', {value: k, selected: k === 'documento_cliente'}, et)));
+    const selClase = h('select', Object.entries(o.clases || {}).filter(([k]) => k !== 'obra_foto').map(([k, et]) => h('option', {value: k, selected: k === 'foto_antes'}, et)));
 
     poner(cuerpo,
       h('div', {estilo: {display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center'}},
@@ -212,7 +224,8 @@ export async function vistaSubcontratas({id}) {
         (o.fases || []).map(f => marca((f.hecho ? '✓ ' : '○ ') + f.titulo, f.hecho ? 'bien' : '')))),
       h('div', h('h3', {estilo: {margin: '10px 0 8px'}}, 'Fotos y documentos de la obra'),
         h('div', {estilo: {display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '10px'}},
-          h('span.nota', 'Subir para el cliente (Rubén / dirección):'), selClase, h('button.btn', {onclick: () => subir.click()}, 'Elegir archivo'), subir),
+          h('span.nota', 'Subir:'), selClase, notaFoto, h('button.btn.primario', {onclick: () => subir.click()}, 'Elegir fotos o archivos'), subir),
+        h('p.nota', {estilo: {marginTop: 0}}, 'Para el instalador (el cliente no lo ve): «Foto antes de la obra» (casa, tejado, cuadro, dónde va cada equipo) y «Documento o foto para el instalador» (planos, esquemas, indicaciones). Manuales, garantías, legalización y documentos para el cliente los ve el cliente al momento.'),
         archivosObra.length ? h('div', {estilo: {display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(140px,1fr))', gap: '8px'}}, archivosObra.map(a =>
           h('div', {estilo: {border: '1px solid var(--linea)', borderRadius: '10px', overflow: 'hidden'}},
             h('button', {estilo: {display: 'block', width: '100%', aspectRatio: '4/3', border: 0, padding: 0, background: '#eef0ea', cursor: 'pointer'}, onclick: () => verArchivo(a.id, a.nombre)},

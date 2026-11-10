@@ -799,6 +799,15 @@
         : h('p.nota', 'Zero Wattios completará aquí los equipos.'),
       o.tejado ? h('p.nota', {estilo: {marginBottom: 0}}, 'Tejado: ' + o.tejado) : null));
 
+    /* Antes de la obra: cómo es la casa y dónde va cada cosa (fotos de la visita
+       del comercial y las que añade Zero Wattios con su explicación). */
+    const fotosAntes = (o.archivos || []).filter(a => a.clase === 'foto' || a.clase === 'foto_antes')
+      .sort((a, b) => (b.clase === 'foto_antes') - (a.clase === 'foto_antes'));
+    main.appendChild(h('.tarjeta', h('h2', 'Antes de la obra · lo que te vas a encontrar'),
+      fotosAntes.length ? [h('p.nota', {estilo: {marginTop: 0}}, 'Fotos de la casa antes de instalar: tejado, cuadro eléctrico, sitio de cada equipo y accesos. Toca una para verla en grande.'),
+        galeria(fotosAntes.map(f => Object.assign({}, f, {notas: f.notas || (f.clase === 'foto' ? 'Visita' : '')})), true)]
+        : h('p.nota', {estilo: {margin: 0}}, 'Zero Wattios añadirá aquí las fotos de la casa antes de la instalación.')));
+
     /* Fases con fotos */
     main.appendChild(h('.tarjeta', h('h2', 'Fases'), h('.fases', (o.fases || []).map(f => {
       const nFotos = (o.archivos || []).filter(a => a.clase === 'obra_foto' && txt(a.notas).toLowerCase() === f.titulo.toLowerCase()).length;
@@ -832,9 +841,8 @@
     }
 
     /* Documentos: subir legalización, certificados… */
-    const propios = (o.archivos || []).filter(a => a.obra_id === o.id && a.clase !== 'obra_foto');
-    const deZW = (o.archivos || []).filter(a => a.obra_id !== o.id && a.clase !== 'foto');
-    const fotosVisita = (o.archivos || []).filter(a => a.clase === 'foto');
+    const propios = (o.archivos || []).filter(a => a.obra_id === o.id && ['legalizacion', 'certificado', 'documento_obra'].includes(a.clase));
+    const deZW = (o.archivos || []).filter(a => a.clase === 'proyecto' || a.clase === 'documento_instalador');
     const fotosObra = (o.archivos || []).filter(a => a.clase === 'obra_foto');
     const subirDoc = async clase => {
       const fs = await elegirArchivos({aceptar: 'application/pdf,image/*', multiple: true});
@@ -851,10 +859,9 @@
         h('button.btn.chico.borde', {onclick: () => subirDoc('documento_obra'), estilo: {gridColumn: '1 / -1'}}, ico('subir'), 'Otro documento (albarán, esquema…)')) : null,
       propios.length ? h('.docs', propios.map(d => filaDoc('doc', d.nombre, d.clase_nombre + ' · ' + fecha(d.subido, true), () => abrir({id: d.id}, d.nombre)))) : h('p.nota', {estilo: {margin: 0}}, 'Aún no has subido documentos.')));
 
-    if (deZW.length || (o.fichas || []).length) main.appendChild(h('.tarjeta', h('h2', 'Proyecto y fichas técnicas'), h('.docs',
-      deZW.map(d => filaDoc(d.clase === 'proyecto' ? 'lista' : 'doc', d.nombre, d.clase_nombre, () => abrir({id: d.id}, d.nombre))),
+    if (deZW.length || (o.fichas || []).length) main.appendChild(h('.tarjeta', h('h2', 'De Zero Wattios para esta obra'), h('p.nota', {estilo: {marginTop: 0}}, 'Proyecto, planos, esquemas, indicaciones y fichas técnicas. Tenlo en cuenta antes de empezar.'), h('.docs',
+      deZW.map(d => filaDoc(d.clase === 'proyecto' ? 'lista' : (d.mime || '').startsWith('image/') ? 'foto' : 'doc', d.notas || d.nombre, (d.clase === 'proyecto' ? 'Proyecto técnico' : 'Para el instalador') + (d.notas ? ' · ' + d.nombre : ''), () => abrir({id: d.id}, d.nombre))),
       (o.fichas || []).map(m => filaDoc('libro', m.nombre, 'Ficha técnica', () => abrir({manual: m.clave}, m.nombre + '.pdf'))))));
-    if (fotosVisita.length) main.appendChild(h('.tarjeta', h('h2', 'Fotos de la visita'), h('p.nota', {estilo: {marginTop: 0}}, 'Cómo es la casa: tejado, cuadro, sitio de los equipos.'), galeria(fotosVisita)));
     if (fotosObra.length) main.appendChild(h('.tarjeta', h('h2', 'Fotos de la obra'), galeria(fotosObra, true)));
 
     /* Bitácora y notas */

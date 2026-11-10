@@ -36,7 +36,8 @@ const PORTAL_SLA = ['urgente' => [4, 24], 'media' => [24, 72], 'baja' => [72, 16
 const PORTAL_ESPECIALIDADES = ['fotovoltaica' => 'Fotovoltaica', 'aerotermia' => 'Aerotermia'];
 const PORTAL_ESTADOS_OBRA = ['asignada' => 'Asignada', 'en_curso' => 'En curso', 'terminada' => 'Terminada', 'validada' => 'Validada', 'cancelada' => 'Cancelada'];
 const PORTAL_CLASES = [
-  'obra_foto' => 'Foto de la instalación', 'legalizacion' => 'Legalización', 'certificado' => 'Certificado (CIE / boletín)',
+  'obra_foto' => 'Foto de la instalación', 'foto_antes' => 'Foto antes de la obra (para el instalador)',
+  'documento_instalador' => 'Documento o foto para el instalador (planos, esquemas, indicaciones)', 'legalizacion' => 'Legalización', 'certificado' => 'Certificado (CIE / boletín)',
   'manual' => 'Manual', 'garantia' => 'Garantía', 'documento_obra' => 'Documento de obra', 'documento_cliente' => 'Documento para el cliente'
 ];
 /* Lo que se le puede enseñar al cliente. Orden de Nando (10/11/2026): «no se le
@@ -45,7 +46,7 @@ const PORTAL_CLASES = [
    deniegan (ARCHIVOS.visible_cliente = si | no | pendiente). */
 const PORTAL_VE_CLIENTE = ['obra_foto', 'legalizacion', 'certificado', 'manual', 'garantia', 'documento_cliente', 'aceptacion'];
 /* Lo que el instalador ve de la carpeta del cliente, además de lo de su obra. */
-const PORTAL_VE_CONTRATA = ['foto', 'proyecto'];
+const PORTAL_VE_CONTRATA = ['foto', 'foto_antes', 'documento_instalador', 'proyecto'];
 const PORTAL_FASES = [
   'fotovoltaica' => [
     ['llegada', 'Llegada y replanteo', false, ''], ['estructura', 'Estructura montada', true, ''],
@@ -751,7 +752,7 @@ function portalSubir_(array $c, array $p): array {
   $o = portalObraMia_($c, txt_($p['obra_id'] ?? ''));
   if (!$o) return ['ok' => false, 'error' => 'Esa obra no es tuya.'];
   $clase = normal_($p['clase'] ?? '');
-  if (!isset(PORTAL_CLASES[$clase]) || $clase === 'documento_cliente' || $clase === 'manual') $clase = 'documento_obra';
+  if (!in_array($clase, ['obra_foto', 'legalizacion', 'certificado', 'documento_obra'], true)) $clase = 'documento_obra';
   $r = portalGuardarArchivo_($o, $p, $clase, portalQuien_($c));
   if (!$r['ok']) return $r;
   /* Al cliente no le llega hasta que Rubén o dirección lo aprueban (accVisibleArchivoPortal_). */
