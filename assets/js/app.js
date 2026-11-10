@@ -13,6 +13,7 @@ import {vistaEstadisticas} from './vistas/estadisticas.js';
 import {vistaIncidencias, vistaAvisarIncidencia} from './vistas/incidencias.js';
 import {vistaTramites, veTramites} from './vistas/tramites.js';
 import {vistaSubcontratas, vistaCuentasPortal} from './vistas/subcontratas.js';
+import {vistaSeguimiento} from './vistas/seguimiento.js';
 import {vistaMapa} from './vistas/mapa.js';
 import {vistaDirectorio} from './vistas/directorio.js';
 import {vistaContabilidad, vistaFacturas, vistaGastos, vistaCobros} from './vistas/finanzas.js';
@@ -50,6 +51,7 @@ const VISTAS = {
   estadisticas: {titulo: 'Estadísticas',       pinta: vistaEstadisticas},
   incidencias:  {titulo: 'Incidencias',        pinta: vistaIncidencias,   permiso: 'direccion'},
   tramites:     {titulo: 'CAEs y WIXER',       pinta: vistaTramites,      permiso: 'tramites'},
+  seguimiento:  {titulo: 'Seguimiento de operaciones', pinta: vistaSeguimiento, permiso: 'direccion'},
   subcontratas: {titulo: 'Obras de subcontratas', pinta: vistaSubcontratas, permiso: 'direccion'},
   cuentasportal:{titulo: 'Cuentas de clientes y subcontratas', pinta: vistaCuentasPortal, permiso: 'direccion', soloSuper: true},
   avisar:       {titulo: 'Avisar de una incidencia', pinta: vistaAvisarIncidencia},
@@ -139,6 +141,7 @@ function menuDe(rol) {
     {id: 'visor', et: 'Visor 3D', ico: '⌂'},
     {id: 'cotizador', et: 'Cotizador', ico: '€'},
     {id: 'operaciones', et: 'Instalaciones', ico: '⚡'},
+    {id: 'seguimiento', et: 'Seguimiento de operaciones', ico: '☑'},
     {id: 'subcontratas', et: 'Obras de subcontratas', ico: '⚒'},
     {id: 'tramites', et: 'CAEs y WIXER', ico: '♻'},
     {id: 'captaciones', et: 'Captaciones', ico: '⚑'},
@@ -181,7 +184,7 @@ const K_MENU = 'zw.crm.menuSimple';
 const MENU_CORTO = {
   captador: ['hoy', 'agenda', 'captaciones', 'estadisticas', 'clientes', 'parte', 'tramites', 'avisar', 'perfil'],
   comercial: ['hoy', 'agenda', 'clientes', 'visor', 'cotizador', 'operaciones', 'parte', 'avisar', 'perfil'],
-  otro: ['hoy', 'panel', 'tablero', 'incidencias', 'agenda', 'clientes', 'operaciones', 'subcontratas', 'tramites', 'captaciones', 'estadisticas', 'cobros', 'banco', 'perfil']
+  otro: ['hoy', 'panel', 'tablero', 'incidencias', 'agenda', 'clientes', 'operaciones', 'seguimiento', 'subcontratas', 'tramites', 'captaciones', 'estadisticas', 'cobros', 'banco', 'perfil']
 };
 const menuCorto = () => { try { return localStorage.getItem(K_MENU) === '1'; } catch (e) { return false; } };
 

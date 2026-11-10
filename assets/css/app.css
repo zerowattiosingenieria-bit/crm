@@ -530,3 +530,92 @@ ul.zw-faltan li::before{content:'!'; position:absolute; left:0; top:6px; width:1
   .ventana > .cuerpo{padding:16px}
   .ventana input, .ventana select, .ventana textarea{max-width:100%}
 }
+
+/* ---------- seguimiento de operaciones (10/11/2026) ---------- */
+.seg-cabecera{display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; margin-bottom:14px}
+.seg-cabecera .acciones{display:flex; gap:8px}
+.nota.aviso{color:var(--aviso); background:var(--aviso-b); padding:8px 12px; border-radius:var(--r-s)}
+.seg-faltas{display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr)); margin-bottom:16px}
+.seg-grupo{background:var(--papel); border:1px solid var(--linea); border-radius:var(--r); padding:12px 14px; box-shadow:var(--sombra)}
+.seg-grupo-t{font-weight:700; font-size:13px; letter-spacing:.04em; text-transform:uppercase; color:var(--tx-2); margin-bottom:10px; display:flex; gap:8px; align-items:center}
+.seg-grupo-t span{display:inline-grid; place-items:center; width:22px; height:22px; border-radius:6px; background:var(--carbon); color:var(--lima); font-size:12px}
+.seg-pastillas{display:flex; flex-wrap:wrap; gap:6px}
+.seg-pastilla{position:relative; overflow:hidden; display:flex; align-items:center; gap:6px; border:1px solid var(--linea-fuerte); background:var(--papel-2);
+  border-radius:999px; padding:5px 11px 7px 5px; font:inherit; font-size:12.5px; color:var(--tx); cursor:pointer}
+.seg-pastilla .n{display:inline-grid; place-items:center; min-width:22px; height:22px; padding:0 5px; border-radius:999px; font-weight:800; font-size:12px; color:#fff}
+.seg-pastilla i{position:absolute; left:0; bottom:0; height:3px; background:var(--bien)}
+.seg-pastilla.ok{border-color:#cfe8d6; background:var(--bien-b)}
+.seg-pastilla.ok .n{background:var(--bien)}
+.seg-pastilla.algunas .n{background:var(--aviso)}
+.seg-pastilla.muchas .n{background:var(--mal)}
+.seg-pastilla.algunas i,.seg-pastilla.muchas i{background:var(--lima-osc)}
+.seg-pastilla:hover{border-color:var(--carbon)}
+.seg-pastilla.activa{background:var(--carbon); color:#fff; border-color:var(--carbon)}
+.seg-barra{display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:12px}
+.seg-segmentos{display:flex; background:var(--papel); border:1px solid var(--linea); border-radius:999px; padding:3px; flex-wrap:wrap}
+.seg-segmentos button{border:0; background:none; font:inherit; font-size:13px; padding:7px 14px; border-radius:999px; cursor:pointer; color:var(--tx-2)}
+.seg-segmentos button.activo{background:var(--carbon); color:var(--lima); font-weight:700}
+.seg-filtros{display:flex; gap:8px; flex:1; min-width:240px; flex-wrap:wrap}
+.seg-filtros .crece{flex:1; min-width:180px}
+.seg-filtros input,.seg-filtros select{width:100%; padding:8px 10px; border:1px solid var(--linea-fuerte); border-radius:var(--r-s); font:inherit; background:var(--papel)}
+.seg-filtros select{width:auto}
+.seg-filtro-activo{display:flex; flex-wrap:wrap; gap:8px; align-items:center; background:var(--carbon); color:#fff; border-radius:var(--r-s); padding:8px 12px; margin-bottom:10px; font-size:13px}
+.seg-filtro-activo b{color:var(--lima)}
+.seg-tabla-caja{overflow:auto; max-height:calc(100vh - 150px); background:var(--papel); border:1px solid var(--linea); border-radius:var(--r); box-shadow:var(--sombra)}
+.seg-tabla{border-collapse:separate; border-spacing:0; width:100%; font-size:13px}
+.seg-tabla th,.seg-tabla td{border-bottom:1px solid var(--linea); padding:0}
+.seg-tabla thead th{position:sticky; background:var(--papel); z-index:2}
+.seg-tabla thead tr:first-child th{top:0; height:34px}
+.seg-tabla thead tr:nth-child(2) th{top:34px}
+.seg-tabla th.seg-op,.seg-tabla td.seg-op{position:sticky; left:0; z-index:1; background:var(--papel); text-align:left; padding:8px 12px; min-width:230px; max-width:250px; width:250px; border-right:1px solid var(--linea)}
+.seg-tabla thead th.seg-op{z-index:3; vertical-align:bottom; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--tx-3)}
+.seg-tabla th.seg-av{vertical-align:bottom; padding:8px; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--tx-3)}
+.seg-tabla th.seg-gr{font-size:12px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--lima); background:var(--carbon); border-left:3px solid var(--fondo)}
+.seg-tabla th.seg-col{height:112px; vertical-align:bottom; padding:6px 0; min-width:28px; width:28px}
+.seg-tabla th.seg-col span{writing-mode:vertical-rl; transform:rotate(180deg); white-space:nowrap; font-size:11.5px; font-weight:600; color:var(--tx-2); display:inline-block}
+.seg-tabla th.seg-col.marcada{background:var(--lima)}
+.seg-tabla th.seg-col.marcada span{color:var(--carbon)}
+.seg-tabla .inicio{border-left:3px solid var(--fondo)}
+.seg-tabla tbody tr:hover td{background:#f7faf2}
+.seg-tabla tbody tr:hover td.seg-op{background:#f2f7ea}
+.seg-tabla tr.completa td{opacity:.62}
+.seg-op .dir{font-weight:700; color:var(--tx); line-height:1.25}
+.seg-op .dir a{color:var(--tx)} .seg-op .dir a:hover{color:var(--info)}
+.seg-op .dir small{font-weight:500; color:var(--tx-3)}
+.seg-op .nom{font-size:12px; color:var(--tx-2); margin-top:2px; display:flex; gap:5px; align-items:center; min-width:0}
+.seg-op .nom b{font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:0 1 auto}
+.seg-op .dir{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.seg-meta{color:var(--tx-3); font-size:11.5px}
+.seg-prod{font-size:10px; font-weight:800; letter-spacing:.06em; padding:1px 6px; border-radius:4px}
+.seg-prod.aero{background:#e8f1fc; color:#1d5fae}
+.seg-prod.fv{background:#fdf1de; color:#8a5207}
+.seg-op .sig{margin-top:3px; font-size:12px; font-weight:600; color:var(--aviso); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.seg-op .meta2{font-size:11.5px; color:var(--tx-3); margin-top:1px}
+.seg-op .sig.ok{color:var(--bien)}
+.seg-anillos{display:flex; gap:6px; justify-content:center; padding:6px 8px}
+.seg-anillo{position:relative; width:36px; height:36px; display:grid; place-items:center}
+.seg-anillo svg{position:absolute; inset:0; width:100%; height:100%}
+.seg-anillo circle{fill:none; stroke-width:4}
+.seg-anillo .fondo{stroke:var(--linea)}
+.seg-anillo .lleno{stroke-linecap:round}
+.seg-anillo.ok .lleno{stroke:var(--bien)} .seg-anillo.medio .lleno{stroke:var(--lima-osc)} .seg-anillo.bajo .lleno{stroke:var(--aviso)}
+.seg-anillo span{font-size:11px; font-weight:800; color:var(--tx)}
+.seg-anillo.ok span{color:var(--bien)}
+.seg-anillo i{position:absolute; right:-3px; bottom:-3px; font-style:normal; font-size:9px; background:var(--carbon); color:var(--lima); width:15px; height:15px; border-radius:50%; display:grid; place-items:center}
+.seg-c{text-align:center}
+.seg-c span{display:inline-grid; place-items:center; width:20px; height:20px; border-radius:50%; font-size:11px; font-weight:800; margin:3px 4px; box-sizing:border-box}
+.seg-c.si span{background:var(--bien); color:#fff}
+.seg-c.pte span{border:2px solid #d7a85a; background:var(--aviso-b)}
+.seg-c.no span{background:var(--mal); color:#fff}
+.seg-c.na span{color:var(--linea-fuerte); width:auto}
+.seg-leyenda{display:flex; flex-wrap:wrap; gap:6px 16px; align-items:center; margin-top:10px; font-size:12px; color:var(--tx-2)}
+.seg-leyenda span{display:flex; align-items:center; gap:2px}
+.seg-leyenda i{font-style:normal}
+.seg-leyenda .der{margin-left:auto; color:var(--tx-3)}
+@media (max-width:640px){
+  .seg-tabla th.seg-op,.seg-tabla td.seg-op{min-width:190px; max-width:210px}
+  .seg-op .seg-meta{display:none}
+  .seg-segmentos button{padding:6px 10px; font-size:12px}
+}
+.seg-quitar{margin-left:auto; border:1px solid var(--lima); background:none; color:var(--lima); border-radius:999px; padding:4px 12px; font:inherit; font-size:12.5px; cursor:pointer}
+.seg-quitar:hover{background:var(--lima); color:var(--carbon)}

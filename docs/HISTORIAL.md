@@ -1370,3 +1370,6 @@ _Sin más detalle._
 ### CRM de ZERO WATTIOS: raíz del proyecto
 
 _Sin más detalle._
+
+## 10/11/2026 · Seguimiento de operaciones (Rubén)
+- Nueva pantalla «Seguimiento de operaciones» (solo dirección): lee las pestañas CORREOS-WHATSSAP y DOCUMENTACIÓN PROYECTOS del Excel «SEGUIMIENTO OPERACIONES ZERO WATTIOS BUENO» (Drive, solo lectura, caché 10 min, botón Actualizar). Contadores, pastillas de lo que falta por check (filtran), matriz de checks con avance por bloque y siguiente paso. No muestra DNI, teléfono ni email.
