@@ -119,10 +119,32 @@ function desplegarDesdeGitHub_(string $raiz, bool $forzar = false): array {
   if (is_dir($src . '/assets')) $n += copiarSobre_($src . '/assets', $raiz . '/assets');
   if (is_dir($src . '/api')) $n += copiarSobre_($src . '/api', $raiz . '/api');
   $retoques = retocarDespliegue_($raiz);
+  $mu = actualizarMuPlugin_($src . '/servidor/zw-crm.php');
+  if ($mu !== '') $retoques[] = $mu;
   borrarCarpeta_($tmp);
   setProp_('GITHUB_SHA', $sha);
   setProp_('GITHUB_DESPLEGADO', ahora_());
   setProp_('GITHUB_COMPROBADO', ahora_());
   try { registrar_(null, 'despliegue', 'GITHUB', substr($sha, 0, 7), $n . ' archivos; ' . implode(',', $retoques)); } catch (Throwable $e) {}
   return ['ok' => true, 'cambios' => true, 'sha' => $sha, 'archivos' => $n, 'retoques' => $retoques];
+}
+
+/**
+ * El mu-plugin (servidor/zw-crm.php) también se mantiene solo: si el del
+ * repositorio es distinto del instalado, se comprueba que es PHP válido y que
+ * es nuestro plugin, se guarda una copia del anterior y se cambia de golpe.
+ * Un plugin roto tumbaría WordPress entero, por eso tantas comprobaciones.
+ */
+function actualizarMuPlugin_(string $nuevo): string {
+  if (!defined('WPMU_PLUGIN_DIR') || !is_file($nuevo)) return '';
+  $destino = WPMU_PLUGIN_DIR . '/zw-crm.php';
+  $codigo = file_get_contents($nuevo);
+  if ($codigo === false || strpos($codigo, 'Plugin Name: ZERO WATTIOS') === false || strpos($codigo, "if (!defined('ABSPATH')) exit;") === false) return 'mu-plugin: no parece el nuestro';
+  if (is_file($destino) && md5_file($destino) === md5($codigo)) return '';
+  try { token_get_all($codigo, TOKEN_PARSE); } catch (Throwable $e) { return 'mu-plugin: con errores, no se instala'; }
+  if (is_file($destino)) @copy($destino, $destino . '.anterior');
+  if (file_put_contents($destino . '.tmp', $codigo) === false) return 'mu-plugin: no se puede escribir';
+  rename($destino . '.tmp', $destino);
+  if (function_exists('opcache_invalidate')) @opcache_invalidate($destino, true);
+  return 'mu-plugin';
 }

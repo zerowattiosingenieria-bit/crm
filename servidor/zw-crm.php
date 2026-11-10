@@ -1,14 +1,16 @@
 <?php
 /**
  * Plugin Name: ZERO WATTIOS · CRM en crm.zerowattios.com
- * Description: Sirve el CRM interno (carpeta /crm del espacio web, fuera de WordPress) cuando se entra por crm.zerowattios.com, enruta /api/ al backend PHP y lanza las tareas programadas. Uso interno, no indexable.
- * Version: 2.1
+ * Description: Sirve el CRM interno (carpeta /crm del espacio web, fuera de WordPress) cuando se entra por crm.zerowattios.com, las apps de clientes (clientes.zerowattios.com) y de subcontratas (contratas.zerowattios.com), enruta /api/ al backend PHP y lanza las tareas programadas. Nada de esto es indexable.
+ * Version: 2.2
  */
 
 if (!defined('ABSPATH')) exit;
 
 define('ZW_CRM_HOST', 'crm.zerowattios.com');
 define('ZW_CRM_RAIZ', dirname(ABSPATH) . '/crm');
+/* Las dos apps de fuera: misma carpeta, mismo backend, otra puerta. */
+define('ZW_PORTALES', ['clientes.zerowattios.com' => 'cliente', 'contratas.zerowattios.com' => 'contrata']);
 
 /* ---------- tareas programadas ----------
    El reloj principal es el Apps Script, que llama a /api/cron cada 10 min.
@@ -45,8 +47,59 @@ function zw_crm_tipo_mime($ext) {
     return $tipos[$ext] ?? 'application/octet-stream';
 }
 
+/* ---------- las apps de clientes y subcontratas ----------
+   Solo se sirve: /api (el mismo backend; las acciones «portal*» llevan sus
+   propias cuentas), /robots.txt, el manifest, /assets/portal/ y /assets/img/.
+   Cualquier otra ruta devuelve la app (assets/portal/index.html). */
+function zw_portal_servir($host, $tipo) {
+    $raiz = realpath(ZW_CRM_RAIZ);
+    if (!$raiz) return;
+    header('X-Robots-Tag: noindex, nofollow, noarchive, nosnippet, noimageindex');
+    header('X-Content-Type-Options: nosniff');
+    header('X-Frame-Options: SAMEORIGIN');
+    header('Referrer-Policy: same-origin');
+    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+    if (!$https) { header('Location: https://' . $host . ($_SERVER['REQUEST_URI'] ?? '/'), true, 301); exit; }
+    $uri = rawurldecode(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/');
+    if (preg_match('#^/(wp-admin|wp-login\.php|wp-json|wp-includes|wp-content|wp-cron\.php|xmlrpc\.php)(/|$)#', $uri)) { http_response_code(404); exit; }
+    if ($uri === '/robots.txt') { header('Content-Type: text/plain; charset=utf-8'); echo "User-agent: *\nDisallow: /\n"; exit; }
+    if (preg_match('#^/api/?$#', $uri)) {
+        $f = $raiz . '/api/index.php';
+        if (!is_file($f)) { http_response_code(503); exit; }
+        if (!defined('ZW_API_NOMBRE')) define('ZW_API_NOMBRE', 'index');
+        zw_crm_tic_si_toca($raiz);
+        chdir($raiz . '/api');
+        require $f;
+        exit;
+    }
+    if ($uri === '/manifest.webmanifest') $uri = '/assets/portal/manifest-' . $tipo . '.webmanifest';
+    if ($uri === '/favicon.ico') $uri = '/assets/img/isotipo.png';
+    $fichero = null;
+    if (preg_match('#^/assets/(portal|img)/#', $uri)) {
+        $f = realpath($raiz . $uri);
+        if ($f && strpos($f, $raiz . '/assets/') === 0 && is_file($f) && !preg_match('#\.(php|phtml|ini|htaccess|zip|sql|gz|log)$#i', $f)) $fichero = $f;
+        else { http_response_code(404); header('Content-Type: text/plain'); echo 'No encontrado'; exit; }
+    }
+    if (!$fichero) $fichero = $raiz . '/assets/portal/index.html';
+    if (!is_file($fichero)) { http_response_code(503); header('Content-Type: text/plain; charset=utf-8'); echo 'App en preparación'; exit; }
+    $ext = strtolower(pathinfo($fichero, PATHINFO_EXTENSION));
+    header('Content-Type: ' . zw_crm_tipo_mime($ext));
+    if ($ext === 'html') header('Cache-Control: no-store');
+    else {
+        header('Cache-Control: no-cache');
+        $etag = '"' . md5($fichero . filemtime($fichero) . filesize($fichero)) . '"';
+        header('ETag: ' . $etag);
+        if (trim($_SERVER['HTTP_IF_NONE_MATCH'] ?? '') === $etag) { http_response_code(304); exit; }
+    }
+    header('Content-Length: ' . filesize($fichero));
+    readfile($fichero);
+    exit;
+}
+
 (function () {
     $host = strtolower($_SERVER['HTTP_HOST'] ?? '');
+    $sinWww = preg_replace('/^www\./', '', $host);
+    if (isset(ZW_PORTALES[$sinWww])) { zw_portal_servir($sinWww, ZW_PORTALES[$sinWww]); return; }
     if ($host !== ZW_CRM_HOST && $host !== 'www.' . ZW_CRM_HOST) return;
 
     $raiz = realpath(ZW_CRM_RAIZ);

@@ -7,7 +7,10 @@ Hosting Expand), con la base de datos en MySQL/MariaDB y el backend en PHP
 - Espacio web: `/crm` (esta web y `api/`), fuera de la carpeta de WordPress.
 - `servidor/zw-crm.php` va en `/wordpress/wp-content/mu-plugins/`: cuando se
   entra por crm.zerowattios.com sirve el CRM y enruta `/api/…` al PHP; para
-  cualquier otro dominio no hace nada.
+  cualquier otro dominio no hace nada. También sirve las apps de clientes
+  (clientes.zerowattios.com) y de subcontratas (contratas.zerowattios.com):
+  `/api` al mismo backend, `assets/portal/` y `assets/img/`, nada más. Desde
+  el 10/11/2026 `api/desplegar.php` lo actualiza solo en cada despliegue.
 - La base de datos es la del propio WordPress (tablas `zw_*`); la conexión
   sale de sus constantes `DB_*`.
 - Lo que solo puede hacer Google (Drive, correo, mapas) lo sigue haciendo el

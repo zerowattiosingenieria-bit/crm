@@ -9,6 +9,55 @@ luego no hay manera de reconstruir.
 
 
 
+## 10/11/2026 · Apps de clientes y de subcontratas
+
+Lo pidió Nando: «hazme la app para clientes y la app para proveedores… que sea
+muy fácil, sencillo e intuitivo». Dos webs separadas del CRM pero con el mismo
+backend y la misma base de datos:
+
+- **clientes.zerowattios.com** — el cliente entra con su correo. Solo si su
+  proyecto está FIRMADO (firmada, financiación, trámite, material,
+  instalación, instalada, legalizada, cerrada). Ve de forma muy visual en qué
+  punto está (anillo con el % y el camino de 7 pasos), el avance de la obra,
+  el diario, sus fotos, documentos, manuales de sus equipos (salen solos de
+  los modelos: FICHAS_TECNICAS), facturas y un botón de ayuda con tickets.
+  La primera vez crea su clave con un código que le llega al correo.
+- **contratas.zerowattios.com** — cada instalador (RoberGas aerotermia,
+  Greenfield y Climassine fotovoltaica) entra con su usuario y ve SOLO sus
+  obras: ficha de obra (qué máquina va y dónde, la escribe dirección), fotos
+  de la visita, proyecto y fichas técnicas, avisos con fecha (llamar al
+  cliente 2 días antes, llegada, fases, legalización en 7 días y los que
+  ponga dirección), «He llegado» / «Me voy», fases con foto obligatoria,
+  subir legalización y certificados, bitácora y tickets.
+- Tickets con tiempos: urgente 4 h / 24 h, media 24 h / 72 h, baja 72 h /
+  7 días (respuesta / solución). Cada ticket se refleja en Incidencias. Fuera
+  de plazo: aviso a dirección y escalado a Fernando (cron, ticPortal_).
+- **Nada llega al cliente sin aprobación de Rubén o dirección** (orden de
+  Nando): todo lo que sube la subcontrata entra «pendiente»
+  (ARCHIVOS.visible_cliente) y se aprueba o deniega en CRM → Obras de
+  subcontratas → Para aprobar. A Rubén le llega un aviso (portal_aprobador).
+  El cliente sí ve el avance (fase, llegada, terminada) en tiempo real.
+- Correos a clientes y subcontratas: solo a `portal_correos_permitidos`
+  (de momento nandete.salamanca@gmail.com, el cliente de pruebas). Lo demás
+  se queda sin mandar y se apunta en el registro (portal_correo_retenido).
+- OPERACIONES no se toca: al terminar una obra se crea una tarea para
+  dirección (Fernando) para validarla y cambiar el estado.
+- CRM: «Obras de subcontratas» (dirección: aprobar, asignar, ficha de obra,
+  validar, tickets, cómo cumple cada subcontrata) y «Cuentas de clientes y
+  subcontratas» (solo superadmin: altas, claves, activar, desbloquear y «Ver
+  como», una vista previa de 20 minutos de solo lectura).
+- Cuentas y sesiones propias (PORTAL_CUENTAS, PORTAL_SESIONES): un token del
+  portal no vale en el CRM ni al revés. Tablas nuevas OBRAS, OBRA_EVENTOS,
+  TICKETS; ARCHIVOS gana obra_id, visible_cliente, aprobado_por, aprobado.
+- Las claves no las pone Claude: las pone Nando desde la pantalla de cuentas.
+- Nada se indexa: robots.txt Disallow, cabecera X-Robots-Tag y meta noindex
+  en las dos webs.
+- El mu-plugin (servidor/zw-crm.php) sirve los dos subdominios y ahora se
+  actualiza solo al desplegar (desplegar.php comprueba que es PHP válido y
+  guarda el anterior como zw-crm.php.anterior).
+- Solo PHP: el espejo de Apps Script (00_Config.gs) lleva las tablas, pero
+  las acciones del portal no existen en el mock de node.
+
 ## 09/11/2026 · Simulación 3D para todos los comerciales
 
 Lo pidió Nando: el Visor 3D y la pestaña «Simulación 3D» de la ficha dejan

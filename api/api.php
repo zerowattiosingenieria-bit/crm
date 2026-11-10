@@ -156,7 +156,11 @@ function acciones_(): array {
     'guardarAvisoIncidencia' => 'accGuardarAvisoIncidencia_',
     /* CAEs (Novawatt) y WIXER, y estado de la sincronización contable (tramites.php, 09/11/2026) */
     'tramites' => 'accTramites_', 'guardarTramite' => 'accGuardarTramite_', 'importarTramites' => 'accImportarTramites_',
-    'syncContabilidad' => 'accSyncContabilidad_'
+    'syncContabilidad' => 'accSyncContabilidad_',
+    /* Apps de clientes y subcontratas, lado CRM (portal.php, 10/11/2026) */
+    'cuentasPortal' => 'accCuentasPortal_', 'guardarCuentaPortal' => 'accGuardarCuentaPortal_', 'verComoPortal' => 'accVerComoPortal_',
+    'obrasPortal' => 'accObrasPortal_', 'obraPortal' => 'accObraPortal_', 'guardarObraPortal' => 'accGuardarObraPortal_',
+    'responderTicketPortal' => 'accResponderTicketPortal_', 'visibleArchivoPortal' => 'accVisibleArchivoPortal_', 'subirArchivoObra' => 'accSubirArchivoObra_'
   ];
 }
 
@@ -196,6 +200,12 @@ function asegurarEsquema_(): void {
 function atender_(array $p, string $accion): array {
   if ($accion === 'login') return accLogin_($p);
   if ($accion === 'loginCodigo') return accLoginCodigo_($p);
+  /* Las apps de clientes y subcontratas llevan sus propias cuentas y sesiones:
+     un token del portal nunca vale para el CRM ni al revés. */
+  if (strpos($accion, 'portal') === 0) {
+    if (!function_exists('atenderPortal_')) return ['ok' => false, 'error' => 'Acción no disponible.'];
+    return atenderPortal_($p, $accion);
+  }
   $fn = acciones_()[$accion] ?? null;
   if (!$fn) return ['ok' => false, 'error' => 'Acción desconocida: ' . $accion];
   if (!function_exists($fn)) return ['ok' => false, 'error' => 'Acción no disponible: ' . $accion];

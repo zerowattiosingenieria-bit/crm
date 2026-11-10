@@ -74,6 +74,10 @@ function ejecutarCron_(string $raiz = ''): array {
       setProp_('CRON_limpieza', ahora_());
       try { limpiarSesiones_(); $hecho['limpieza'] = true; } catch (Throwable $e) { $hecho['limpieza'] = $e->getMessage(); }
     }
+    /* Apps de clientes y subcontratas: tickets fuera de plazo → aviso y escalado a Fernando. */
+    if (function_exists('ticPortal_')) {
+      try { $tp = ticPortal_(); if ($tp['avisos'] || $tp['escalados']) $hecho['portal'] = $tp; } catch (Throwable $e) { $hecho['portal'] = $e->getMessage(); }
+    }
     /* GitHub: si hay versión nueva de la web, se despliega. */
     if ($raiz !== '' && prop_('GITHUB_AUTO') !== 'no') {
       require_once __DIR__ . '/desplegar.php';

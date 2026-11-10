@@ -213,7 +213,7 @@ const ESQUEMA = {
               'enviado','enviado_por'],
 
   ARCHIVOS: ['id','cliente_id','proyecto_id','clase','nombre','archivo_id','mime','bytes',
-             'miniatura','subido_por','subido','notas'],
+             'miniatura','subido_por','subido','notas','obra_id','visible_cliente','aprobado_por','aprobado'],
 
   CIFRAS: ['clave','grupo','titulo','valor','unidad','meta','nota','fecha',
            'orden','actualizado','actualizado_por'],
@@ -225,6 +225,11 @@ const ESQUEMA = {
   /* El registro de conexiones y actividad. Las cinco últimas columnas
      llegaron después: en las hojas de antes las añade sola la primera
      petición que escribe (ver 20_Registro.gs) o instalar(). */
+  PORTAL_CUENTAS: ['id','tipo','usuario','nombre','email','telefono','empresa','especialidad','cliente_id','activo','hash','salt','vueltas','intentos','bloqueado_hasta','clave_cambiada','ultimo_acceso','notas','creado','creado_por','modificado','modificado_por'],
+  PORTAL_SESIONES: ['token','cuenta_id','creado','expira','ultimo_uso','agente','ver_como'],
+  OBRAS: ['id','operacion_id','cliente_id','contrata_id','especialidad','estado','fecha_prevista','llegada','salida','terminada','progreso','checklist','marcas','equipos','avisos','instrucciones','contacto_obra','notas_internas','creado','creado_por','modificado','modificado_por'],
+  OBRA_EVENTOS: ['id','obra_id','fecha','cuenta_id','autor','tipo','detalle','visible_cliente'],
+  TICKETS: ['id','obra_id','cliente_id','contrata_id','cuenta_id','origen','titulo','detalle','prioridad','estado','creado','limite_respuesta','limite_resolucion','primera_respuesta','aviso_respuesta','resuelto','escalado','mensajes','incidencia_id','modificado'],
   LOG: ['fecha','usuario_id','usuario','accion','entidad','entidad_id','detalle',
         'tipo','equipo','agente','ip','lugar']
 };

@@ -18,7 +18,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Robots-Tag: noindex, nofollow, noarchive');
 $origen = $_SERVER['HTTP_ORIGIN'] ?? '';
-if (preg_match('#^https://(zerowattiosingenieria-bit\.github\.io|crm\.zerowattios\.com)$#', $origen)) {
+if (preg_match('#^https://(zerowattiosingenieria-bit\.github\.io|(crm|clientes|contratas)\.zerowattios\.com)$#', $origen)) {
   header('Access-Control-Allow-Origin: ' . $origen);
   header('Vary: Origin');
 }

@@ -12,6 +12,7 @@ import {vistaCaptaciones} from './vistas/captaciones.js';
 import {vistaEstadisticas} from './vistas/estadisticas.js';
 import {vistaIncidencias, vistaAvisarIncidencia} from './vistas/incidencias.js';
 import {vistaTramites, veTramites} from './vistas/tramites.js';
+import {vistaSubcontratas, vistaCuentasPortal} from './vistas/subcontratas.js';
 import {vistaMapa} from './vistas/mapa.js';
 import {vistaDirectorio} from './vistas/directorio.js';
 import {vistaContabilidad, vistaFacturas, vistaGastos, vistaCobros} from './vistas/finanzas.js';
@@ -49,6 +50,8 @@ const VISTAS = {
   estadisticas: {titulo: 'Estadísticas',       pinta: vistaEstadisticas},
   incidencias:  {titulo: 'Incidencias',        pinta: vistaIncidencias,   permiso: 'direccion'},
   tramites:     {titulo: 'CAEs y WIXER',       pinta: vistaTramites,      permiso: 'tramites'},
+  subcontratas: {titulo: 'Obras de subcontratas', pinta: vistaSubcontratas, permiso: 'direccion'},
+  cuentasportal:{titulo: 'Cuentas de clientes y subcontratas', pinta: vistaCuentasPortal, permiso: 'direccion', soloSuper: true},
   avisar:       {titulo: 'Avisar de una incidencia', pinta: vistaAvisarIncidencia},
   mapa:         {titulo: 'Mapa de clientes',   pinta: vistaMapa,          permiso: 'direccion'},
   directorio:   {titulo: 'Directorio y puertas', pinta: vistaDirectorio,  permiso: 'directorio'},
@@ -136,6 +139,7 @@ function menuDe(rol) {
     {id: 'visor', et: 'Visor 3D', ico: '⌂'},
     {id: 'cotizador', et: 'Cotizador', ico: '€'},
     {id: 'operaciones', et: 'Instalaciones', ico: '⚡'},
+    {id: 'subcontratas', et: 'Obras de subcontratas', ico: '⚒'},
     {id: 'tramites', et: 'CAEs y WIXER', ico: '♻'},
     {id: 'captaciones', et: 'Captaciones', ico: '⚑'},
     {id: 'estadisticas', et: 'Estadísticas', ico: '▥'},
@@ -156,6 +160,7 @@ function menuDe(rol) {
     {grupo: 'Sistema'},
     {id: 'dashboard', et: 'Dashboard interactivo', ico: '◈', soloSuper: true},
     {id: 'usuarios', et: 'Usuarios', ico: '◉', soloSuper: true},
+    {id: 'cuentasportal', et: 'Cuentas clientes y subcontratas', ico: '⚿', soloSuper: true},
     {id: 'ajustes', et: 'Ajustes', ico: '⚙'},
     {id: 'registro', et: 'Registro de conexiones', ico: '⟲', soloSuper: true},
     {id: 'perfil', et: 'Mi perfil', ico: '◉'}
@@ -176,7 +181,7 @@ const K_MENU = 'zw.crm.menuSimple';
 const MENU_CORTO = {
   captador: ['hoy', 'agenda', 'captaciones', 'estadisticas', 'clientes', 'parte', 'tramites', 'avisar', 'perfil'],
   comercial: ['hoy', 'agenda', 'clientes', 'visor', 'cotizador', 'operaciones', 'parte', 'avisar', 'perfil'],
-  otro: ['hoy', 'panel', 'tablero', 'incidencias', 'agenda', 'clientes', 'operaciones', 'tramites', 'captaciones', 'estadisticas', 'cobros', 'banco', 'perfil']
+  otro: ['hoy', 'panel', 'tablero', 'incidencias', 'agenda', 'clientes', 'operaciones', 'subcontratas', 'tramites', 'captaciones', 'estadisticas', 'cobros', 'banco', 'perfil']
 };
 const menuCorto = () => { try { return localStorage.getItem(K_MENU) === '1'; } catch (e) { return false; } };
 
@@ -284,7 +289,7 @@ export async function pintar() {
   poner($('#acciones-barra'));
   pintaMenu();
 
-  const fuera = (def.permiso === 'direccion' && !api.esDireccion()) ||
+  const fuera = (def.soloSuper && (api.estado.usuario || {}).rol !== 'superadmin') || (def.permiso === 'direccion' && !api.esDireccion()) ||
                 (def.permiso === 'visor' ? !veVisor() : def.permiso === 'cotizador' ? !veCotizador() : def.permiso === 'tramites' ? !veTramites() : (def.permiso && def.permiso !== 'direccion' && !api.puede(def.permiso)));
   if (fuera) {
     return poner($('#vista'), h('.tarjeta', h('.cuerpo',

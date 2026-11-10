@@ -1,0 +1,9 @@
+{
+  "name": "Zero Wattios · Mi instalación",
+  "short_name": "Mi instalación",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f3f4ef",
+  "theme_color": "#242422",
+  "icons": [{"src": "/assets/img/isotipo.png", "sizes": "512x512", "type": "image/png"}, {"src": "/assets/img/apple-touch-icon.png", "sizes": "180x180", "type": "image/png"}]
+}

@@ -95,9 +95,14 @@ const ESQUEMA = [
   "DIR_VISITAS" => ['id', 'ref', 'cliente', 'empresa', 'fecha', 'hora', 'comercial', 'etiquetas', 'tarjeta'],
   "PUERTAS" => ['id', 'lista', 'nota', 'categoria', 'nombre', 'direccion', 'zona', 'fecha', 'hora', 'lat', 'lon', 'alta_crm'],
   "PROYECTOS" => ['id', 'cliente_id', 'descripcion', 'estado', 'faltan', 'carpeta_id', 'archivo_id', 'archivo_nombre', 'creado', 'creado_por', 'pedido', 'pedido_por', 'entregado', 'entregado_por', 'modificado', 'modificado_por', 'notas', 'enviado', 'enviado_por'],
-  "ARCHIVOS" => ['id', 'cliente_id', 'proyecto_id', 'clase', 'nombre', 'archivo_id', 'mime', 'bytes', 'miniatura', 'subido_por', 'subido', 'notas'],
+  "ARCHIVOS" => ['id', 'cliente_id', 'proyecto_id', 'clase', 'nombre', 'archivo_id', 'mime', 'bytes', 'miniatura', 'subido_por', 'subido', 'notas', 'obra_id', 'visible_cliente', 'aprobado_por', 'aprobado'],
   "CIFRAS" => ['clave', 'grupo', 'titulo', 'valor', 'unidad', 'meta', 'nota', 'fecha', 'orden', 'actualizado', 'actualizado_por'],
   "TAREAS" => ['id', 'creado', 'creado_por', 'area', 'usuario_id', 'titulo', 'detalle', 'cliente_id', 'importe', 'prioridad', 'vence', 'estado', 'origen', 'origen_id', 'hecho', 'hecho_por', 'modificado', 'modificado_por'],
+  "PORTAL_CUENTAS" => ['id', 'tipo', 'usuario', 'nombre', 'email', 'telefono', 'empresa', 'especialidad', 'cliente_id', 'activo', 'hash', 'salt', 'vueltas', 'intentos', 'bloqueado_hasta', 'clave_cambiada', 'ultimo_acceso', 'notas', 'creado', 'creado_por', 'modificado', 'modificado_por'],
+  "PORTAL_SESIONES" => ['token', 'cuenta_id', 'creado', 'expira', 'ultimo_uso', 'agente', 'ver_como'],
+  "OBRAS" => ['id', 'operacion_id', 'cliente_id', 'contrata_id', 'especialidad', 'estado', 'fecha_prevista', 'llegada', 'salida', 'terminada', 'progreso', 'checklist', 'marcas', 'equipos', 'avisos', 'instrucciones', 'contacto_obra', 'notas_internas', 'creado', 'creado_por', 'modificado', 'modificado_por'],
+  "OBRA_EVENTOS" => ['id', 'obra_id', 'fecha', 'cuenta_id', 'autor', 'tipo', 'detalle', 'visible_cliente'],
+  "TICKETS" => ['id', 'obra_id', 'cliente_id', 'contrata_id', 'cuenta_id', 'origen', 'titulo', 'detalle', 'prioridad', 'estado', 'creado', 'limite_respuesta', 'limite_resolucion', 'primera_respuesta', 'aviso_respuesta', 'resuelto', 'escalado', 'mensajes', 'incidencia_id', 'modificado'],
   "LOG" => ['fecha', 'usuario_id', 'usuario', 'accion', 'entidad', 'entidad_id', 'detalle', 'tipo', 'equipo', 'agente', 'ip', 'lugar']
 ];
 
