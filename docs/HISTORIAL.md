@@ -9,6 +9,28 @@ luego no hay manera de reconstruir.
 
 
 
+## 10/11/2026 · Seguimiento de operaciones editable y copia editable del Excel
+
+Lo pidió Nando: «el seguimiento de operaciones se tiene que poder editar si se
+da sobre un cliente» y «se creará un Excel duplicado… que sí se podrá tocar»;
+Rubén sigue trabajando en el original.
+
+- Pulsando en una operación (o en una celda) se abre su ficha de seguimiento
+  con los 26 checks: Hecho / Pendiente / No / No aplica, y «↺ Excel» para
+  quitar el cambio. Cada cambio se guarda en SEGUIMIENTO_CAMBIOS (quién y
+  cuándo) y manda sobre el original hasta que el original diga lo mismo.
+- Copia en Google Sheets «SEGUIMIENTO OPERACIONES ZERO WATTIOS · COPIA
+  EDITABLE» (misma carpeta ADMINISTRACION). Se rehace con original + cambios
+  en cada lectura, en cada cambio y en el tic de 10 minutos. Lo que alguien
+  marque o desmarque a mano en la copia se detecta comparando con lo último
+  que escribió el CRM (SEGUIMIENTO_COPIA_FOTO) y pasa a ser un cambio.
+  Operaciones nuevas del original se añaden al final de la copia.
+- Al convertir el .xlsm a Google Sheets se pierden las casillas: el CRM las
+  vuelve a poner (casillas de verificación) en las columnas de checks.
+- Apps Script: servicios nuevos hojaLeer y hojaEscribir (30_Servicio.gs);
+  hace falta publicar una versión nueva de la implementación.
+- El original de Rubén no se toca nunca.
+
 ## 10/11/2026 · Visitas de instaladores desde la ficha del cliente
 
 Ficha del cliente → pestaña «Instaladores» (dirección): agendar una visita a

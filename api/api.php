@@ -158,7 +158,7 @@ function acciones_(): array {
     'tramites' => 'accTramites_', 'guardarTramite' => 'accGuardarTramite_', 'importarTramites' => 'accImportarTramites_',
     'syncContabilidad' => 'accSyncContabilidad_',
     /* Panel de seguimiento de operaciones: checks del Excel de Rubén (seguimiento.php, 10/11/2026) */
-    'seguimientoOperaciones' => 'accSeguimientoOperaciones_',
+    'seguimientoOperaciones' => 'accSeguimientoOperaciones_', 'seguimientoCambiar' => 'accSeguimientoCambiar_',
     /* Apps de clientes y subcontratas, lado CRM (portal.php, 10/11/2026) */
     'cuentasPortal' => 'accCuentasPortal_', 'guardarCuentaPortal' => 'accGuardarCuentaPortal_', 'verComoPortal' => 'accVerComoPortal_',
     'obrasPortal' => 'accObrasPortal_', 'obraPortal' => 'accObraPortal_', 'guardarObraPortal' => 'accGuardarObraPortal_',

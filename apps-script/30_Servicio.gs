@@ -150,6 +150,57 @@ const SERVICIOS_ = {
     return {resultado: r};
   },
 
+  /* ---------- hojas de cálculo (copia editable del seguimiento, 10/11/2026) ---------- */
+
+  /* Lee los valores de unas pestañas de una hoja de Google: {id, pestanas:[nombre…]}. */
+  hojaLeer: function (p) {
+    const libro = SpreadsheetApp.openById(txt_(p.id));
+    const res = {};
+    (p.pestanas || []).forEach(function (n) {
+      const h = libro.getSheetByName(txt_(n));
+      res[n] = h ? h.getDataRange().getValues().map(function (f) {
+        return f.map(function (v) { return v instanceof Date ? Utilities.formatDate(v, 'Europe/Madrid', 'yyyy-MM-dd') : v; });
+      }) : null;
+    });
+    return {pestanas: res, nombre: libro.getName()};
+  },
+
+  /* Escribe en una hoja de Google: {id, casillas:[A1…], celdas:[[pestaña, fila, col, valor]…]}
+     (fila y col empiezan en 1). Las casillas son rangos a los que se pone casilla de verificación. */
+  hojaEscribir: function (p) {
+    const libro = SpreadsheetApp.openById(txt_(p.id));
+    (p.casillas || []).forEach(function (a1) { libro.getRange(txt_(a1)).insertCheckboxes(); });
+    /* Se agrupa por pestaña y columna: una lectura y una escritura por columna
+       (celda a celda serían miles de llamadas). Las fórmulas que haya en el
+       tramo se conservan. */
+    const grupos = {};
+    (p.celdas || []).forEach(function (c) {
+      const k = txt_(c[0]) + '\u0001' + Number(c[2]);
+      (grupos[k] = grupos[k] || []).push(c);
+    });
+    let n = 0;
+    Object.keys(grupos).forEach(function (k) {
+      const lista = grupos[k];
+      const h = libro.getSheetByName(txt_(lista[0][0]));
+      if (!h) return;
+      const col = Number(lista[0][2]);
+      const filas = lista.map(function (c) { return Number(c[1]); });
+      const desde = Math.min.apply(null, filas), hasta = Math.max.apply(null, filas);
+      const rango = h.getRange(desde, col, hasta - desde + 1, 1);
+      const vals = rango.getValues(), forms = rango.getFormulas();
+      for (let i = 0; i < vals.length; i++) if (forms[i][0]) vals[i][0] = forms[i][0];
+      lista.forEach(function (c) {
+        let v = c[3];
+        if (typeof v === 'string' && /^[=+\-@]/.test(v)) v = "'" + v;
+        vals[Number(c[1]) - desde][0] = v;
+        n++;
+      });
+      rango.setValues(vals);
+    });
+    SpreadsheetApp.flush();
+    return {escritas: n};
+  },
+
   /* ---------- espejo ---------- */
 
   /* El servidor manda todas las tablas y aquí se escriben en la hoja, tal

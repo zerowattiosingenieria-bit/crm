@@ -78,6 +78,10 @@ function ejecutarCron_(string $raiz = ''): array {
     if (function_exists('ticPortal_')) {
       try { $tp = ticPortal_(); if ($tp['avisos'] || $tp['escalados']) $hecho['portal'] = $tp; } catch (Throwable $e) { $hecho['portal'] = $e->getMessage(); }
     }
+    /* Seguimiento de operaciones: releer el Excel de Rubén y poner al día la copia editable. */
+    if (function_exists('ticSeguimiento_')) {
+      try { $ts = ticSeguimiento_(); if ($ts) $hecho['seguimiento'] = $ts; } catch (Throwable $e) { $hecho['seguimiento'] = $e->getMessage(); }
+    }
     /* GitHub: si hay versión nueva de la web, se despliega. */
     if ($raiz !== '' && prop_('GITHUB_AUTO') !== 'no') {
       require_once __DIR__ . '/desplegar.php';

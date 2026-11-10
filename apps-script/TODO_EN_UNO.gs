@@ -230,7 +230,7 @@ const ESQUEMA = {
               'enviado','enviado_por'],
 
   ARCHIVOS: ['id','cliente_id','proyecto_id','clase','nombre','archivo_id','mime','bytes',
-             'miniatura','subido_por','subido','notas'],
+             'miniatura','subido_por','subido','notas','obra_id','visible_cliente','aprobado_por','aprobado'],
 
   CIFRAS: ['clave','grupo','titulo','valor','unidad','meta','nota','fecha',
            'orden','actualizado','actualizado_por'],
@@ -242,6 +242,12 @@ const ESQUEMA = {
   /* El registro de conexiones y actividad. Las cinco últimas columnas
      llegaron después: en las hojas de antes las añade sola la primera
      petición que escribe (ver 20_Registro.gs) o instalar(). */
+  PORTAL_CUENTAS: ['id','tipo','usuario','nombre','email','telefono','empresa','especialidad','cliente_id','activo','hash','salt','vueltas','intentos','bloqueado_hasta','clave_cambiada','ultimo_acceso','notas','creado','creado_por','modificado','modificado_por'],
+  PORTAL_SESIONES: ['token','cuenta_id','creado','expira','ultimo_uso','agente','ver_como'],
+  OBRAS: ['id','operacion_id','cliente_id','contrata_id','especialidad','estado','fecha_prevista','llegada','salida','terminada','progreso','checklist','marcas','equipos','avisos','instrucciones','contacto_obra','notas_internas','creado','creado_por','modificado','modificado_por'],
+  OBRA_EVENTOS: ['id','obra_id','fecha','cuenta_id','autor','tipo','detalle','visible_cliente'],
+  TICKETS: ['id','obra_id','cliente_id','contrata_id','cuenta_id','origen','titulo','detalle','prioridad','estado','creado','limite_respuesta','limite_resolucion','primera_respuesta','aviso_respuesta','resuelto','escalado','mensajes','incidencia_id','modificado'],
+  VISITAS_INSTALADOR: ['id','cliente_id','operacion_id','contrata_id','fecha','hora','tipo','notas','estado','resultado','hecha','creado','creado_por','modificado','modificado_por'],
   LOG: ['fecha','usuario_id','usuario','accion','entidad','entidad_id','detalle',
         'tipo','equipo','agente','ip','lugar']
 };
@@ -9814,6 +9820,57 @@ const SERVICIOS_ = {
     const r = Maps.newDirectionFinder().setOrigin(txt_(p.origen)).setDestination(txt_(p.destino))
       .setMode(Maps.DirectionFinder.Mode.DRIVING).setRegion('es').getDirections();
     return {resultado: r};
+  },
+
+  /* ---------- hojas de cálculo (copia editable del seguimiento, 10/11/2026) ---------- */
+
+  /* Lee los valores de unas pestañas de una hoja de Google: {id, pestanas:[nombre…]}. */
+  hojaLeer: function (p) {
+    const libro = SpreadsheetApp.openById(txt_(p.id));
+    const res = {};
+    (p.pestanas || []).forEach(function (n) {
+      const h = libro.getSheetByName(txt_(n));
+      res[n] = h ? h.getDataRange().getValues().map(function (f) {
+        return f.map(function (v) { return v instanceof Date ? Utilities.formatDate(v, 'Europe/Madrid', 'yyyy-MM-dd') : v; });
+      }) : null;
+    });
+    return {pestanas: res, nombre: libro.getName()};
+  },
+
+  /* Escribe en una hoja de Google: {id, casillas:[A1…], celdas:[[pestaña, fila, col, valor]…]}
+     (fila y col empiezan en 1). Las casillas son rangos a los que se pone casilla de verificación. */
+  hojaEscribir: function (p) {
+    const libro = SpreadsheetApp.openById(txt_(p.id));
+    (p.casillas || []).forEach(function (a1) { libro.getRange(txt_(a1)).insertCheckboxes(); });
+    /* Se agrupa por pestaña y columna: una lectura y una escritura por columna
+       (celda a celda serían miles de llamadas). Las fórmulas que haya en el
+       tramo se conservan. */
+    const grupos = {};
+    (p.celdas || []).forEach(function (c) {
+      const k = txt_(c[0]) + '\u0001' + Number(c[2]);
+      (grupos[k] = grupos[k] || []).push(c);
+    });
+    let n = 0;
+    Object.keys(grupos).forEach(function (k) {
+      const lista = grupos[k];
+      const h = libro.getSheetByName(txt_(lista[0][0]));
+      if (!h) return;
+      const col = Number(lista[0][2]);
+      const filas = lista.map(function (c) { return Number(c[1]); });
+      const desde = Math.min.apply(null, filas), hasta = Math.max.apply(null, filas);
+      const rango = h.getRange(desde, col, hasta - desde + 1, 1);
+      const vals = rango.getValues(), forms = rango.getFormulas();
+      for (let i = 0; i < vals.length; i++) if (forms[i][0]) vals[i][0] = forms[i][0];
+      lista.forEach(function (c) {
+        let v = c[3];
+        if (typeof v === 'string' && /^[=+\-@]/.test(v)) v = "'" + v;
+        vals[Number(c[1]) - desde][0] = v;
+        n++;
+      });
+      rango.setValues(vals);
+    });
+    SpreadsheetApp.flush();
+    return {escritas: n};
   },
 
   /* ---------- espejo ---------- */

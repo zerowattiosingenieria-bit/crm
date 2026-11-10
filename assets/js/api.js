@@ -371,6 +371,7 @@ export function pasoPendiente(c) {
 export const tramites = (tipo = '') => pedir('tramites', {tipo});
 export const guardarTramite = tramite => pedir('guardarTramite', {tramite});
 export const seguimientoOperaciones = (forzar = false) => pedir('seguimientoOperaciones', {forzar});
+export const seguimientoCambiar = (clave, bloque, check, estado) => pedir('seguimientoCambiar', {clave, bloque, check, estado});
 export const importarTramites = (tramites, opciones = {}) => pedir('importarTramites', {tramites, ...opciones});
 /* Estado de la sincronización de la contabilidad con BankTrack y Drive › FACTURACIÓN. */
 export const syncContabilidad = guardar => pedir('syncContabilidad', guardar ? {guardar} : {});
