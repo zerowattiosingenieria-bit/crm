@@ -126,6 +126,19 @@ function zw_portal_servir($host, $tipo) {
 
     if ($uri === '/robots.txt') { header('Content-Type: text/plain; charset=utf-8'); echo "User-agent: *\nDisallow: /\n"; exit; }
 
+    /* Las apps de clientes y subcontratas también por ruta: clientes.zerowattios.com
+       y contratas.zerowattios.com redirigen aquí (IONOS no deja colgar dos
+       subdominios más del mismo WordPress sin quitarle el suyo al CRM). */
+    if (preg_match('#^/(clientes|contratas)(/.*)?$#', $uri)) {
+        $f = $raiz . '/assets/portal/index.html';
+        if (!is_file($f)) { http_response_code(503); header('Content-Type: text/plain; charset=utf-8'); echo 'App en preparación'; exit; }
+        header('X-Robots-Tag: noindex, nofollow, noarchive, nosnippet, noimageindex');
+        header('Content-Type: text/html; charset=utf-8');
+        header('Cache-Control: no-store');
+        readfile($f);
+        exit;
+    }
+
     /* El backend: /api, /api/ y /api/<nombre> -> /crm/api/<nombre>.php (index.php por defecto) */
     if (preg_match('#^/api(?:/([a-z0-9_\-]+)(?:\.php)?)?/?$#i', $uri, $m)) {
         $nombre = isset($m[1]) && $m[1] !== '' ? $m[1] : 'index';

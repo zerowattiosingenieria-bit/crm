@@ -1,7 +1,8 @@
 {
   "name": "Zero Wattios · Mi instalación",
   "short_name": "Mi instalación",
-  "start_url": "/",
+  "start_url": "/clientes/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#f3f4ef",
   "theme_color": "#242422",

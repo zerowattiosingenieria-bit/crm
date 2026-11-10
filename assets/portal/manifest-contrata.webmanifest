@@ -1,7 +1,8 @@
 {
   "name": "Zero Wattios · Obras",
   "short_name": "ZW Obras",
-  "start_url": "/",
+  "start_url": "/contratas/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#f3f4ef",
   "theme_color": "#242422",

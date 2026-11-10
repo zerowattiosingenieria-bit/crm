@@ -65,7 +65,10 @@ const PORTAL_FASES = [
 /* Las acciones que cambian algo: en «Ver como» (vista previa del superadmin) no se dejan. */
 const PORTAL_ESCRIBEN = ['portalLlegada', 'portalFase', 'portalAviso', 'portalTerminar', 'portalNota', 'portalSubir',
                          'portalTicket', 'portalMensaje', 'portalCambiarClave'];
+/* Las direcciones que se dan (redirigen a crm.zerowattios.com/clientes/ y /contratas/). */
 const PORTAL_WEB = ['cliente' => 'https://clientes.zerowattios.com/', 'contrata' => 'https://contratas.zerowattios.com/'];
+/* Donde vive de verdad cada app (para «Ver como», que no puede perder el #). */
+const PORTAL_RUTA = ['cliente' => 'https://crm.zerowattios.com/clientes/', 'contrata' => 'https://crm.zerowattios.com/contratas/'];
 
 /* ======================================================================
    Entrada: api.php manda aquí todo lo que empieza por «portal».
@@ -1094,7 +1097,7 @@ function accVerComoPortal_(array $u, array $p): array {
   if (!$c) return ['ok' => false, 'error' => 'No existe esa cuenta.'];
   $token = portalAbrirSesion_($c, $p, txt_($u['id']), 20);
   registrar_($u, 'portal_ver_como', 'PORTAL_CUENTAS', $c['id'], $c['usuario']);
-  return ['ok' => true, 'token' => $token, 'web' => PORTAL_WEB[normal_($c['tipo'])] ?? PORTAL_WEB['cliente']];
+  return ['ok' => true, 'token' => $token, 'web' => PORTAL_RUTA[normal_($c['tipo'])] ?? PORTAL_RUTA['cliente']];
 }
 
 /** Obras de subcontratas: todo lo que dirección necesita en una llamada. */

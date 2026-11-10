@@ -11,8 +11,12 @@
   /* ---------- modo y sesión ---------- */
   const host = location.hostname;
   const qs = new URLSearchParams(location.search);
-  const MODO = host.indexOf('contratas.') === 0 ? 'contrata' : host.indexOf('clientes.') === 0 ? 'cliente'
+  const camino = location.pathname;
+  const MODO = host.indexOf('contratas.') === 0 || /^\/contratas(\/|$)/.test(camino) ? 'contrata'
+    : host.indexOf('clientes.') === 0 || /^\/clientes(\/|$)/.test(camino) ? 'cliente'
     : (qs.get('modo') === 'contrata' ? 'contrata' : 'cliente');
+  /* El manifest de la app que toca (para «añadir a la pantalla de inicio»). */
+  try { const m = document.querySelector('link[rel=manifest]'); if (m) m.href = '/assets/portal/manifest-' + MODO + '.webmanifest'; } catch (e) { /* nada */ }
   const ES_CLIENTE = MODO === 'cliente';
   const K_TOKEN = 'zw.portal.' + MODO + '.token';
   const API = '/api/';
