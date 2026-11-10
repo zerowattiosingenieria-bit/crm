@@ -867,7 +867,7 @@ function portalTicket_(array $c, array $p): array {
     'bitacora' => '[]', 'creado' => $ahora, 'creado_por' => $c['id'], 'modificado' => $ahora, 'modificado_por' => $c['id']]);
   $t = actualizar_('TICKETS', $t['id'], ['incidencia_id' => $inc['id']]);
   $cli = $clienteId !== '' ? buscar1_('CLIENTES', fn($x) => mismo_($x['id'], $clienteId)) : null;
-  $dest = correoDeAvisos_();
+  $dest = portalCorreoTickets_();
   if ($dest !== '') correo_(['to' => $dest, 'subject' => 'Ticket ' . strtoupper($prio) . ' · ' . $titulo,
     'htmlBody' => portalHtml_('Nuevo ticket · ' . ucfirst($prio), '<p><b>' . htmlspecialchars(txt_($c['empresa']) ?: txt_($c['nombre'])) . '</b> (' . ($esCliente ? 'cliente' : 'subcontrata') . ')' .
       ($cli ? ' · ' . htmlspecialchars(txt_($cli['nombre'])) . ', ' . htmlspecialchars(txt_($cli['direccion'])) : '') . '</p><p><b>' . htmlspecialchars($titulo) . '</b><br>' .
@@ -896,6 +896,11 @@ function portalMensaje_(array $c, array $p): array {
   if (in_array(normal_($t['estado']), ['resuelto', 'cerrado'], true)) $cambios['estado'] = 'abierto';
   $t = actualizar_('TICKETS', $t['id'], $cambios);
   portalBitacoraIncidencia_($t, ($esCliente ? 'Cliente' : 'Subcontrata') . ': ' . $texto, $c['id']);
+  $dest = portalCorreoTickets_();
+  if ($dest !== '') correo_(['to' => $dest, 'subject' => 'Respuesta en ticket · ' . $t['titulo'],
+    'htmlBody' => portalHtml_('Nuevo mensaje en un ticket', '<p><b>' . htmlspecialchars(txt_($c['empresa']) ?: txt_($c['nombre'])) . '</b> (' . ($esCliente ? 'cliente' : 'subcontrata') .
+      ') ha escrito en «<b>' . htmlspecialchars($t['titulo']) . '</b>» (' . $t['id'] . '):</p><p style="background:#f4f6f3;border-left:3px solid #B4FA1E;padding:10px 12px">' .
+      nl2br(htmlspecialchars($texto)) . '</p><p>Respóndelo en el CRM → Obras de subcontratas → Tickets.</p>')]);
   registrar_(portalQuien_($c), 'portal_mensaje', 'TICKETS', $t['id'], mb_substr($texto, 0, 120));
   return ['ok' => true, 'ticket' => portalTicketPublico_($t, $esCliente ? 'cliente' : 'contrata')];
 }
@@ -967,6 +972,11 @@ function portalCorreo_(string $to, string $asunto, string $titulo, string $cuerp
   return true;
 }
 
+/** A quién avisa cada ticket nuevo (orden de Nando, 10/11/2026). Se cambia en configuración: portal_avisos_tickets. */
+function portalCorreoTickets_(): string {
+  return txt_(config_()['portal_avisos_tickets'] ?? '') ?: 'administracion@zerowattios.com,fernandogarcia@zerowattios.com';
+}
+
 function portalCorreoEscalado_(): string {
   return txt_(config_()['portal_escalado'] ?? '') ?: 'fernandogarcia@zerowattios.com';
 }
@@ -981,7 +991,7 @@ function ticPortal_(): array {
     $cambios = [];
     if (txt_($t['primera_respuesta']) === '' && caducada_($t['limite_respuesta']) && txt_($t['aviso_respuesta'] ?? '') === '') {
       $cambios['aviso_respuesta'] = ahora_();
-      $dest = correoDeAvisos_();
+      $dest = portalCorreoTickets_();
       if ($dest !== '') correo_(['to' => $dest, 'subject' => 'Ticket sin responder · ' . $t['titulo'],
         'htmlBody' => portalHtml_('Ticket sin responder', '<p>El ticket <b>' . htmlspecialchars($t['titulo']) . '</b> (' . $t['id'] . ', ' . $t['prioridad'] . ') ha pasado su plazo de primera respuesta.</p>')]);
       $hecho['avisos']++;

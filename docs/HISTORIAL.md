@@ -29,6 +29,9 @@ backend y la misma base de datos:
   cliente 2 días antes, llegada, fases, legalización en 7 días y los que
   ponga dirección), «He llegado» / «Me voy», fases con foto obligatoria,
   subir legalización y certificados, bitácora y tickets.
+- Cada ticket nuevo (y cada respuesta del cliente o la subcontrata) se avisa por
+  correo a administracion@zerowattios.com y fernandogarcia@zerowattios.com
+  (configuración portal_avisos_tickets).
 - Tickets con tiempos: urgente 4 h / 24 h, media 24 h / 72 h, baja 72 h /
   7 días (respuesta / solución). Cada ticket se refleja en Incidencias. Fuera
   de plazo: aviso a dirección y escalado a Fernando (cron, ticPortal_).
