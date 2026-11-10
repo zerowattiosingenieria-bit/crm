@@ -769,16 +769,39 @@ function portalGuardarArchivo_(array $o, array $p, string $clase, array $quien, 
   $cli = buscar1_('CLIENTES', fn($x) => mismo_($x['id'], $o['cliente_id']));
   if (!$cli) return ['ok' => false, 'error' => 'No existe el cliente de esta obra.'];
   $proy = proyectoDe_($cli, $quien);
-  $carpeta = carpetaDeProyecto_($proy, $cli);
+  $carpeta = carpetaDeObra_($o, $proy, $cli);
   $nombre = mb_substr(preg_replace('#[\\\\/:*?"<>|]+#', '-', txt_($p['nombre'] ?? '')) ?: ($clase . '-' . hoyISO_()), 0, 120);
   $mime = txt_($p['mime'] ?? '') ?: 'application/octet-stream';
-  $a = driveSubir_($carpeta, 'OBRA ' . $o['id'] . ' · ' . $nombre, $datos, $mime);
+  /* El nombre en el Drive dice de quién es y qué es, sin abrirlo:
+     «C. Enebro, 12 · Gustavo Moreno · Paneles colocados · 2026-11-10 10.32 · foto.jpg». */
+  $ext = pathinfo($nombre, PATHINFO_EXTENSION);
+  $que = txt_($p['notas'] ?? '') !== '' ? mb_substr(preg_replace('#[\\/:*?"<>|]+#', '-', txt_($p['notas'])), 0, 60) : (PORTAL_CLASES[$clase] ?? 'Documento');
+  $nombreDrive = portalEtiquetaCliente_($cli) . ' · ' . $que . ' · ' . str_replace(':', '.', substr(ahora_(), 0, 16)) . ' · ' . $nombre;
+  if ($ext === '' && strpos($mime, 'jpeg') !== false) $nombreDrive .= '.jpg';
+  $a = driveSubir_($carpeta, $nombreDrive, $datos, $mime);
   $fila = insertar_('ARCHIVOS', ['cliente_id' => $cli['id'], 'proyecto_id' => $proy['id'], 'clase' => $clase, 'nombre' => $nombre,
     'archivo_id' => $a['id'] ?? '', 'mime' => $mime, 'bytes' => $a['bytes'] ?? 0, 'miniatura' => trozo_($p['miniatura'] ?? '', 0, TOPE_MINIATURA),
     'subido_por' => $quien['id'], 'subido' => ahora_(), 'notas' => mb_substr(txt_($p['notas'] ?? ''), 0, 300),
     'obra_id' => $o['id'], 'visible_cliente' => $visible]);
   registrar_($quien, 'portal_subir', 'ARCHIVOS', $fila['id'], txt_($cli['nombre']) . ' · ' . $nombre);
   return ['ok' => true, 'archivo' => portalArchivoPublico_($fila)];
+}
+
+/**
+ * Todo lo que se sube de una obra va al Drive de la empresa (orden de Nando,
+ * 10/11/2026), dentro de la carpeta del cliente, en una subcarpeta por obra:
+ * «OBRA · Fotovoltaica · Greenfield». Si la subcarpeta no se puede crear, a
+ * la carpeta del cliente, pero nunca se queda fuera del Drive.
+ */
+function carpetaDeObra_(array $o, array &$proy, array $cli): string {
+  $padre = carpetaDeProyecto_($proy, $cli);
+  try {
+    $cta = txt_($o['contrata_id']) !== '' ? buscar1_('PORTAL_CUENTAS', fn($x) => mismo_($x['id'], $o['contrata_id'])) : null;
+    $nombre = 'OBRA ' . (PORTAL_ESPECIALIDADES[normal_($o['especialidad'])] ?? 'Instalación') . ' · ' . portalEtiquetaCliente_($cli) .
+      ($cta ? ' · ' . (txt_($cta['empresa']) ?: txt_($cta['usuario'])) : '');
+    $id = driveCarpeta_($nombre, $padre, true);
+    return $id !== '' ? $id : $padre;
+  } catch (Throwable $e) { return $padre; }
 }
 
 /** Descarga: un archivo que esa cuenta puede ver, una factura suya o un manual. */
@@ -1354,4 +1377,10 @@ function portalCorreoAprobador_(): string {
   $quien = $v !== '' ? normal_($v) : 'ruben';
   $u = buscar1_('USUARIOS', fn($x) => normal_($x['usuario']) === $quien && txt_($x['email']) !== '');
   return $u ? txt_($u['email']) : correoDeAvisos_();
+}
+
+/** Cómo se nombra a un cliente en el Drive: dirección y nombre (como en el CRM). */
+function portalEtiquetaCliente_(array $cli): string {
+  $t = trim(txt_($cli['direccion'] ?? '') . (txt_($cli['nombre'] ?? '') !== '' ? ' · ' . txt_($cli['nombre']) : ''));
+  return mb_substr(preg_replace('#[\\\\/:*?"<>|]+#', '-', $t !== '' ? $t : txt_($cli['id'] ?? '')), 0, 90);
 }

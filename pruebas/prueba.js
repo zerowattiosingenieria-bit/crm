@@ -695,7 +695,9 @@ console.log('\n== Resumen semanal por correo ==');
    envío sin molestar al equipo. Primero se comprueba eso. */
 vaciarCorreos();                 // los códigos de entrada no son resúmenes
 const envioUnico = resumenSemanal();
-const correosUnicos = correosEnviados();
+/* Los avisos de vencidos de cada comercial y captador salen siempre a su
+   propio correo (avisoVencidos, por diseño); aquí se miran solo los resúmenes. */
+const correosUnicos = correosEnviados().filter(c => /^Tu semana en ZERO WATTIOS/.test(c.subject));
 comprobar('con «resumen_a» puesto, todo va a esa dirección',
   correosUnicos.length === 7 && correosUnicos.every(c => c.to === 'fernandogarcia@zerowattios.com'),
   correosUnicos.map(c => c.to).join(','));
@@ -707,7 +709,7 @@ despachar_({accion: 'guardarConfig', token: sesiones.fernando.token, config: {re
 vaciarCorreos();
 const envio = resumenSemanal();
 comprobar('se envía a todo el equipo', envio.enviados === 7, JSON.stringify(envio));
-const correos = correosEnviados();
+const correos = correosEnviados().filter(c => /^Tu semana en ZERO WATTIOS/.test(c.subject));
 comprobar('cada correo va a su dirección',
   correos.every(c => /@/.test(c.to)), correos.map(c => c.to).join(','));
 comprobar('los correos llevan el asunto de la semana',
