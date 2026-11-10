@@ -50,12 +50,14 @@ const PORTAL_FASES = [
   'fotovoltaica' => [
     ['llegada', 'Llegada y replanteo', false, ''], ['estructura', 'Estructura montada', true, ''],
     ['paneles', 'Paneles colocados', true, ''], ['inversor', 'Inversor y protecciones', true, ''],
+    ['etiqueta_inversor', 'Foto de la pegatina del inversor (placa con modelo y nº de serie)', true, ''],
     ['bateria', 'Batería instalada', true, 'bateria'], ['cargador', 'Cargador instalado', true, 'cargador'],
     ['cableado', 'Cableado y puesta a tierra', true, ''], ['marcha', 'Puesta en marcha y app de monitorización', true, ''],
     ['cliente', 'Explicado al cliente', false, ''], ['limpieza', 'Obra recogida y limpia', true, '']
   ],
   'aerotermia' => [
     ['llegada', 'Llegada y replanteo', false, ''], ['exterior', 'Unidad exterior colocada', true, ''],
+    ['etiqueta_aero', 'Foto de la pegatina de la máquina de aerotermia (placa con modelo y nº de serie)', true, ''],
     ['interior', 'Unidad interior / hidrokit', true, ''], ['acs', 'Depósito de ACS', true, 'acs'],
     ['inercia', 'Depósito de inercia', true, 'inercia'], ['hidraulica', 'Conexión hidráulica y llenado', true, ''],
     ['electrica', 'Conexión eléctrica', true, ''], ['marcha', 'Puesta en marcha y parametrización', true, ''],
