@@ -316,7 +316,15 @@ function portalInicioCliente_(array $c): array {
     ];
   }
   /* El diario: lo que pasa en la obra que el cliente puede ver. */
-  $diario = array_values(array_filter(leer_('OBRA_EVENTOS'), fn($e) => in_array(txt_($e['obra_id']), $idsObras, true) && normal_($e['visible_cliente']) === 'si'));
+  /* Una fase que el instalador marca y luego desmarca no debe seguir en el diario del cliente. */
+  $fasesHechas = [];
+  $opsPorId = indexar_($ops);
+  foreach ($obras as $o) {
+    $hechas = deJson_($o['checklist'] ?? '', []) ?: [];
+    foreach (portalFasesDe_($o, $opsPorId[txt_($o['operacion_id'])] ?? []) as [$k, $t]) if (!empty($hechas[$k])) $fasesHechas[txt_($o['id']) . '|' . normal_($t)] = true;
+  }
+  $diario = array_values(array_filter(leer_('OBRA_EVENTOS'), fn($e) => in_array(txt_($e['obra_id']), $idsObras, true) && normal_($e['visible_cliente']) === 'si' &&
+    (normal_($e['tipo']) !== 'fase' || isset($fasesHechas[txt_($e['obra_id']) . '|' . normal_($e['detalle'])]))));
   usort($diario, fn($a, $b) => strcmp(txt_($b['fecha']), txt_($a['fecha'])));
   $diario = array_map(fn($e) => ['fecha' => $e['fecha'], 'tipo' => $e['tipo'], 'texto' => portalTextoCliente_($e)], array_slice($diario, 0, 60));
 
