@@ -107,6 +107,13 @@ export function panelProyecto(cliente) {
     const proyectos = archivos.filter(a => a.clase === 'proyecto');
     /* Solo le llegan a la dirección: el servidor no se los manda a nadie más. */
     const deDireccion = archivos.filter(a => a.clase === 'direccion');
+    /* Lo de la obra (apps de subcontratas, 10/11/2026): fotos de las fases,
+       pegatinas, legalización, certificados y lo que dirección deja al
+       instalador o al cliente. Se gestiona en «Obras de subcontratas». */
+    const NOMBRE_OBRA = {obra_foto: 'Foto de obra', foto_antes: 'Antes de la obra', documento_instalador: 'Para el instalador',
+      legalizacion: 'Legalización', certificado: 'Certificado', documento_obra: 'Documento de obra', documento_cliente: 'Para el cliente',
+      manual: 'Manual', garantia: 'Garantía'};
+    const deObra = archivos.filter(a => NOMBRE_OBRA[a.clase]);
     const puedeEntregar = api.puede('editarTodo');
     const [etiqueta, color] = ESTADOS[txt(proy.estado)] || ESTADOS.borrador;
 
@@ -336,6 +343,15 @@ export function panelProyecto(cliente) {
       tarjeta('Fotos de la vivienda (' + fotos.length + ')', h('div', {'data-zona': 'foto'}, subidor, rejillaFotos),
         {subtitulo: 'Tejado, cuadro eléctrico, caldera, radiadores, sitio de la máquina…'}),
       tarjeta('Otros documentos (' + docs.length + ')', listaDocs),
+      deObra.length ? tarjeta('Obra · instaladores (' + deObra.length + ')', h('div',
+        h('.zw-fotos', deObra.filter(a => a.miniatura).map(f => h('.zw-foto', {title: (NOMBRE_OBRA[f.clase] || '') + (f.notas ? ' · ' + f.notas : '')},
+          h('img', {src: f.miniatura, alt: txt(f.notas || f.nombre), loading: 'lazy'}),
+          h('button.abrir', {title: 'Descargar', onclick: e => conEspera(e, () => abrirArchivo(f))}, '⤓')))),
+        h('ul.zw-docs', deObra.filter(a => !a.miniatura).map(doc => h('li',
+          h('span', NOMBRE_OBRA[doc.clase] + ' · ' + txt(doc.notas || doc.nombre)), h('span.nota', fechaCorta(doc.subido)),
+          h('button.btn.plano', {onclick: e => conEspera(e, () => abrirArchivo(doc))}, '⤓')))),
+        api.esDireccion() ? h('.acciones', {estilo: {marginTop: '10px'}}, h('a.btn', {href: '#subcontratas/obras'}, 'Ver en Obras de subcontratas')) : null),
+        {subtitulo: 'Lo que suben las subcontratas (también en el Drive, carpeta del cliente › OBRA …)'}) : null,
       tarjetaAceptacion(cliente, archivos, pinta),
       cambios,
       privados,

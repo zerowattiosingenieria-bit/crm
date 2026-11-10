@@ -92,7 +92,8 @@ function comprobar(nombre, condicion, extra) {
       const api = await import('/assets/js/api.js');
       const yo = api.estado.usuario;
       const d = new Date(); const hoy = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-      const deHoy = api.estado.captaciones.filter(c => String(c.captador_id) === String(yo.id) && String(c.fecha).slice(0, 10) === hoy && api.cliente(c.cliente_id));
+      /* La agenda del captador solo pinta las citas que ya ha puesto a un comercial (agenda.js). */
+      const deHoy = api.estado.captaciones.filter(c => String(c.captador_id) === String(yo.id) && String(c.fecha).slice(0, 10) === hoy && String(c.comercial_id || '').trim() && api.cliente(c.cliente_id));
       const titulos = [...document.querySelectorAll('#vista .tarjeta header h2')].map(e => e.textContent);
       const lineas = [...document.querySelectorAll('#vista ul.lista-avisos li b')].map(e => e.textContent);
       const ajenos = api.estado.captaciones.filter(c => String(c.captador_id) !== String(yo.id) && api.cliente(c.cliente_id));
