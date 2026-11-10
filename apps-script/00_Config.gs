@@ -230,6 +230,7 @@ const ESQUEMA = {
   OBRAS: ['id','operacion_id','cliente_id','contrata_id','especialidad','estado','fecha_prevista','llegada','salida','terminada','progreso','checklist','marcas','equipos','avisos','instrucciones','contacto_obra','notas_internas','creado','creado_por','modificado','modificado_por'],
   OBRA_EVENTOS: ['id','obra_id','fecha','cuenta_id','autor','tipo','detalle','visible_cliente'],
   TICKETS: ['id','obra_id','cliente_id','contrata_id','cuenta_id','origen','titulo','detalle','prioridad','estado','creado','limite_respuesta','limite_resolucion','primera_respuesta','aviso_respuesta','resuelto','escalado','mensajes','incidencia_id','modificado'],
+  VISITAS_INSTALADOR: ['id','cliente_id','operacion_id','contrata_id','fecha','hora','tipo','notas','estado','resultado','hecha','creado','creado_por','modificado','modificado_por'],
   LOG: ['fecha','usuario_id','usuario','accion','entidad','entidad_id','detalle',
         'tipo','equipo','agente','ip','lugar']
 };

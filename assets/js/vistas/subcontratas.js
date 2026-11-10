@@ -69,6 +69,7 @@ export async function vistaSubcontratas({id}) {
       ['aprobar', 'Para aprobar', D.por_aprobar.length],
       ['obras', 'Obras', D.obras.filter(o => o.estado !== 'validada' && o.estado !== 'cancelada').length],
       ['asignar', 'Sin asignar', D.pendientes.length],
+      ['visitas', 'Visitas', (D.visitas || []).filter(v => v.estado === 'pendiente').length],
       ['tickets', 'Tickets', abiertos.length],
       ['equipos', 'Subcontratas', D.contratas.length]
     ];
@@ -84,6 +85,14 @@ export async function vistaSubcontratas({id}) {
     if (est.pestana === 'aprobar') pintaAprobar(cuerpo);
     else if (est.pestana === 'asignar') pintaAsignar(cuerpo);
     else if (est.pestana === 'tickets') pintaTickets(cuerpo);
+    else if (est.pestana === 'visitas') poner(cuerpo, tarjeta('Visitas de instaladores', tabla([
+      {clave: 'fecha', et: 'Día', valor: v => v.fecha + v.hora, pinta: v => h('div', h('b', fechaCorta(v.fecha)), v.hora ? h('.nota', v.hora) : null)},
+      {clave: 'direccion', et: 'Cliente', pinta: v => h('div', h('a', {href: '#cliente/' + encodeURIComponent(v.cliente_id)}, v.direccion || v.cliente), h('.nota', v.cliente))},
+      {clave: 'tipo_nombre', et: 'Visita'}, {clave: 'contrata', et: 'Instalador'},
+      {clave: 'estado', et: 'Estado', pinta: v => marca(...({pendiente: ['Pendiente', 'info'], hecha: ['Hecha', 'bien'], cancelada: ['Cancelada', '']}[v.estado] || [v.estado]))},
+      {clave: 'notas', et: 'Qué / resultado', noOrden: true, pinta: v => v.estado === 'hecha' && v.resultado ? '✓ ' + v.resultado : (v.notas || '—')}
+    ], D.visitas || [], {vacio: 'Sin visitas. Se agendan desde la ficha del cliente → pestaña Instaladores.'}), {sinRelleno: true,
+      subtitulo: 'Se agendan desde la ficha de cada cliente → pestaña «Instaladores».'}));
     else if (est.pestana === 'equipos') pintaEquipos(cuerpo);
     else pintaObras(cuerpo);
   }
@@ -369,6 +378,63 @@ export async function vistaCuentasPortal() {
       tarjeta('Clientes', tabla(col('cliente'), clientes, {vacio: 'Sin cuentas de cliente todavía.'}), {sinRelleno: true,
         subtitulo: 'Cualquier cliente firmado puede crear su clave él mismo con «Es mi primera vez» (le llega un código a su correo).',
         acciones: [h('button.btn.primario', {onclick: () => editar(null, 'cliente')}, '+ Cliente')]}));
+  }
+  cargar();
+  return caja;
+}
+
+/* ======================================================================
+   Ficha del cliente → pestaña «Instaladores»: sus obras con subcontratas y
+   las visitas que se le agendan a un instalador (replanteo, visita técnica,
+   revisión…). Al instalador le salen en su app con dirección, teléfono y
+   las fotos de la casa.
+   ====================================================================== */
+const ESTADO_VISITA = {pendiente: ['Pendiente', 'info'], hecha: ['Hecha', 'bien'], cancelada: ['Cancelada', '']};
+
+export function panelInstaladores(c, ir) {
+  const caja = h('div', cargando('Cargando instaladores…'));
+  let D = null;
+  async function cargar() {
+    try { D = await api.pedir('visitasInstalador', {cliente_id: c.id}); } catch (e) { return poner(caja, h('p.nota', e.message)); }
+    pinta();
+  }
+  function editar(v) {
+    if (!D.contratas.length) return avisoError(new Error('No hay subcontratas dadas de alta (superadmin → Cuentas de clientes y subcontratas).'));
+    const campos = [
+      {id: 'contrata_id', et: 'Instalador', tipo: 'select', opciones: D.contratas.map(k => [k.id, k.nombre + ' · ' + (ESP[k.especialidad] || '')]), requerido: true, ancho: 2},
+      {id: 'tipo', et: 'Tipo de visita', tipo: 'select', opciones: Object.entries(D.tipos), requerido: true, ancho: 2},
+      {id: 'fecha', et: 'Día', tipo: 'fecha', requerido: true, ancho: 2},
+      {id: 'hora', et: 'Hora', tipo: 'hora', ancho: 2},
+      {id: 'notas', et: 'Qué tiene que hacer o mirar', tipo: 'area', ancho: 4, filas: 3, pista: 'Lo verá el instalador en su app'}
+    ];
+    if (D.operaciones.length) campos.push({id: 'operacion_id', et: 'Instalación', tipo: 'select', opciones: [['', '—']].concat(D.operaciones.map(o => [o.id, o.id + ' · ' + o.estado])), ancho: 2});
+    if (v) campos.push({id: 'estado', et: 'Estado', tipo: 'select', opciones: Object.entries(ESTADO_VISITA).map(([k, [et]]) => [k, et]), ancho: 2});
+    ventanaFormulario({titulo: (v ? 'Visita · ' : 'Agendar visita de instalador · ') + (txt(c.direccion) || c.nombre), campos,
+      valores: v ? v : {tipo: 'tecnica', operacion_id: (D.operaciones[0] || {}).id || ''},
+      extra: h('p.nota', 'El instalador la ve en su app con la dirección, el teléfono del cliente y las fotos de la casa. Al cliente no le llega nada.'),
+      alGuardar: async val => {
+        await api.pedir('guardarVisitaInstalador', {visita: Object.assign({cliente_id: c.id}, v ? {id: v.id} : {}, val)});
+        aviso(v ? 'Visita guardada' : 'Visita agendada: ya la ve el instalador');
+        cargar();
+      }});
+  }
+  function pinta() {
+    const pend = D.visitas.filter(v => v.estado === 'pendiente');
+    poner(caja,
+      tarjeta('Visitas de instaladores', D.visitas.length ? tabla([
+        {clave: 'fecha', et: 'Día', valor: v => v.fecha + v.hora, pinta: v => h('div', h('b', fechaCorta(v.fecha)), v.hora ? h('.nota', v.hora) : null)},
+        {clave: 'tipo_nombre', et: 'Visita'},
+        {clave: 'contrata', et: 'Instalador'},
+        {clave: 'estado', et: 'Estado', pinta: v => marca(...(ESTADO_VISITA[v.estado] || [v.estado]))},
+        {clave: 'notas', et: 'Qué / resultado', noOrden: true, pinta: v => h('div', {estilo: {maxWidth: '360px', whiteSpace: 'pre-wrap'}}, v.estado === 'hecha' && v.resultado ? h('span', '✓ ' + v.resultado) : (v.notas || '—'))}
+      ], D.visitas, {alPulsar: v => editar(v)}) : h('p.nota', 'Todavía no hay visitas de instaladores para este cliente.'),
+      {sinRelleno: !!D.visitas.length, subtitulo: pend.length ? pend.length + ' pendiente' + (pend.length === 1 ? '' : 's') : null,
+       acciones: [h('button.btn.primario', {onclick: () => editar(null)}, '+ Agendar visita')]}),
+      tarjeta('Obras con subcontratas', D.obras.length ? h('div', {estilo: {display: 'grid', gap: '8px'}}, D.obras.map(o => h('div', {estilo: {display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap'}},
+        marca(ESP[o.especialidad] || o.especialidad), h('b', o.contrata || 'Sin instalador'), marca(...(ESTADO_OBRA[o.estado] || [o.estado])),
+        h('span', {estilo: {minWidth: '120px'}}, barraProgreso(o.progreso || 0)), h('span.nota', (o.progreso || 0) + ' %' + (o.fecha_prevista ? ' · prevista ' + fechaCorta(o.fecha_prevista) : '')))),
+        h('a.btn', {href: '#subcontratas/obras', estilo: {justifySelf: 'start'}}, 'Abrir en Obras de subcontratas'))
+        : h('p.nota', 'Sin obra asignada todavía. Se asigna en Obras de subcontratas → Sin asignar.')));
   }
   cargar();
   return caja;

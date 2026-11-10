@@ -10,6 +10,7 @@ import {tarjeta, tabla, kpi, kpis, etiquetaEstado, marca, ventanaFormulario, ven
         aviso, avisoError, confirmar, filtros} from '../ui.js';
 import {editorOperacion, tarjetaOperacion} from './operaciones.js';
 import {panelProyecto} from './proyecto.js';
+import {panelInstaladores, veSubcontratas} from './subcontratas.js';
 import {panelFicha} from './ficha.js';
 import {avisoDuplicadoVivo, ventanaYaExiste, duplicadoLocal, faltaPorMeter, menuApuntar, panelHistorial, panelCambios,
         panelCitas, sucesosDe, ventanaRepetidos, CAMPOS_VIVIENDA, CAMPOS_CONTACTO} from './ficha-cliente.js';
@@ -418,7 +419,8 @@ export async function vistaCliente({id, ir, refrescar}) {
     veVisor() && ['simulacion', 'Simulación 3D', () => { const caja = h('div', h('p.nota', 'Cargando la simulación…'));
       import('./visor3d.js').then(m => m.vistaVisor3d({id: c.id, embebido: true})).then(n => poner(caja, n))
         .catch(e => poner(caja, h('p.nota', 'No se ha podido abrir la simulación: ' + e.message))); return caja; }],
-    ['instalaciones', 'Instalaciones (' + ops.length + ')', () => panelOperaciones(c, ops, refrescar, acc.instalacion)]
+    ['instalaciones', 'Instalaciones (' + ops.length + ')', () => panelOperaciones(c, ops, refrescar, acc.instalacion)],
+    veSubcontratas() && ['instaladores', 'Instaladores', () => panelInstaladores(c, ir)]
   ].filter(Boolean);
   tabs.forEach(([clave, nombre, pinta], i) => {
     const b = h('button', {onclick: () => {

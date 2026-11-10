@@ -27,6 +27,7 @@ const INDICES = [
   'PORTAL_SESIONES' => ['token', 'cuenta_id'],
   'OBRAS' => ['operacion_id', 'cliente_id', 'contrata_id'],
   'OBRA_EVENTOS' => ['obra_id'],
+  'VISITAS_INSTALADOR' => ['cliente_id', 'contrata_id'],
   'TICKETS' => ['cliente_id', 'contrata_id', 'estado'],
   'PARTES' => ['usuario_id', 'fecha'],
   'NOMINAS' => ['usuario_id', 'periodo'],

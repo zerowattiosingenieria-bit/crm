@@ -160,7 +160,8 @@ function acciones_(): array {
     /* Apps de clientes y subcontratas, lado CRM (portal.php, 10/11/2026) */
     'cuentasPortal' => 'accCuentasPortal_', 'guardarCuentaPortal' => 'accGuardarCuentaPortal_', 'verComoPortal' => 'accVerComoPortal_',
     'obrasPortal' => 'accObrasPortal_', 'obraPortal' => 'accObraPortal_', 'guardarObraPortal' => 'accGuardarObraPortal_',
-    'responderTicketPortal' => 'accResponderTicketPortal_', 'visibleArchivoPortal' => 'accVisibleArchivoPortal_', 'subirArchivoObra' => 'accSubirArchivoObra_'
+    'responderTicketPortal' => 'accResponderTicketPortal_', 'visibleArchivoPortal' => 'accVisibleArchivoPortal_', 'subirArchivoObra' => 'accSubirArchivoObra_',
+    'visitasInstalador' => 'accVisitasInstalador_', 'guardarVisitaInstalador' => 'accGuardarVisitaInstalador_'
   ];
 }
 

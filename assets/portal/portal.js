@@ -398,11 +398,11 @@
   function pintar() {
     if (!D) return arrancar();
     const {v, id} = ruta();
-    const enObra = !ES_CLIENTE && v === 'obra';
+    const enObra = !ES_CLIENTE && (v === 'obra' || v === 'visita');
     const nombre = ES_CLIENTE ? (D.cliente.nombre || D.cuenta.nombre) : (D.cuenta.empresa || D.cuenta.nombre);
     const cab = h('header.cabecera',
       enObra ? h('button.atras', {onclick: () => ir('inicio'), 'aria-label': 'Volver'}, '‹') : h('img.logo', {src: '/assets/img/logo-dark-h96.png', alt: 'ZERO WATTIOS'}),
-      enObra ? h('.tit', 'Ficha de obra') : h('.tit'),
+      enObra ? h('.tit', v === 'visita' ? 'Visita' : 'Ficha de obra') : h('.tit'),
       h('button.yo', {onclick: menuYo, 'aria-label': 'Mi cuenta'}, inicialesDe(nombre)));
     const main = h('main');
     const nav = h('nav.pestanas', PESTANAS.map(([k, et, ic]) => {
@@ -421,6 +421,7 @@
       else vistaInicioCliente(main);
     } else {
       if (v === 'obra' && id) vistaObra(main, id);
+      else if (v === 'visita' && id) vistaVisita(main, id);
       else if (v === 'avisos') vistaAvisos(main);
       else if (v === 'tickets') vistaAyuda(main, id);
       else vistaObras(main);
@@ -689,6 +690,7 @@
     return h('.avisote' + (a.vencido ? '.vencido' : ''),
       h('.ic', a.vencido ? '⚠️' : a.fecha === hoyISO() ? '⏰' : '📅'),
       h('div', h('b', a.texto), h('small', (a.vencido ? 'Vencido: ' : 'Para el ') + fechaLarga(a.fecha) + (obra ? ' · ' + obra.direccion : ''))),
+      a.visita_id ? h('button.btn.chico.borde', {onclick: () => ir('visita/' + encodeURIComponent(a.visita_id))}, 'Ver') :
       a.marcable && !previa ? h('button.btn.chico.lima', {onclick: async () => {
         try { const r = await pedir('portalAviso', {obra_id: a.obra_id || (obraAbierta && obraAbierta.id), clave: a.clave}); if (!r.ok) return toast(r.error, 'error');
           toast('Hecho', 'ok'); if (r.obra) obraAbierta = r.obra; await refrescar(); pintar(); } catch (e) { toast(e.message, 'error'); }
@@ -701,7 +703,13 @@
     main.appendChild(h('.hola', h('h1', 'Hola, ' + (D.cuenta.empresa || D.cuenta.nombre || '')),
       h('p', obras.filter(o => o.estado === 'en_curso' || o.estado === 'asignada').length + ' obras activas · ' + fechaLarga(hoyISO()))));
     if (pend.length) main.appendChild(h('.seccion', h('h2', 'Para hoy'), h('.avisos', pend.slice(0, 4).map(a => tarjetaAviso(a, true)))));
-    if (!obras.length) { main.appendChild(h('.tarjeta', h('.vacio', h('span.ico', '🏗️'), 'Todavía no tienes obras asignadas.'))); return; }
+    const visitas = (D.visitas || []).filter(x => x.estado === 'pendiente');
+    if (visitas.length) main.appendChild(h('.seccion', h('h2', 'Próximas visitas', h('small', visitas.length + '')),
+      h('div', {estilo: {display: 'grid', gap: '10px'}}, visitas.map(x => h('button.obra' + (x.fecha === hoyISO() ? '.en-obra' : ''), {onclick: () => ir('visita/' + encodeURIComponent(x.id))},
+        h('.arriba', h('span.chip.' + (x.fecha < hoyISO() ? 'mal' : x.fecha === hoyISO() ? 'lima' : 'info'), x.fecha === hoyISO() ? 'Hoy' : fechaLarga(x.fecha)), h('span.chip', x.tipo_nombre)),
+        h('h3', x.direccion || x.cliente),
+        h('.datos', h('span', '👤 ' + x.cliente), x.hora ? h('span', '🕘 ' + x.hora) : null))))));
+    if (!obras.length) { if (!visitas.length) main.appendChild(h('.tarjeta', h('.vacio', h('span.ico', '🏗️'), 'Todavía no tienes obras asignadas.'))); return; }
     const grupos = [['Activas', obras.filter(o => o.estado === 'en_curso' || o.estado === 'asignada')], ['Terminadas', obras.filter(o => o.estado === 'terminada' || o.estado === 'validada')]];
     grupos.forEach(([t, lista]) => { if (!lista.length) return;
       main.appendChild(h('.seccion', h('h2', t, h('small', lista.length + '')), h('div', {estilo: {display: 'grid', gap: '10px'}}, lista.map(o => {
@@ -721,6 +729,32 @@
     if (!av.length) main.appendChild(h('.tarjeta', h('.vacio', h('span.ico', '✅'), 'No tienes nada pendiente.')));
     else main.appendChild(h('.avisos', av.map(a => tarjetaAviso(a, true))));
     main.appendChild(h('.tarjeta', h('h2', 'Tiempos de los tickets'), h('.lista-mini', Object.keys(PRIO_T).map(k => h('div', h('span', PRIO_T[k][0]), h('b', horasSla(k)))))));
+  }
+
+  function vistaVisita(main, id) {
+    const x = (D.visitas || []).find(v => v.id === id);
+    if (!x) { main.appendChild(h('.tarjeta', h('.vacio', 'Esa visita ya no está.'))); return; }
+    const destino = encodeURIComponent([x.direccion, x.cp].filter(Boolean).join(' '));
+    main.appendChild(h('.cab-obra',
+      h('div', {estilo: {display: 'flex', gap: '8px', flexWrap: 'wrap'}}, h('span.chip.' + (x.estado === 'hecha' ? 'ok' : 'info'), x.estado === 'hecha' ? 'Hecha' : 'Pendiente'), h('span.chip', x.tipo_nombre)),
+      h('h2', x.direccion),
+      h('.ln', h('span', '👤 ' + x.cliente), h('span', '📅 ' + fechaLarga(x.fecha) + (x.hora ? ' · ' + x.hora : ''))),
+      h('.ln', x.telefono ? h('a', {href: 'tel:' + x.telefono.replace(/\s/g, '')}, ico('telefono'), x.telefono) : null,
+        h('a.lima', {href: 'https://www.google.com/maps/dir/?api=1&destination=' + destino, target: '_blank', rel: 'noopener'}, ico('mapa'), 'Cómo llegar'))));
+    if (x.notas) main.appendChild(h('.tarjeta', h('h2', 'Qué hay que hacer'), h('.instr', x.notas)));
+    const fotos = (x.archivos || []).filter(a => (a.mime || '').startsWith('image/') || a.miniatura);
+    const docs = (x.archivos || []).filter(a => !((a.mime || '').startsWith('image/') || a.miniatura));
+    main.appendChild(h('.tarjeta', h('h2', 'Lo que te vas a encontrar'), fotos.length ? galeria(fotos, true) : h('p.nota', {estilo: {margin: 0}}, 'Todavía no hay fotos de la casa.')));
+    if (docs.length) main.appendChild(h('.tarjeta', h('h2', 'Documentación'), h('.docs', docs.map(d => filaDoc(d.clase === 'proyecto' ? 'lista' : 'doc', d.notas || d.nombre, d.clase_nombre, () => abrir({id: d.id}, d.nombre))))));
+    if (x.estado === 'hecha') { main.appendChild(h('.tarjeta', h('h2', 'Resultado'), h('p', {estilo: {margin: 0}}, x.resultado || 'Hecha el ' + fecha(x.hecha, true)))); return; }
+    if (previa) return;
+    const res = h('textarea', {placeholder: 'Cómo ha ido: medidas, material que hace falta, problemas que has visto…'});
+    const b = h('button.btn.lima.ancho', {type: 'submit'}, ico('fin'), 'Visita hecha');
+    main.appendChild(h('form.tarjeta.form', {onsubmit: async e => {
+      e.preventDefault(); b.disabled = true;
+      try { const r = await pedir('portalVisitaHecha', {id: x.id, resultado: res.value}); if (!r.ok) return toast(r.error, 'error');
+        toast('Visita apuntada como hecha', 'ok'); await refrescar(); ir('inicio'); } catch (er) { toast(er.message, 'error'); } finally { b.disabled = false; }
+    }}, h('h2', '¿Has terminado?'), h('label.campo', h('span', 'Resultado de la visita'), res), b));
   }
 
   async function vistaObra(main, id) {

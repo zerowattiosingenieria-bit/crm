@@ -9,6 +9,16 @@ luego no hay manera de reconstruir.
 
 
 
+## 10/11/2026 · Visitas de instaladores desde la ficha del cliente
+
+Ficha del cliente → pestaña «Instaladores» (dirección): agendar una visita a
+una subcontrata (replanteo, visita técnica, instalación, revisión,
+incidencia) con día, hora y qué tiene que hacer. Al instalador le sale en su
+app (Próximas visitas y Avisos) con la dirección, el teléfono, «Cómo llegar»,
+las fotos de la casa y lo que se le haya dejado; la marca como hecha con el
+resultado y a dirección le llega un correo. Tabla VISITAS_INSTALADOR; en
+Obras de subcontratas, pestaña «Visitas» con todas. Al cliente no le llega nada.
+
 ## 10/11/2026 · Apps de clientes y de subcontratas
 
 Lo pidió Nando: «hazme la app para clientes y la app para proveedores… que sea

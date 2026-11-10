@@ -300,7 +300,7 @@ const PREFIJO = [
   'BANCO' => 'B', 'VACACIONES' => 'V', 'SESIONES' => 'SE', 'LOG' => 'L',
   'DIRECTORIO' => 'D', 'DIR_VISITAS' => 'DV', 'PUERTAS' => 'PU', 'EQUIPOS' => 'EQ',
   'PROYECTOS' => 'PR', 'ARCHIVOS' => 'AR', 'TAREAS' => 'T', 'CITAS_CAMBIOS' => 'CC', 'CAMBIOS' => 'CB', 'INCIDENCIAS' => 'IN', 'COTIZACIONES' => 'CZ', 'TRAMITES' => 'TR',
-  'PORTAL_CUENTAS' => 'PC', 'OBRAS' => 'OB', 'OBRA_EVENTOS' => 'OE', 'TICKETS' => 'TK'
+  'PORTAL_CUENTAS' => 'PC', 'OBRAS' => 'OB', 'OBRA_EVENTOS' => 'OE', 'TICKETS' => 'TK', 'VISITAS_INSTALADOR' => 'VI'
 ];
 
 /** Identificador corto, legible y único: C-000412. */

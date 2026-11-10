@@ -66,7 +66,7 @@ const PORTAL_FASES = [
   ]
 ];
 /* Las acciones que cambian algo: en «Ver como» (vista previa del superadmin) no se dejan. */
-const PORTAL_ESCRIBEN = ['portalLlegada', 'portalFase', 'portalAviso', 'portalTerminar', 'portalNota', 'portalSubir',
+const PORTAL_ESCRIBEN = ['portalVisitaHecha', 'portalLlegada', 'portalFase', 'portalAviso', 'portalTerminar', 'portalNota', 'portalSubir',
                          'portalTicket', 'portalMensaje', 'portalCambiarClave'];
 /* Las direcciones que se dan (redirigen a crm.zerowattios.com/clientes/ y /contratas/). */
 const PORTAL_WEB = ['cliente' => 'https://clientes.zerowattios.com/', 'contrata' => 'https://contratas.zerowattios.com/'];
@@ -85,7 +85,7 @@ function atenderPortal_(array $p, string $accion): array {
     'portalLlegada' => 'portalLlegada_', 'portalFase' => 'portalFase_', 'portalAviso' => 'portalAviso_',
     'portalTerminar' => 'portalTerminar_', 'portalNota' => 'portalNota_', 'portalSubir' => 'portalSubir_',
     'portalDescargar' => 'portalDescargar_', 'portalTicket' => 'portalTicket_', 'portalMensaje' => 'portalMensaje_',
-    'portalCambiarClave' => 'portalCambiarClave_'
+    'portalCambiarClave' => 'portalCambiarClave_', 'portalVisitaHecha' => 'portalVisitaHecha_'
   ];
   $fn = $mapa[$accion] ?? null;
   if (!$fn) return ['ok' => false, 'error' => 'Acción desconocida.'];
@@ -461,8 +461,16 @@ function portalInicioContrata_(array $c): array {
   $peso = ['en_curso' => 0, 'asignada' => 1, 'terminada' => 2, 'validada' => 3];
   usort($lista, fn($a, $b) => (($peso[$a['estado']] ?? 9) <=> ($peso[$b['estado']] ?? 9)) ?: strcmp($a['fecha_prevista'] ?: '9', $b['fecha_prevista'] ?: '9'));
   usort($avisos, fn($a, $b) => strcmp($a['fecha'] ?: '9', $b['fecha'] ?: '9'));
+  /* Visitas que dirección le ha agendado desde la ficha del cliente. */
+  $visitas = portalVisitasDe_($c, $clientes);
+  foreach ($visitas as $v) if ($v['estado'] === 'pendiente') {
+    $avisos[] = ['clave' => 'visita_' . $v['id'], 'texto' => $v['tipo_nombre'] . ($v['hora'] !== '' ? ' a las ' . $v['hora'] : '') . ' · ' . $v['cliente'],
+                 'fecha' => $v['fecha'], 'hecho' => false, 'marcable' => false, 'vencido' => $v['fecha'] !== '' && strcmp($v['fecha'], hoyISO_()) < 0,
+                 'obra_id' => '', 'visita_id' => $v['id'], 'direccion' => $v['direccion']];
+  }
+  usort($avisos, fn($a, $b) => strcmp($a['fecha'] ?: '9', $b['fecha'] ?: '9'));
   $tickets = filtrar_('TICKETS', fn($t) => mismo_($t['contrata_id'], $c['id']));
-  return ['obras' => $lista, 'avisos' => $avisos,
+  return ['obras' => $lista, 'avisos' => $avisos, 'visitas' => $visitas,
           'tickets' => array_map(fn($t) => portalTicketPublico_($t, 'contrata'), portalOrdenTickets_($tickets)),
           'sla' => PORTAL_SLA];
 }
@@ -839,6 +847,9 @@ function portalDescargar_(array $c, array $p): array {
 
 function portalPuedeVerArchivo_(array $c, array $a): bool {
   if (normal_($c['tipo']) === 'cliente') return mismo_($a['cliente_id'], $c['cliente_id']) && portalVeCliente_($a);
+  /* Con una visita agendada a ese cliente ve sus fotos y lo que se le deja al instalador. */
+  if (in_array(normal_($a['clase']), PORTAL_VE_CONTRATA, true) && buscar1_('VISITAS_INSTALADOR', fn($v) => mismo_($v['contrata_id'], $c['id']) &&
+      mismo_($v['cliente_id'], $a['cliente_id']) && normal_($v['estado']) !== 'cancelada' && strcmp(txt_($v['fecha']), sumarDias_(hoyISO_(), -30)) >= 0)) return true;
   foreach (filtrar_('OBRAS', fn($o) => mismo_($o['contrata_id'], $c['id']) && normal_($o['estado']) !== 'cancelada') as $o) {
     if (mismo_($a['obra_id'] ?? '', $o['id'])) return true;
     if (mismo_($a['cliente_id'], $o['cliente_id']) && in_array(normal_($a['clase']), PORTAL_VE_CONTRATA, true)) return true;
@@ -1184,7 +1195,15 @@ function accObrasPortal_(array $u, array $p): array {
   $porAprobar = array_map(function ($a) use ($clientes) {
     return portalArchivoPublico_($a) + ['cliente' => txt_(($clientes[txt_($a['cliente_id'])] ?? [])['nombre'] ?? ''), 'cliente_id' => txt_($a['cliente_id'])];
   }, array_values(array_filter(leer_('ARCHIVOS'), 'portalPendiente_')));
-  return ['ok' => true, 'obras' => $obras, 'pendientes' => $pendientes, 'por_aprobar' => $porAprobar, 'contratas' => $contratas, 'tickets' => $tickets,
+  $visitas = [];
+  foreach (filtrar_('VISITAS_INSTALADOR', fn($v) => normal_($v['estado']) === 'pendiente' || strcmp(txt_($v['fecha']), sumarDias_(hoyISO_(), -14)) >= 0) as $v) {
+    $x = portalVisitaPublica_($v, $clientes[txt_($v['cliente_id'])] ?? [], 'zw');
+    $cta = $cuentas[txt_($v['contrata_id'])] ?? [];
+    $x['contrata'] = txt_($cta['empresa'] ?? '') ?: txt_($cta['usuario'] ?? '');
+    $visitas[] = $x;
+  }
+  usort($visitas, fn($a, $b) => strcmp($a['fecha'] . $a['hora'], $b['fecha'] . $b['hora']));
+  return ['ok' => true, 'obras' => $obras, 'pendientes' => $pendientes, 'por_aprobar' => $porAprobar, 'visitas' => $visitas, 'contratas' => $contratas, 'tickets' => $tickets,
           'estados' => PORTAL_ESTADOS_OBRA, 'especialidades' => PORTAL_ESPECIALIDADES, 'clases' => PORTAL_CLASES, 'sla' => PORTAL_SLA];
 }
 
@@ -1383,4 +1402,117 @@ function portalCorreoAprobador_(): string {
 function portalEtiquetaCliente_(array $cli): string {
   $t = trim(txt_($cli['direccion'] ?? '') . (txt_($cli['nombre'] ?? '') !== '' ? ' · ' . txt_($cli['nombre']) : ''));
   return mb_substr(preg_replace('#[\\\\/:*?"<>|]+#', '-', $t !== '' ? $t : txt_($cli['id'] ?? '')), 0, 90);
+}
+
+/* ======================================================================
+   Visitas de instaladores (10/11/2026): dirección las agenda desde la
+   ficha del cliente y al instalador le salen en su app, con la dirección,
+   el teléfono, las fotos de la casa y lo que se le haya dejado.
+   ====================================================================== */
+const PORTAL_TIPOS_VISITA = ['replanteo' => 'Visita de replanteo', 'tecnica' => 'Visita técnica', 'instalacion' => 'Instalación',
+                             'revision' => 'Revisión / mantenimiento', 'incidencia' => 'Incidencia', 'otro' => 'Visita'];
+
+function portalVisitaPublica_(array $v, array $cli, string $para): array {
+  $o = ['id' => $v['id'], 'cliente_id' => txt_($v['cliente_id']), 'fecha' => txt_($v['fecha']), 'hora' => txt_($v['hora']),
+        'tipo' => normal_($v['tipo']), 'tipo_nombre' => PORTAL_TIPOS_VISITA[normal_($v['tipo'])] ?? 'Visita', 'notas' => txt_($v['notas']),
+        'estado' => normal_($v['estado']) ?: 'pendiente', 'resultado' => txt_($v['resultado']), 'hecha' => txt_($v['hecha']),
+        'cliente' => txt_($cli['nombre'] ?? ''), 'telefono' => txt_($cli['telefono'] ?? ''), 'cp' => txt_($cli['cp'] ?? ''),
+        'direccion' => trim(txt_($cli['direccion'] ?? '') . (txt_($cli['municipio'] ?? '') !== '' ? ', ' . txt_($cli['municipio']) : ''))];
+  if ($para === 'zw') { $o['contrata_id'] = txt_($v['contrata_id']); $o['operacion_id'] = txt_($v['operacion_id']); $o['creado'] = txt_($v['creado']); }
+  return $o;
+}
+
+/** Las visitas del instalador: pendientes y las de los últimos 30 días, con lo que necesita ver. */
+function portalVisitasDe_(array $c, array $clientes): array {
+  $desde = sumarDias_(hoyISO_(), -30);
+  $o = [];
+  foreach (filtrar_('VISITAS_INSTALADOR', fn($v) => mismo_($v['contrata_id'], $c['id']) && normal_($v['estado']) !== 'cancelada' &&
+           (normal_($v['estado']) === 'pendiente' || strcmp(txt_($v['fecha']), $desde) >= 0)) as $v) {
+    $cli = $clientes[txt_($v['cliente_id'])] ?? [];
+    $x = portalVisitaPublica_($v, $cli, 'contrata');
+    $x['archivos'] = array_map('portalArchivoPublico_', array_values(array_filter(leer_('ARCHIVOS'),
+      fn($a) => mismo_($a['cliente_id'], $v['cliente_id']) && in_array(normal_($a['clase']), PORTAL_VE_CONTRATA, true))));
+    $o[] = $x;
+  }
+  usort($o, fn($a, $b) => (($a['estado'] === 'pendiente' ? 0 : 1) <=> ($b['estado'] === 'pendiente' ? 0 : 1)) ?: strcmp($a['fecha'] . $a['hora'], $b['fecha'] . $b['hora']));
+  return $o;
+}
+
+function portalVisitaHecha_(array $c, array $p): array {
+  $v = buscar1_('VISITAS_INSTALADOR', fn($x) => mismo_($x['id'], $p['id'] ?? '') && mismo_($x['contrata_id'], $c['id']));
+  if (!$v || normal_($v['estado']) === 'cancelada') return ['ok' => false, 'error' => 'Esa visita no es tuya.'];
+  $v = actualizar_('VISITAS_INSTALADOR', $v['id'], ['estado' => 'hecha', 'hecha' => ahora_(), 'resultado' => mb_substr(txt_($p['resultado'] ?? ''), 0, 1500),
+    'modificado' => ahora_(), 'modificado_por' => $c['id']]);
+  $cli = buscar1_('CLIENTES', fn($x) => mismo_($x['id'], $v['cliente_id'])) ?: [];
+  $dest = correoDeAvisos_();
+  if ($dest !== '') correo_(['to' => $dest, 'subject' => 'Visita hecha · ' . portalEtiquetaCliente_($cli) . ' · ' . (txt_($c['empresa']) ?: txt_($c['usuario'])),
+    'htmlBody' => portalHtml_('Visita del instalador hecha', '<p><b>' . htmlspecialchars(txt_($c['empresa']) ?: txt_($c['usuario'])) . '</b> ha hecho la ' .
+      htmlspecialchars(mb_strtolower(PORTAL_TIPOS_VISITA[normal_($v['tipo'])] ?? 'visita')) . ' de <b>' . htmlspecialchars(portalEtiquetaCliente_($cli)) . '</b>.</p>' .
+      (txt_($v['resultado']) !== '' ? '<p style="background:#f4f6f3;border-left:3px solid #B4FA1E;padding:10px 12px">' . nl2br(htmlspecialchars($v['resultado'])) . '</p>' : ''))]);
+  registrar_(portalQuien_($c), 'portal_visita_hecha', 'VISITAS_INSTALADOR', $v['id'], portalEtiquetaCliente_($cli));
+  return ['ok' => true];
+}
+
+/** Las visitas de instaladores de un cliente (ficha del cliente en el CRM). */
+function accVisitasInstalador_(array $u, array $p): array {
+  exigirDireccionPortal_($u);
+  $cliId = txt_($p['cliente_id'] ?? '');
+  $cli = buscar1_('CLIENTES', fn($x) => mismo_($x['id'], $cliId));
+  if (!$cli) return ['ok' => false, 'error' => 'No existe ese cliente.'];
+  $visitas = array_map(fn($v) => portalVisitaPublica_($v, $cli, 'zw'), filtrar_('VISITAS_INSTALADOR', fn($v) => mismo_($v['cliente_id'], $cliId)));
+  usort($visitas, fn($a, $b) => strcmp($b['fecha'] . $b['hora'], $a['fecha'] . $a['hora']));
+  $cuentas = indexar_(leer_('PORTAL_CUENTAS'));
+  foreach ($visitas as &$v) $v['contrata'] = txt_(($cuentas[$v['contrata_id']] ?? [])['empresa'] ?? '') ?: txt_(($cuentas[$v['contrata_id']] ?? [])['usuario'] ?? '');
+  unset($v);
+  $obras = array_map(function ($o) use ($cuentas) {
+    $cta = $cuentas[txt_($o['contrata_id'])] ?? [];
+    return ['id' => $o['id'], 'especialidad' => normal_($o['especialidad']), 'estado' => normal_($o['estado']), 'progreso' => (int)num_($o['progreso']),
+            'fecha_prevista' => txt_($o['fecha_prevista']), 'contrata' => txt_($cta['empresa'] ?? '') ?: txt_($cta['usuario'] ?? '')];
+  }, filtrar_('OBRAS', fn($o) => mismo_($o['cliente_id'], $cliId) && normal_($o['estado']) !== 'cancelada'));
+  $contratas = array_values(array_map(fn($c) => ['id' => $c['id'], 'nombre' => txt_($c['empresa']) ?: txt_($c['usuario']), 'especialidad' => normal_($c['especialidad'])],
+    array_filter(leer_('PORTAL_CUENTAS'), fn($c) => normal_($c['tipo']) === 'contrata' && normal_($c['activo']) === 'si')));
+  $ops = array_map(fn($o) => ['id' => $o['id'], 'estado' => normal_($o['estado'])], filtrar_('OPERACIONES', fn($o) => mismo_($o['cliente_id'], $cliId)));
+  return ['ok' => true, 'visitas' => $visitas, 'obras' => $obras, 'contratas' => $contratas, 'operaciones' => $ops, 'tipos' => PORTAL_TIPOS_VISITA];
+}
+
+function accGuardarVisitaInstalador_(array $u, array $p): array {
+  exigirDireccionPortal_($u);
+  $d = is_array($p['visita'] ?? null) ? $p['visita'] : [];
+  $id = txt_($d['id'] ?? '');
+  $ya = $id !== '' ? buscar1_('VISITAS_INSTALADOR', fn($x) => mismo_($x['id'], $id)) : null;
+  if ($id !== '' && !$ya) return ['ok' => false, 'error' => 'No existe esa visita.'];
+  $cliId = $ya ? txt_($ya['cliente_id']) : txt_($d['cliente_id'] ?? '');
+  $cli = buscar1_('CLIENTES', fn($x) => mismo_($x['id'], $cliId));
+  if (!$cli) return ['ok' => false, 'error' => 'No existe ese cliente.'];
+  $cambios = ['modificado' => ahora_(), 'modificado_por' => $u['id']];
+  if (array_key_exists('contrata_id', $d) || !$ya) {
+    $cta = buscar1_('PORTAL_CUENTAS', fn($x) => mismo_($x['id'], $d['contrata_id'] ?? '') && normal_($x['tipo']) === 'contrata');
+    if (!$cta) return ['ok' => false, 'error' => 'Elige el instalador.'];
+    $cambios['contrata_id'] = $cta['id'];
+  }
+  if (array_key_exists('fecha', $d) || !$ya) {
+    $f = substr(txt_($d['fecha'] ?? ''), 0, 10);
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $f)) return ['ok' => false, 'error' => 'Pon el día de la visita.'];
+    $cambios['fecha'] = $f;
+  }
+  if (array_key_exists('hora', $d)) $cambios['hora'] = preg_match('/^\d{1,2}:\d{2}/', txt_($d['hora'])) ? substr(txt_($d['hora']), 0, 5) : '';
+  if (array_key_exists('tipo', $d) || !$ya) { $t = normal_($d['tipo'] ?? ''); $cambios['tipo'] = isset(PORTAL_TIPOS_VISITA[$t]) ? $t : 'tecnica'; }
+  if (array_key_exists('notas', $d)) $cambios['notas'] = mb_substr(txt_($d['notas']), 0, 2000);
+  if (array_key_exists('operacion_id', $d)) $cambios['operacion_id'] = txt_($d['operacion_id']);
+  if (array_key_exists('estado', $d) && $ya) { $e = normal_($d['estado']); if (in_array($e, ['pendiente', 'hecha', 'cancelada'], true)) $cambios['estado'] = $e; }
+  $v = $ya ? actualizar_('VISITAS_INSTALADOR', $ya['id'], $cambios)
+           : insertar_('VISITAS_INSTALADOR', $cambios + ['cliente_id' => $cli['id'], 'estado' => 'pendiente', 'creado' => ahora_(), 'creado_por' => $u['id']]);
+  /* Aviso al instalador (solo si su correo está en la lista permitida). */
+  $cta = buscar1_('PORTAL_CUENTAS', fn($x) => mismo_($x['id'], $v['contrata_id']));
+  if ($cta && txt_($cta['email']) !== '' && (!$ya || isset($cambios['fecha']) || isset($cambios['hora']) || ($cambios['estado'] ?? '') === 'cancelada')) {
+    $cancelada = normal_($v['estado']) === 'cancelada';
+    portalCorreo_(txt_($cta['email']), ($cancelada ? 'Visita cancelada' : 'Visita agendada') . ' · ' . txt_($cli['municipio'] ?? '') . ' · Zero Wattios',
+      $cancelada ? 'Visita cancelada' : 'Tienes una visita',
+      '<p>' . ($cancelada ? 'Se cancela la ' : 'Te hemos agendado una ') . htmlspecialchars(mb_strtolower(PORTAL_TIPOS_VISITA[normal_($v['tipo'])] ?? 'visita')) .
+      ' el <b>' . htmlspecialchars($v['fecha']) . (txt_($v['hora']) !== '' ? ' a las ' . htmlspecialchars($v['hora']) : '') . '</b> en <b>' .
+      htmlspecialchars(txt_($cli['direccion'] ?? '')) . '</b>.</p><p>La dirección, el teléfono y las fotos de la casa están en tu app.</p>', $cta);
+  }
+  registrar_($u, $ya ? 'portal_editar_visita' : 'portal_agendar_visita', 'VISITAS_INSTALADOR', $v['id'],
+    portalEtiquetaCliente_($cli) . ' · ' . $v['fecha'] . ' ' . txt_($v['hora']));
+  return ['ok' => true, 'visita' => portalVisitaPublica_($v, $cli, 'zw')];
 }
