@@ -515,7 +515,10 @@ function portalAvisos_(array $o): array {
              'hecho' => txt_($o['llegada']) !== '', 'marcable' => false];
   }
   if ($est === 'en_curso') {
-    $o2[] = ['clave' => 'fases', 'texto' => 'Completa todas las fases con sus fotos', 'fecha' => sumarDias_(txt_($o['llegada']) ? substr($o['llegada'], 0, 10) : $prevista, 3),
+    /* Fin de fases: 3 días después de empezar o el último aviso que haya puesto dirección, lo que sea más tarde. */
+    $finFases = sumarDias_(txt_($o['llegada']) ? substr($o['llegada'], 0, 10) : ($prevista ?: hoyISO_()), 3);
+    foreach (deJson_($o['avisos'] ?? '', []) ?: [] as $ax) if (is_array($ax) && strcmp(txt_($ax['fecha'] ?? ''), $finFases) > 0) $finFases = txt_($ax['fecha']);
+    $o2[] = ['clave' => 'fases', 'texto' => 'Completa todas las fases con sus fotos', 'fecha' => $finFases,
              'hecho' => num_($o['progreso']) >= 100, 'marcable' => false];
   }
   if (in_array($est, ['terminada', 'validada'], true)) {
