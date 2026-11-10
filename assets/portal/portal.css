@@ -275,3 +275,88 @@ main { padding: 16px max(16px, env(safe-area-inset-right)) calc(96px + env(safe-
 .camino .paso span { font-size: 10.5px; max-width: none; white-space: nowrap; letter-spacing: -.01em; }
 @media (max-width: 360px) { .camino .paso span { font-size: 9.5px; } .camino .bola { width: 34px; height: 34px; } .camino .paso::before { top: 16px; } }
 @media (min-width: 760px) { .entrada { align-items: center; } .entrada > * { width: 100%; max-width: 440px; } .entrada .logo { width: auto; align-self: center; } }
+
+/* ======================================================================
+   Pantalla de entrada (rediseño 10/11/2026): marca a la izquierda, acceso
+   en una tarjeta clara a la derecha. En el móvil, la marca arriba y la
+   tarjeta encima, montada.
+   ====================================================================== */
+.acceso { min-height: 100vh; min-height: 100dvh; display: grid; grid-template-columns: 1fr; background: var(--fondo); }
+.acceso-marca { position: relative; overflow: hidden; background: var(--negro); color: #fff; isolation: isolate;
+  padding: calc(env(safe-area-inset-top) + 24px) max(22px, env(safe-area-inset-right)) 64px max(22px, env(safe-area-inset-left));
+  display: flex; flex-direction: column; gap: 22px; }
+.acceso-marca::before { content: ""; position: absolute; z-index: -1; width: 520px; height: 520px; right: -220px; top: -200px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(180,250,30,.28), rgba(180,250,30,0) 65%); }
+.acceso-marca::after { content: ""; position: absolute; z-index: -1; inset: 0;
+  background-image: radial-gradient(rgba(255,255,255,.06) 1px, transparent 1px); background-size: 22px 22px;
+  mask-image: linear-gradient(180deg, #000 0%, transparent 85%); -webkit-mask-image: linear-gradient(180deg, #000 0%, transparent 85%); }
+.acceso-marca .logo { height: 28px; align-self: flex-start; }
+.acceso-texto { display: grid; gap: 12px; max-width: 520px; }
+.acceso-texto .eti { justify-self: start; font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--lima);
+  border: 1px solid rgba(180,250,30,.4); background: rgba(180,250,30,.08); padding: 5px 10px; border-radius: 999px; }
+.acceso-texto h1 { margin: 0; font-size: clamp(30px, 7vw, 52px); line-height: 1.02; font-weight: 900; font-style: italic; letter-spacing: -.035em; text-wrap: balance; }
+.acceso-texto h1 em { font-style: italic; color: var(--lima); }
+.acceso-texto p.sub { margin: 0; color: #c9cbc3; font-size: 15.5px; max-width: 42ch; }
+.ventajas { list-style: none; margin: 8px 0 0; padding: 0; display: none; gap: 12px; }
+.ventajas li { display: flex; gap: 12px; align-items: center; color: #e4e6de; font-size: 15px; }
+.ventajas li span { width: 36px; height: 36px; flex: none; border-radius: 10px; display: grid; place-items: center; background: rgba(180,250,30,.12); color: var(--lima); }
+.ventajas li svg { width: 19px; height: 19px; }
+.muestra { display: none; }
+.acceso-marca .abeja { position: absolute; z-index: -1; right: -70px; bottom: -60px; width: 300px; opacity: .06; filter: grayscale(1) brightness(3); pointer-events: none; }
+
+.acceso-panel { position: relative; margin-top: -40px; padding: 0 max(14px, env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  display: flex; flex-direction: column; align-items: center; gap: 18px; }
+.acceso-tarjeta { width: 100%; max-width: 440px; background: var(--papel); border-radius: 22px; padding: 26px 22px 22px;
+  box-shadow: 0 1px 2px rgba(20,22,18,.06), 0 20px 50px rgba(20,22,18,.14); }
+.acceso-tarjeta h2 { margin: 0; font-size: 24px; font-weight: 900; font-style: italic; letter-spacing: -.02em; }
+.acceso-sub { margin: 4px 0 20px; color: var(--suave); font-size: 14.5px; }
+.acceso-tarjeta form { display: grid; gap: 16px; }
+.acceso-tarjeta label { display: grid; gap: 7px; font-size: 13px; font-weight: 700; color: var(--texto); }
+.caja-input { position: relative; display: block; }
+.caja-input > svg { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; color: #9a9e94; pointer-events: none; transition: color .15s; }
+.caja-input input { width: 100%; height: 54px; padding: 0 48px 0 46px; border: 1.5px solid var(--linea); border-radius: 14px; background: #fafbf8;
+  font-size: 16.5px; color: var(--texto); outline: none; transition: border-color .15s, box-shadow .15s, background .15s; }
+.caja-input input::placeholder { color: #b0b4aa; }
+.caja-input input:focus { border-color: var(--negro); background: #fff; box-shadow: 0 0 0 4px rgba(180,250,30,.35); }
+.caja-input:focus-within > svg { color: var(--negro); }
+.caja-input.codigo input { letter-spacing: 8px; font-size: 22px; font-weight: 800; text-align: center; padding-right: 46px; }
+.ojo { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 42px; height: 42px; border: 0; border-radius: 10px; background: none; color: #8a8e85; cursor: pointer; display: grid; place-items: center; }
+.ojo:hover { background: #f0f2ec; color: var(--negro); }
+.ojo svg { width: 20px; height: 20px; }
+.acceso-tarjeta .btn.lima { height: 54px; border-radius: 14px; font-size: 16.5px; margin-top: 4px; box-shadow: 0 6px 16px rgba(143,209,0,.35); }
+.acceso-tarjeta .btn.lima:hover { filter: brightness(1.04); }
+.acceso-tarjeta .enlace { background: none; border: 0; padding: 4px 0; justify-self: center; text-align: center; color: var(--texto); font-weight: 700; font-size: 14px;
+  cursor: pointer; text-decoration: underline; text-decoration-color: var(--lima-osc); text-decoration-thickness: 2px; text-underline-offset: 4px; }
+.acceso-tarjeta .error { background: #fdeceb; border: 1px solid #f3c4c0; color: #9b221a; padding: 11px 12px; border-radius: 12px; font-size: 14px; }
+.acceso-tarjeta .bien { background: #f2fbdc; border: 1px solid #cfee86; color: #3d5a00; padding: 11px 12px; border-radius: 12px; font-size: 14px; }
+.acceso-pie { margin: 0; display: flex; gap: 8px; align-items: center; justify-content: center; color: var(--suave); font-size: 12.5px; text-align: center; }
+.acceso-pie span { color: var(--lima-osc); display: grid; }
+.acceso-pie svg { width: 16px; height: 16px; }
+
+/* Escritorio: dos columnas */
+@media (min-width: 900px) {
+  .acceso { grid-template-columns: minmax(0, 1.1fr) minmax(460px, .9fr); }
+  .acceso-marca { padding: 44px 56px; justify-content: space-between; min-height: 100vh; }
+  .acceso-marca .logo { height: 32px; }
+  .acceso-texto { gap: 16px; }
+  .ventajas { display: grid; }
+  .muestra { display: flex; align-items: center; gap: 18px; align-self: flex-start; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08);
+    border-radius: 20px; padding: 16px 20px; backdrop-filter: blur(6px); max-width: 420px; }
+  .muestra .anillo, .muestra .anillo svg { width: 92px; height: 92px; }
+  .muestra .anillo .dentro b { font-size: 22px; }
+  .muestra .anillo .dentro span { font-size: 10px; }
+  .muestra > div { display: grid; gap: 3px; }
+  .muestra small { color: #a9aca2; font-size: 12px; }
+  .muestra b { font-size: 18px; font-style: italic; font-weight: 900; }
+  .muestra span { color: #c9cbc3; font-size: 13px; }
+  .muestra .puntos { display: flex; gap: 6px; margin-top: 6px; }
+  .muestra .puntos i { width: 18px; height: 6px; border-radius: 3px; background: #45463f; }
+  .muestra .puntos i.si { background: var(--lima); }
+  .muestra .puntos i.ya { background: var(--lima); opacity: .45; }
+  .muestra-obra { display: grid; gap: 8px; min-width: 300px; }
+  .muestra-obra .barra { background: #3d3e38; }
+  .acceso-marca .abeja { width: 420px; right: -90px; bottom: -90px; }
+  .acceso-panel { margin-top: 0; justify-content: center; padding: 40px; }
+  .acceso-tarjeta { padding: 36px 34px 30px; }
+  .acceso-tarjeta h2 { font-size: 28px; }
+}

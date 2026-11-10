@@ -155,7 +155,11 @@
     usuario: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M4 21a8 8 0 0 1 16 0',
     alerta: 'M12 3l10 18H2z M12 10v5 M12 18v.01',
     llave: 'M15 7a4 4 0 1 1-3.5 6L5 19.5V22H2v-3l6.5-6.5A4 4 0 0 1 15 7z M16 8h.01',
-    mas: 'M12 5v14 M5 12h14'
+    mas: 'M12 5v14 M5 12h14',
+    candado: 'M6 11h12v10H6z M8 11V8a4 4 0 0 1 8 0v3 M12 15v2',
+    correo: 'M3 6h18v12H3z M3 7l9 6 9-6',
+    ojo: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+    ojoNo: 'M3 3l18 18 M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.1 3.9 M6.6 6.6A17 17 0 0 0 2 12s4 7 10 7a9.6 9.6 0 0 0 4.4-1.1 M9.9 9.9a3 3 0 0 0 4.2 4.2'
   };
   function ico(n) {
     const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -281,7 +285,6 @@
           pantallaEntrada('clave', r.mensaje, u.value);
         } catch (er) { mal(er.message); } finally { boton.disabled = false; }
       }},
-        h('p', {estilo: {margin: 0, color: '#c9cbc3'}}, 'Escribe el correo que diste al firmar. Te mandamos un código para crear tu clave.'),
         h('label', 'Tu correo', u), error, boton,
         h('button.enlace', {type: 'button', onclick: () => pantallaEntrada('login', '', u.value)}, '← Ya tengo clave'));
     } else {
@@ -305,11 +308,54 @@
         h('label', 'Repite la clave', c2), error, boton,
         h('button.enlace', {type: 'button', onclick: () => pantallaEntrada('codigo', '', emailPrevio)}, 'No me ha llegado: pedir otro'));
     }
-    poner(app(), h('.entrada',
-      h('img.logo', {src: '/assets/img/logo-dark-h96.png', alt: 'ZERO WATTIOS'}),
-      titulo, sub, form,
-      h('p.pie', ES_CLIENTE ? 'Área privada de clientes de Zero Wattios Ingeniería.' : 'Área privada de instaladores de Zero Wattios Ingeniería.')));
-    const primero = app().querySelector('input'); if (primero && !primero.value) setTimeout(() => primero.focus(), 50);
+    /* Iconos dentro de los campos y botón para ver la clave. */
+    form.querySelectorAll('input').forEach(i => {
+      const tipo = i.getAttribute('autocomplete') || '';
+      const icono = tipo === 'one-time-code' ? 'llave' : i.type === 'password' ? 'candado' : i.type === 'email' ? 'correo' : 'usuario';
+      const caja = h('span.caja-input' + (tipo === 'one-time-code' ? '.codigo' : ''), ico(icono));
+      i.parentNode.insertBefore(caja, i); caja.appendChild(i);
+      if (i.type === 'password') {
+        const ojo = h('button.ojo', {type: 'button', 'aria-label': 'Ver la clave', onclick: () => {
+          const ver = i.type === 'password'; i.type = ver ? 'text' : 'password';
+          poner(ojo, ico(ver ? 'ojoNo' : 'ojo')); ojo.setAttribute('aria-label', ver ? 'Ocultar la clave' : 'Ver la clave');
+        }}, ico('ojo'));
+        caja.appendChild(ojo);
+      }
+    });
+    const CABECERA = {
+      login: ['Entrar', ES_CLIENTE ? 'Con el correo que nos diste al firmar.' : 'Con el usuario que te ha dado Zero Wattios.'],
+      codigo: ['Crea tu clave', 'Escribe tu correo y te mandamos un código de 6 cifras.'],
+      aviso: ['Crea tu clave', 'Escribe tu correo y te mandamos un código de 6 cifras.'],
+      clave: ['Elige tu clave', 'Pon el código que te ha llegado y tu clave nueva.']
+    }[paso] || ['Entrar', ''];
+    const VENTAJAS = ES_CLIENTE
+      ? [['obra', 'Cada fase de tu instalación, en tiempo real'], ['foto', 'Las fotos de tu obra, revisadas por nuestro equipo'],
+         ['doc', 'Contrato, certificados, manuales y facturas'], ['chat', 'Ayuda directa con plazos de respuesta']]
+      : [['bandera', 'Avisos con fecha para cada obra'], ['lista', 'Ficha de obra: qué equipo va y dónde'],
+         ['camara', 'Fases con fotos y legalización'], ['chat', 'Tickets con tiempos de respuesta']];
+    const muestra = ES_CLIENTE
+      ? h('.muestra', {'aria-hidden': 'true'}, anillo(64, '64%', 'completado'),
+          h('div', h('small', 'Ahora mismo'), h('b', 'Instalación'), h('span', 'Paneles colocados · Inversor en curso'),
+            h('.puntos', [1, 1, 1, 2, 0, 0, 0].map(x => h('i' + (x === 1 ? '.si' : x === 2 ? '.ya' : ''))))))
+      : h('.muestra', {'aria-hidden': 'true'}, h('.muestra-obra',
+          h('div', {estilo: {display: 'flex', gap: '6px'}}, h('span.chip.lima', 'En obra ahora'), h('span.chip', 'Fotovoltaica')),
+          h('b', 'C. Ejemplo, 12 · Torrelodones'), h('span', '12 paneles · Inversor híbrido · Batería'),
+          h('.barra', h('i', {estilo: {width: '70%'}}))));
+    poner(app(), h('.acceso',
+      h('section.acceso-marca',
+        h('img.logo', {src: '/assets/img/logo-dark-h96.png', alt: 'ZERO WATTIOS'}),
+        h('.acceso-texto',
+          h('span.eti', ES_CLIENTE ? 'Área de clientes' : 'Área de instaladores'),
+          titulo, sub,
+          h('ul.ventajas', VENTAJAS.map(([i, t]) => h('li', h('span', ico(i)), t)))),
+        muestra,
+        h('img.abeja', {src: '/assets/img/isotipo.png', alt: '', 'aria-hidden': 'true'})),
+      h('section.acceso-panel',
+        h('.acceso-tarjeta',
+          h('h2', CABECERA[0]), CABECERA[1] ? h('p.acceso-sub', CABECERA[1]) : null,
+          form),
+        h('p.acceso-pie', h('span', ico('escudo')), ES_CLIENTE ? 'Área privada y segura de clientes de Zero Wattios Ingeniería' : 'Área privada y segura de instaladores de Zero Wattios Ingeniería'))));
+    const primero = app().querySelector('.acceso-panel input'); if (primero && !primero.value && window.innerWidth > 900) setTimeout(() => primero.focus(), 50);
   }
 
   function salirLocal() {
