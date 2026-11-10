@@ -1274,6 +1274,8 @@ function accGuardarObraPortal_(array $u, array $p): array {
     if (!isset(PORTAL_ESTADOS_OBRA[$e])) return ['ok' => false, 'error' => 'Estado no válido.'];
     $cambios['estado'] = $e;
     if ($e === 'validada' && txt_($ya['terminada']) === '') $cambios['terminada'] = ahora_();
+    /* Volver a «asignada» (p. ej. una llegada marcada por error) deja la obra como sin empezar. */
+    if ($e === 'asignada') { $cambios['llegada'] = ''; $cambios['salida'] = ''; $cambios['terminada'] = ''; }
   }
   $o = $ya ? actualizar_('OBRAS', $ya['id'], $cambios) : insertar_('OBRAS', $cambios);
   $o = portalRecalcular_($o);
