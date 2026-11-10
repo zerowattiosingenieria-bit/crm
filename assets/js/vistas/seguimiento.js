@@ -159,7 +159,7 @@ export async function vistaSeguimiento({ir}) {
           editar(op.clave, td ? td.dataset.check : null);
         }},
         h('td.seg-op', {title: 'Pulsa para ver y editar el seguimiento de esta operación'},
-          h('.dir', {title: op.direccion + (op.poblacion ? ' · ' + op.poblacion : '')}, ficha ? h('a', {href: '#clientes/' + encodeURIComponent(ficha.id), title: 'Abrir la ficha del cliente'}, op.direccion) : op.direccion,
+          h('.dir', {title: op.direccion + (op.poblacion ? ' · ' + op.poblacion : '')}, ficha ? h('a', {href: '#cliente/' + encodeURIComponent(ficha.id), title: 'Abrir la ficha del cliente'}, op.direccion) : op.direccion,
             op.poblacion ? h('small', ' · ' + op.poblacion) : null),
           h('.nom', {title: op.nombre}, h('b', op.nombre),
             op.aero ? h('span.seg-prod.aero', {title: op.aero}, 'AERO') : null,
@@ -204,7 +204,7 @@ export async function vistaSeguimiento({ir}) {
           h('div', h('b', o.direccion), o.poblacion ? ' · ' + o.poblacion : '', h('br'),
             h('span.nota', o.nombre + ' · #' + o.numero + (o.contrato ? ' · ' + o.contrato : '') + (o.fecha_financiacion ? ' · financiación ' + (fechaCorta(o.fecha_financiacion) || o.fecha_financiacion) : ''))),
           h('.seg-anillos', ['comunicacion', 'documentacion'].map(b => anillo(o['p_' + b], BLOQUES[b].ico, BLOQUES[b].et))),
-          ficha ? h('a.btn', {href: '#clientes/' + encodeURIComponent(ficha.id), onclick: () => abierta && abierta.cerrar()}, 'Ficha del cliente') : null),
+          ficha ? h('a.btn', {href: '#cliente/' + encodeURIComponent(ficha.id), onclick: () => abierta && abierta.cerrar()}, 'Ficha del cliente') : null),
         h('p.nota', 'Los cambios se guardan al momento en el CRM y en la copia editable, y mandan sobre el Excel de Rubén, que no se toca. Cuando el Excel diga lo mismo, vuelve a mandar el Excel.'),
         ['comunicacion', 'documentacion'].map(b => h('.seg-ficha-bloque',
           h('h3', BLOQUES[b].ico + ' ' + BLOQUES[b].et, h('small', ' · ' + o['p_' + b] + ' % hecho')),
