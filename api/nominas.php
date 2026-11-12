@@ -30,6 +30,42 @@ function comisionesPagadasHasta_(): string {
   return preg_match('/^\d{4}-\d{2}-\d{2}$/', $f) ? $f : '2026-10-15';
 }
 
+/**
+ * Estimación de comisiones del periodo en curso (del 16 al 15) y de qué
+ * clientes vienen (12/11/2026, Nando). Mismo cálculo que el resto del CRM
+ * (comisionesPeriodo_): no cambia reglas. Las firmadas sin aprobar todavía
+ * se marcan, porque una venta solo cuenta cuando la financiera aprueba o el
+ * cliente paga. No se enseña el importe de la venta, solo la comisión.
+ */
+function accEstimacionComisiones_(array $u, array $p): array {
+  $per = permisos_($u);
+  $objetivoId = txt_($p['usuario_id'] ?? '') ?: $u['id'];
+  if (!mismo_($objetivoId, $u['id']) && empty($per['nominasAjenas'])) return ['ok' => false, 'error' => 'Solo puedes ver tu propia estimación.'];
+  $persona = buscar1_('USUARIOS', fn($x) => mismo_($x['id'], $objetivoId));
+  if (!$persona) return ['ok' => false, 'error' => 'No existe esa persona.'];
+  $hoy = hoyISO_();
+  $d = (int)substr($hoy, 8, 2);
+  $base = new DateTime(substr($hoy, 0, 7) . '-01');
+  if ($d >= 16) { $desde = $base->format('Y-m-') . '16'; $hasta = (clone $base)->modify('+1 month')->format('Y-m-') . '15'; }
+  else { $desde = (clone $base)->modify('-1 month')->format('Y-m-') . '16'; $hasta = $base->format('Y-m-') . '15'; }
+  $com = comisionesPeriodo_($persona, $desde, $hasta);
+  $clientes = indexar_(leer_('CLIENTES'));
+  $ops = indexar_(leer_('OPERACIONES'));
+  $lineas = [];
+  foreach ($com['detalle'] ?? [] as $l) {
+    $op = $ops[txt_($l['operacion_id'] ?? '')] ?? [];
+    $cli = $clientes[txt_($l['cliente_id'] ?? '')] ?? [];
+    $est = normal_($op['estado'] ?? '');
+    $lineas[] = ['cliente' => txt_($cli['nombre'] ?? ''), 'direccion' => txt_($cli['direccion'] ?? '') ?: txt_($l['direccion'] ?? ''),
+      'concepto' => txt_($l['concepto'] ?? ''), 'fecha' => substr(txt_($l['fecha'] ?? ''), 0, 10), 'importe' => num_($l['importe'] ?? 0),
+      'estado' => $est, 'sin_aprobar' => $est === 'firmada'];
+  }
+  usort($lineas, fn($a, $b) => strcmp($a['fecha'], $b['fecha']));
+  $seguro = array_sum(array_map(fn($l) => $l['sin_aprobar'] ? 0 : $l['importe'], $lineas));
+  return ['ok' => true, 'desde' => $desde, 'hasta' => $hasta, 'total' => redondear_(num_($com['total'] ?? 0), 2),
+          'aprobado' => redondear_($seguro, 2), 'lineas' => $lineas];
+}
+
 function accNominas_(array $u, array $p): array {
   $per = permisos_($u);
   $objetivoId = txt_($p['usuario_id'] ?? '') ?: $u['id'];

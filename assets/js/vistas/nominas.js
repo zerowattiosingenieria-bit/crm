@@ -80,11 +80,38 @@ function pinta(d, est, puedeOtras, recargar, ir) {
     h('p', {estilo: {background: 'var(--bien-b)', borderLeft: '4px solid var(--lima-osc)', padding: '10px 14px',
       borderRadius: '6px', margin: '0 0 14px', fontWeight: '600'}},
       '✓ Comisiones ajustadas hasta el periodo anterior al actual' + (hasta ? ' (hasta el ' + fechaCorta(hasta) + ' incluido).' : '.')),
+    estimacion(p),
     tarjeta('Mis nóminas', t, {sinRelleno: true,
       subtitulo: 'Pulsa «Descargar PDF» para bajarte la de ese mes',
       acciones: puedeOtras
         ? [h('button.btn.mini.primario', {onclick: () => subir(p.id, recargar)}, '+ Subir nómina')]
         : null}));
+}
+
+/* Estimación de comisiones del periodo en curso y de qué clientes vienen (12/11/2026). */
+const ESTADO_OP = {firmada: 'Firmada · falta aprobación o pago', tramite: 'Aprobada', material: 'Material pedido', instalacion: 'Instalando',
+  instalada: 'Instalada', legalizada: 'Legalizada', cerrada: 'Cerrada'};
+function estimacion(p) {
+  const cuerpo = h('div', cargando());
+  const caja = tarjeta('Estimación de comisiones de este periodo', cuerpo, {sinRelleno: true});
+  api.pedir('estimacionComisiones', {usuario_id: p.id}).then(r => {
+    const sub = caja.querySelector('.nota, small');
+    const t = tabla([
+      {clave: 'cliente', et: 'Cliente', pinta: l => h('div', h('b', l.direccion || '—'), l.cliente ? h('div.nota', l.cliente) : null)},
+      {clave: 'concepto', et: 'Por qué', pinta: l => h('span.nota', capital(l.concepto))},
+      {clave: 'fecha', et: 'Firma', pinta: l => l.fecha ? fechaCorta(l.fecha) : '—'},
+      {clave: 'estado', et: 'Estado', pinta: l => etiquetaEstado(l.sin_aprobar ? 'pendiente' : 'ganado', ESTADO_OP[l.estado] || capital(l.estado || '—'))},
+      {clave: 'importe', et: 'Comisión', num: true, valor: l => num(l.importe), pinta: l => h('b', eur2(l.importe))}
+    ], r.lineas, {vacio: 'De momento no hay comisiones en este periodo.',
+      pie: r.lineas.length ? [{texto: 'Total estimado', colspan: 4}, {texto: eur2(r.total), num: true}] : null});
+    poner(cuerpo,
+      h('p', {estilo: {margin: '10px 14px', fontSize: '14px'}},
+        'Del ' + fechaCorta(r.desde) + ' al ' + fechaCorta(r.hasta) + ': ', h('b', eur2(r.total)),
+        num(r.total) !== num(r.aprobado) ? h('span.nota', ' · ' + eur2(r.aprobado) + ' de ventas ya aprobadas o pagadas; el resto, a falta de aprobación de la financiera o del pago') : null,
+        h('span.nota', ' · Estimación: lo definitivo es la nómina en PDF.')),
+      t);
+  }).catch(e => poner(cuerpo, h('.vacio', txt(e.message))));
+  return caja;
 }
 
 function mesLargoCompleto(periodo) {

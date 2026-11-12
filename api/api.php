@@ -78,6 +78,7 @@ function acciones_(): array {
     /* nóminas */
     'nominas' => 'accNominas_',
     'nominaDias' => 'accNominaDias_',
+    'estimacionComisiones' => 'accEstimacionComisiones_',
     'generarNomina' => 'accGenerarNomina_',
     'guardarNomina' => 'accGuardarNomina_',
     'subirNomina' => 'accSubirNomina_',
