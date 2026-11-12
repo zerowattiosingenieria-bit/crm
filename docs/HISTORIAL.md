@@ -9,6 +9,10 @@ luego no hay manera de reconstruir.
 
 
 
+## 12/11/2026 · Mis visitas: botón de WhatsApp
+
+- Junto al de llamar, botón verde de WhatsApp que abre el chat con el cliente (wa.me, prefijo 34 si el número tiene 9 cifras) con un saludo ya escrito: «Hola <nombre>, soy <comercial> de Zero Wattios.».
+
 ## 12/11/2026 · Nóminas: solo los PDF
 
 - La pantalla de Nóminas solo enseña los meses con su botón «Descargar PDF»: sin importes, KPIs ni devengo día a día. Dirección sigue pudiendo subir, corregir y borrar.

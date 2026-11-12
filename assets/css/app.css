@@ -787,3 +787,7 @@ ul.zw-faltan li::before{content:'!'; position:absolute; left:0; top:6px; width:1
 .ci-pend li.vencida{color:var(--mal); font-weight:700} .ci-pend li.ok{color:var(--tx-3)}
 .ci-barra{margin-top:6px} .ci-pct{color:var(--tx-2)}
 @media (max-width:600px){ .ci-hitos{grid-template-columns:repeat(2,1fr)} .ci-mes h3{min-width:0; font-size:16px} }
+
+.vis-contacto{display:flex; gap:6px; align-items:flex-start}
+.vis-wa{background:#25D366; color:#fff; border-color:#25D366; display:inline-flex; align-items:center; justify-content:center}
+.vis-wa:hover{background:#1ebe5b; color:#fff}
