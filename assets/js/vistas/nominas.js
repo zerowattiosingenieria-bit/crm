@@ -93,7 +93,8 @@ const ESTADO_OP = {firmada: 'Firmada · falta aprobación o pago', tramite: 'Apr
   instalada: 'Instalada', legalizada: 'Legalizada', cerrada: 'Cerrada'};
 function estimacion(p) {
   const cuerpo = h('div', cargando());
-  const caja = tarjeta('Estimación de comisiones de este periodo', cuerpo, {sinRelleno: true});
+  const caja = tarjeta('Estimación de comisiones de este periodo', cuerpo, {sinRelleno: true,
+    acciones: [h('button.btn.mini', {onclick: reportarError, title: 'Si algo no encaja, cuéntalo y le llega a Nando'}, '⚠ Reportar un error')]});
   api.pedir('estimacionComisiones', {usuario_id: p.id}).then(r => {
     const sub = caja.querySelector('.nota, small');
     const t = tabla([
@@ -112,6 +113,22 @@ function estimacion(p) {
       t);
   }).catch(e => poner(cuerpo, h('.vacio', txt(e.message))));
   return caja;
+}
+
+/* «Si algo no encaja»: el comentario le llega por correo a Nando (12/11/2026). */
+function reportarError() {
+  const area = h('textarea', {rows: 6, placeholder: '¿Qué no encaja? Por ejemplo: falta la venta de tal cliente, una comisión no es la que toca, una nómina tiene un dato mal…',
+    estilo: {width: '100%', boxSizing: 'border-box', font: 'inherit', padding: '8px'}});
+  const btn = h('button.btn.primario', 'Enviar');
+  const v = ventana({titulo: 'Reportar un error en nóminas',
+    cuerpo: h('div', h('p.nota', 'Cuéntalo con detalle: le llega por correo a Nando junto con la estimación que estás viendo.'), area),
+    acciones: [h('button.btn', {onclick: () => v.cerrar()}, 'Cancelar'), btn]});
+  btn.addEventListener('click', async () => {
+    if (txt(area.value).length < 5) return aviso('Cuenta qué es lo que no encaja.', 'error');
+    btn.disabled = true; btn.textContent = 'Enviando…';
+    try { await api.pedir('reportarErrorNomina', {comentario: area.value}); aviso('Enviado. Nando lo revisará.'); v.cerrar(); }
+    catch (e) { avisoError(e); btn.disabled = false; btn.textContent = 'Enviar'; }
+  });
 }
 
 function mesLargoCompleto(periodo) {

@@ -66,6 +66,34 @@ function accEstimacionComisiones_(array $u, array $p): array {
           'aprobado' => redondear_($seguro, 2), 'lineas' => $lineas];
 }
 
+/**
+ * «Si algo no encaja, reportar error» (12/11/2026, Nando): el comentario de
+ * la persona le llega por correo a Nando, con la estimación que estaba viendo.
+ * A quién va: configuración `avisos_nominas_a` (por defecto, Nando).
+ */
+function accReportarErrorNomina_(array $u, array $p): array {
+  $texto = trim(mb_substr(txt_($p['comentario'] ?? ''), 0, 3000));
+  if (mb_strlen($texto) < 5) return ['ok' => false, 'error' => 'Cuenta qué es lo que no encaja.'];
+  $destino = txt_(config_()['avisos_nominas_a'] ?? '') ?: 'fernandogarcia@zerowattios.com';
+  $est = accEstimacionComisiones_($u, ['usuario_id' => $u['id']]);
+  $filas = '';
+  foreach (($est['lineas'] ?? []) as $l) {
+    $filas .= '<tr><td style="padding:4px 8px;border-bottom:1px solid #ddd">' . htmlspecialchars($l['direccion'] . ($l['cliente'] ? ' · ' . $l['cliente'] : '')) .
+      '</td><td style="padding:4px 8px;border-bottom:1px solid #ddd">' . htmlspecialchars($l['concepto']) .
+      '</td><td style="padding:4px 8px;border-bottom:1px solid #ddd">' . htmlspecialchars($l['fecha']) .
+      '</td><td style="padding:4px 8px;border-bottom:1px solid #ddd;text-align:right">' . number_format($l['importe'], 2, ',', '.') . ' €</td></tr>';
+  }
+  $html = '<div style="font-family:Arial,sans-serif;font-size:14px;color:#242422">' .
+    '<p><b>' . htmlspecialchars(txt_($u['nombre'] ?? '')) . '</b> ha reportado un error en <b>Nóminas</b> del CRM:</p>' .
+    '<p style="background:#F1FADF;border-left:4px solid #B4FA1E;padding:10px 12px">' . nl2br(htmlspecialchars($texto)) . '</p>' .
+    (!empty($est['ok']) ? '<p>Estimación que estaba viendo (' . htmlspecialchars($est['desde'] . ' → ' . $est['hasta']) . '): <b>' .
+      number_format($est['total'], 2, ',', '.') . ' €</b></p>' . ($filas ? '<table style="border-collapse:collapse;font-size:13px">' . $filas . '</table>' : '<p>Sin comisiones en el periodo.</p>') : '') .
+    '<p style="color:#6B6B66;font-size:12px">Enviado desde crm.zerowattios.com · ' . htmlspecialchars(ahora_()) . '</p></div>';
+  correo_(['to' => $destino, 'subject' => 'Error en nóminas · ' . txt_($u['nombre'] ?? ''), 'htmlBody' => $html, 'name' => 'CRM ZERO WATTIOS']);
+  registrar_($u, 'reportar_error_nomina', 'USUARIOS', $u['id'] ?? '', mb_substr($texto, 0, 120));
+  return ['ok' => true];
+}
+
 function accNominas_(array $u, array $p): array {
   $per = permisos_($u);
   $objetivoId = txt_($p['usuario_id'] ?? '') ?: $u['id'];
