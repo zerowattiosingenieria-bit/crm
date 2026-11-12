@@ -330,6 +330,13 @@ function aplicarComentario_(array $u, array $cap, array $cli, string $texto, boo
     if (empty($f['visita']['enviado'])) {
       $r = accVisitaMarcar_($u, ['id' => $cap['id'], 'campo' => 'enviado', 'valor' => true]);
       if (!empty($r['ok'])) $hechos[] = 'Proyecto marcado como enviado (llamada en una semana)';
+    } else {
+      /* Ya constaba como enviado, pero el cliente se quedó atrás (p. ej. en «cita»). */
+      $c = buscar1_('CLIENTES', fn($x) => mismo_($x['id'], $cli['id']));
+      if ($c && in_array(normal_($c['estado'] ?? ''), ['', 'nuevo', 'captado', 'cita', 'sentada'], true)) {
+        actualizar_('CLIENTES', $cli['id'], ['estado' => 'propuesta', 'fecha_estado' => hoyISO_(), 'modificado' => ahora_(), 'modificado_por' => $u['id']]);
+        $hechos[] = 'Cliente → Propuesta enviada';
+      }
     }
   }
   if (isset($l['sentada']) && $l['sentada'] === false && normal_($cap['resultado'] ?? '') !== 'no_sentada'
