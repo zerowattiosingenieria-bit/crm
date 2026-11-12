@@ -494,7 +494,11 @@ function panelResumen(c, ops, seg, refrescar, {acc, abrir, ir}) {
         h('p', txt(c.perfil) || h('span.nota', 'Sin perfil apuntado.')),
         txt(c.otros) ? h('p.nota', c.otros) : null)),
       tarjeta('Últimos movimientos', (() => {
-        const ev = sucesosDe(c).filter(e => e.fecha <= hoyISO()).slice(0, 5);
+        const todos = sucesosDe(c).filter(e => e.fecha <= hoyISO());
+        const ev = todos.slice(0, 5);
+        /* El captador (y por recomendación de quién) se queda siempre a la vista,
+           con su fecha de inicio, aunque haya muchos movimientos después (12/11/2026). */
+        todos.slice(5).filter(e => /^captador/i.test(txt(e.texto))).forEach(e => ev.push(e));
         return ev.length ? h('ul.linea-tiempo', ev.map(e => h('li',
           h('.cuando', fechaCorta(e.fecha) + ' · ' + e.titulo),
           e.texto ? h('.que', e.texto) : null, e.pie ? h('.nota', e.pie) : null)))
