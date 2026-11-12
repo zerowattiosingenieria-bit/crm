@@ -200,10 +200,9 @@ export async function vistaVisitas({ir}) {
           marcar('enviado', !v.enviado);
         }, {auto: v.enviado_auto, titulo: 'Márcalo cuando le hayas mandado el proyecto al cliente'}),
         h('span.vis-linea' + (v.venta ? '.ok' : '')),
-        paso('Venta', '€', v.venta ? true : null, () => {
-          if (v.venta_auto) return aviso('La operación ya está aprobada o en marcha: cuenta como venta.');
-          marcar('venta', !v.venta);
-        }, {auto: v.venta_auto, titulo: 'Márcalo cuando la financiera la apruebe o el cliente pague'}));
+        paso('Venta', '€', v.venta ? true : null,
+          () => aviso(v.venta ? 'Venta: la financiera la ha aprobado o el cliente ya ha pagado.' : 'La venta se marca sola cuando la financiera la aprueba o el cliente paga.'),
+          {auto: true, titulo: 'Automática: cuando la financiera la aprueba o el cliente paga'}));
 
       const ops = api.opciones('estadosOperacion');
       const sel = h('select.vis-sel', h('option', {value: ''}, v.operacion ? '— sin cambiar —' : '— elige —'),
@@ -280,7 +279,7 @@ export async function vistaVisitas({ir}) {
       grupos.push(tarjetaVisita(v));
     });
     poner(caja,
-      h('p.nota.vis-intro', 'Tus visitas de los últimos 30 días, la más nueva arriba. Marca con un toque si hubo sentada, si el proyecto está hecho, si se lo has enviado y si acabó en venta, y apunta qué te ha dicho el cliente. Pulsa en el nombre o en la dirección para abrir su ficha.'),
+      h('p.nota.vis-intro', 'Tus visitas de los últimos 30 días, la más nueva arriba. Marca con un toque si hubo sentada, si el proyecto está hecho y si se lo has enviado, y apunta qué te ha dicho el cliente. La venta se marca sola cuando la financiera la aprueba o el cliente paga. Pulsa en el nombre o en la dirección para abrir su ficha.'),
       cab,
       h('div.vis-barra-filtros', chips, selCom),
       vis.length ? h('div.vis-lista', grupos) : h('p.nota.vis-vacio', lista.length ? 'Nada pendiente en este filtro. ¡Bien!' : 'No tienes visitas en los últimos 30 días.'));

@@ -43,6 +43,16 @@ function operacionVisita_($clienteId): ?array {
   return $ops[0];
 }
 
+/** ¿Es ya venta? La financiera la aprobó (operación en trámite o más allá) o hay un cobro hecho. */
+function ventaVisita_(?array $op): bool {
+  if (!$op || normal_($op['estado'] ?? '') === 'cancelada') return false;
+  if (in_array(normal_($op['estado'] ?? ''), ['tramite', 'material', 'instalacion', 'instalada', 'legalizada', 'cerrada'], true)) return true;
+  foreach (filtrar_('COBROS', fn($c) => mismo_($c['operacion_id'], $op['id'])) as $c) {
+    if (in_array(normal_($c['estado'] ?? ''), ['cobrado', 'parcial'], true) || txt_($c['fecha_cobro'] ?? '') !== '') return true;
+  }
+  return false;
+}
+
 /** Lo del proyecto que necesita la tarjeta: el PDF vigente, la descripción y las fotos. */
 function proyectoVisita_(?array $proy, array $archs): array {
   $pdfs = array_values(array_filter($archs, fn($a) => normal_($a['clase'] ?? '') === 'proyecto'));
@@ -77,10 +87,9 @@ function filaVisita_(array $cap, array $cli, array $proys, array $segs, array $a
     'enviado_auto' => $estP === 'enviado',
     'proy' => proyectoVisita_($proy, $archs[(string)$cli['id']] ?? []),
     'enviado' => $estP === 'enviado' || txt_($cap['proyecto_enviado'] ?? '') !== '',
-    /* venta: marcada a mano en la cita, o la operación ya pasó de firmada/financiación (aprobada o pagando) */
-    'venta_auto' => $op !== null && in_array(normal_($op['estado'] ?? ''), ['tramite', 'material', 'instalacion', 'instalada', 'legalizada', 'cerrada'], true),
-    'venta' => txt_($cap['venta_marcada'] ?? '') !== ''
-      || ($op !== null && in_array(normal_($op['estado'] ?? ''), ['tramite', 'material', 'instalacion', 'instalada', 'legalizada', 'cerrada'], true)),
+    /* venta: AUTOMÁTICA, nadie la marca a mano. Solo cuenta cuando la financiera
+       la aprueba (la operación ya está en trámite o más allá) o el cliente ha pagado. */
+    'venta' => ventaVisita_($op),
     'operacion' => $op ? ['id' => $op['id'], 'estado' => txt_($op['estado'])] : null,
     'ultimo' => $ult ? ['fecha' => txt_($ult['fecha']), 'nota' => txt_($ult['nota']), 'proximo_paso' => txt_($ult['proximo_paso']),
                         'proxima_fecha' => txt_($ult['proxima_fecha']), 'quien' => txt_($ult['usuario_id'])] : null,
@@ -147,14 +156,6 @@ function accVisitaMarcar_(array $u, array $p): array {
       actualizar_('CLIENTES', $cli['id'], ['estado' => 'sentada', 'modificado' => ahora_(), 'modificado_por' => $u['id']]);
     }
     registrar_($u, 'visita_sentada', 'CAPTACIONES', $cap['id'], $res);
-  } elseif ($campo === 'venta') {
-    /* La venta solo cuenta cuando la financiera la aprueba o el cliente paga: va en su propia marca. */
-    actualizar_('CAPTACIONES', $cap['id'], ['venta_marcada' => $valor ? ahora_() : '',
-      'resultado' => $valor ? 'venta' : (normal_($cap['resultado'] ?? '') === 'venta' ? 'sentada' : txt_($cap['resultado'] ?? '')), 'fecha_resultado' => hoyISO_()]);
-    if ($valor && in_array(normal_($cli['estado'] ?? ''), ['', 'nuevo', 'captado', 'cita', 'sentada', 'propuesta'], true)) {
-      actualizar_('CLIENTES', $cli['id'], ['estado' => 'ganado', 'modificado' => ahora_(), 'modificado_por' => $u['id']]);
-    }
-    registrar_($u, 'visita_venta', 'CAPTACIONES', $cap['id'], $valor ? 'venta' : 'no');
   } elseif ($campo === 'proyecto') {
     actualizar_('CAPTACIONES', $cap['id'], ['proyecto_creado' => $valor ? ahora_() : '']);
     registrar_($u, 'visita_proyecto', 'CAPTACIONES', $cap['id'], $valor ? 'hecho' : 'no');
