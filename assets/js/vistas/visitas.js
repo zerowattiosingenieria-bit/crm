@@ -5,11 +5,15 @@
  * hecho?, ¿proyecto enviado? Y debajo, qué ha dicho el cliente (con fecha),
  * la siguiente acción y el estado de la operación. Pulsando en el cliente o
  * en la dirección se abre su ficha. Muy sencillo, pensado para el móvil.
+ *
+ * El proyecto, en la misma tarjeta: si ya está hecho, se descarga con un
+ * toque; si no, se describe (con fotos) y se pide al ingeniero desde aquí.
  */
 
 import {h, poner, txt, hoyISO, telHref} from '../util.js';
 import * as api from '../api.js';
 import {cargando, avisoError, aviso} from '../ui.js';
+import {prepara, abrirArchivo} from './proyecto.js';
 
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -102,6 +106,81 @@ export async function vistaVisitas({ir}) {
       } catch (e) { avisoError(e); }
     }
 
+    /* ---- el proyecto: descargarlo o pedirlo ---- */
+    let abierto = false;
+    function bloqueProyecto() {
+      const pr = v.proy || {};
+      const est = txt(v.proyecto_estado);
+      if (pr.pdf) {
+        return h('div.vis-proy.listo',
+          h('div.vis-proy-txt', h('b', '📄 Proyecto listo'), h('small', pr.pdf.nombre + (pr.pdf.subido ? ' · ' + fCorta(pr.pdf.subido) : ''))),
+          h('button.btn.lima.vis-proy-btn', {type: 'button', onclick: async e => {
+            const b = e.currentTarget; b.disabled = true; const t = b.textContent; b.textContent = 'Descargando…';
+            try { await abrirArchivo({id: pr.pdf.id}); } catch (err) { avisoError(err); }
+            b.disabled = false; b.textContent = t;
+          }}, '⤓ Descargar proyecto'));
+      }
+      if (est === 'pedido' || est === 'en_curso') {
+        return h('div.vis-proy.pedido',
+          h('div.vis-proy-txt', h('b', '⏳ ' + (est === 'en_curso' ? 'El ingeniero lo está preparando' : 'Pedido al ingeniero') + (pr.pedido ? ' el ' + fCorta(pr.pedido) : '')),
+            pr.descripcion ? h('small', pr.descripcion.length > 140 ? pr.descripcion.slice(0, 140) + '…' : pr.descripcion) : null),
+          h('span.vis-proy-n', '📷 ' + (pr.fotos || 0)));
+      }
+      if (v.sentada === false) return null;
+      if (v.proyecto && est !== 'faltan_datos') {
+        return h('div.vis-proy.fuera', h('div.vis-proy-txt', h('b', 'Proyecto hecho fuera del CRM'),
+          h('small', 'Para descargarlo desde aquí, pide a dirección que lo suba a la ficha del cliente.')));
+      }
+      const falta = est === 'faltan_datos';
+      if (!abierto && !falta) {
+        return h('button.vis-proy-pedir', {type: 'button', onclick: () => { abierto = true; poner(cuerpo, ...contenido()); }},
+          h('span', '✎'), ' Describir el proyecto y pedírselo al ingeniero');
+      }
+      /* el formulario */
+      const desc = h('textarea.vis-nota.vis-proy-desc', {rows: 4,
+        placeholder: 'Qué quiere el cliente y qué has visto: m², calefacción y gasto actual, gasto de luz, monofásica o trifásica, tejado y orientación, nº de placas, batería, lo que haga falta…'});
+      desc.value = pr.descripcion || '';
+      let nuevos = [];
+      const lista = h('span.vis-proy-n');
+      const cuenta = () => { lista.textContent = '📷 ' + ((pr.fotos || 0) + nuevos.length) + ' foto(s)' + (nuevos.length ? ' · ' + nuevos.length + ' por subir' : ''); };
+      const camara = h('input', {type: 'file', accept: 'image/*', capture: 'environment', hidden: true});
+      const galeria = h('input', {type: 'file', accept: 'image/*,application/pdf', multiple: true, hidden: true});
+      [camara, galeria].forEach(inp => inp.addEventListener('change', () => { nuevos = nuevos.concat(Array.from(inp.files || [])); inp.value = ''; cuenta(); }));
+      cuenta();
+      const pedirBtn = h('button.btn.lima.vis-proy-btn', {type: 'button', onclick: async () => {
+        if (!txt(desc.value)) return aviso('Describe el proyecto para que el ingeniero sepa qué hacer.');
+        const fotosNuevas = nuevos.filter(f => /^image\//.test(f.type)).length;
+        if (!(pr.fotos || 0) && !fotosNuevas) return aviso('Añade al menos una foto de la casa (tejado, caldera, cuadro eléctrico) para que el ingeniero pueda hacerlo.');
+        pedirBtn.disabled = true;
+        try {
+          let i = 0;
+          for (const f of nuevos) {
+            pedirBtn.textContent = 'Subiendo ' + (++i) + ' de ' + nuevos.length + '…';
+            const listo = await prepara(f);
+            await api.subirArchivo(Object.assign({cliente_id: c.id}, listo));
+          }
+          pedirBtn.textContent = 'Pidiendo…';
+          const r = await api.visitaProyecto(v.id, desc.value);
+          Object.assign(v, r.visita);
+          abierto = false;
+          aviso(r.pedido ? 'Proyecto pedido. Al ingeniero le llega el aviso.' : 'Descripción guardada.');
+          poner(cuerpo, ...contenido());
+          refrescarCabecera();
+        } catch (e) { avisoError(e); pedirBtn.disabled = false; pedirBtn.textContent = falta ? 'Completar y volver a pedir' : 'Pedir al ingeniero'; }
+      }}, falta ? 'Completar y volver a pedir' : 'Pedir al ingeniero');
+      return h('div.vis-proy.form' + (falta ? '.falta' : ''),
+        falta ? h('div.vis-proy-aviso', h('b', '⚠ El ingeniero necesita: '), pr.faltan || 'más datos') : h('b.vis-proy-tit', 'Pedir el proyecto al ingeniero'),
+        desc,
+        h('div.vis-fila.fin',
+          h('div.vis-proy-fotos',
+            h('button.btn.vis-proy-foto', {type: 'button', onclick: () => camara.click()}, '📷 Hacer foto'),
+            h('button.btn.vis-proy-foto', {type: 'button', onclick: () => galeria.click()}, '🖼 Subir fotos o PDF'),
+            lista, camara, galeria),
+          h('div.vis-proy-fotos',
+            falta ? null : h('button.btn.plano', {type: 'button', onclick: () => { abierto = false; poner(cuerpo, ...contenido()); }}, 'Cancelar'),
+            pedirBtn)));
+    }
+
     function contenido() {
       const sentadaSig = v.sentada === null ? true : v.sentada === true ? false : null;
       const pasos = h('div.vis-pasos',
@@ -138,6 +217,7 @@ export async function vistaVisitas({ir}) {
         } catch (e) { avisoError(e); guardar.disabled = false; }
       }}, 'Guardar');
 
+      const proyBloque = bloqueProyecto();
       const ult = v.ultimo;
       return [
         h('div.vis-cab',
@@ -150,6 +230,7 @@ export async function vistaVisitas({ir}) {
               direccion ? h('span.vis-com', api.nombrePersona(v.comercial_id)) : null)),
           c.telefono ? h('a.btn.vis-tel', {href: telHref(c.telefono), title: 'Llamar'}, '☎') : null),
         pasos,
+        proyBloque,
         ult ? h('div.vis-ultimo',
           h('span.vis-ult-f', fCorta(ult.fecha)), ' ', ult.nota || '—',
           ult.proximo_paso ? h('div.vis-ult-acc', '→ ' + ult.proximo_paso + (ult.proxima_fecha ? ' · ' + fCorta(ult.proxima_fecha) : '')) : null) : null,

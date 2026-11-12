@@ -373,6 +373,7 @@ export const guardarTramite = tramite => pedir('guardarTramite', {tramite});
 export const seguimientoOperaciones = (forzar = false) => pedir('seguimientoOperaciones', {forzar});
 export const visitasRecientes = (dias = 14, comercial_id = '') => pedir('visitasRecientes', {dias, comercial_id});
 export const visitaMarcar = (id, campo, valor) => pedir('visitaMarcar', {id, campo, valor});
+export const visitaProyecto = (id, descripcion) => pedir('visitaProyecto', {id, descripcion});
 export const visitaApunte = datos => pedir('visitaApunte', datos);
 export const seguimientoCambiar = (clave, bloque, check, estado) => pedir('seguimientoCambiar', {clave, bloque, check, estado});
 export const importarTramites = (tramites, opciones = {}) => pedir('importarTramites', {tramites, ...opciones});

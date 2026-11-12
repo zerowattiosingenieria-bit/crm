@@ -43,7 +43,21 @@ function operacionVisita_($clienteId): ?array {
   return $ops[0];
 }
 
-function filaVisita_(array $cap, array $cli, array $proys, array $segs): array {
+/** Lo del proyecto que necesita la tarjeta: el PDF vigente, la descripción y las fotos. */
+function proyectoVisita_(?array $proy, array $archs): array {
+  $pdfs = array_values(array_filter($archs, fn($a) => normal_($a['clase'] ?? '') === 'proyecto'));
+  usort($pdfs, fn($a, $b) => strcmp(txt_($b['subido'] ?? ''), txt_($a['subido'] ?? '')));
+  $fotos = count(array_filter($archs, fn($a) => normal_($a['clase'] ?? '') === 'foto'));
+  return [
+    'pdf' => $pdfs ? ['id' => $pdfs[0]['id'], 'nombre' => txt_($pdfs[0]['nombre']), 'subido' => txt_($pdfs[0]['subido'])] : null,
+    'descripcion' => $proy ? txt_($proy['descripcion'] ?? '') : '',
+    'faltan' => $proy ? txt_($proy['faltan'] ?? '') : '',
+    'pedido' => $proy ? txt_($proy['pedido'] ?? '') : '',
+    'fotos' => $fotos,
+  ];
+}
+
+function filaVisita_(array $cap, array $cli, array $proys, array $segs, array $archs = []): array {
   $proy = $proys[(string)$cli['id']] ?? null;
   $estP = $proy ? normal_($proy['estado'] ?? '') : '';
   $res = normal_($cap['resultado'] ?? '');
@@ -61,6 +75,7 @@ function filaVisita_(array $cap, array $cli, array $proys, array $segs): array {
     'proyecto_auto' => in_array($estP, ['entregado', 'enviado'], true),
     'proyecto' => in_array($estP, ['entregado', 'enviado'], true) || txt_($cap['proyecto_creado'] ?? '') !== '',
     'enviado_auto' => $estP === 'enviado',
+    'proy' => proyectoVisita_($proy, $archs[(string)$cli['id']] ?? []),
     'enviado' => $estP === 'enviado' || txt_($cap['proyecto_enviado'] ?? '') !== '',
     'operacion' => $op ? ['id' => $op['id'], 'estado' => txt_($op['estado'])] : null,
     'ultimo' => $ult ? ['fecha' => txt_($ult['fecha']), 'nota' => txt_($ult['nota']), 'proximo_paso' => txt_($ult['proximo_paso']),
@@ -93,6 +108,11 @@ function accVisitasRecientes_(array $u, array $p): array {
   foreach (filtrar_('CLIENTES', fn($c) => isset($ids[(string)$c['id']])) as $c) $clis[(string)$c['id']] = $c;
   $proys = [];
   foreach (filtrar_('PROYECTOS', fn($x) => isset($ids[(string)$x['cliente_id']])) as $x) $proys[(string)$x['cliente_id']] = $x;
+  $archs = [];
+  foreach (filtrar_('ARCHIVOS', fn($a) => isset($ids[(string)$a['cliente_id']])) as $a) {
+    if (function_exists('veArchivo_') && !veArchivo_($u, $a)) continue;
+    $archs[(string)$a['cliente_id']][] = $a;
+  }
   $segs = [];
   foreach (filtrar_('SEGUIMIENTO', fn($s) => isset($ids[(string)$s['cliente_id']])) as $s) {
     $k = (string)$s['cliente_id'];
@@ -103,7 +123,7 @@ function accVisitasRecientes_(array $u, array $p): array {
   $out = [];
   foreach ($caps as $c) {
     $cli = $clis[(string)$c['cliente_id']] ?? null;
-    if ($cli) $out[] = filaVisita_($c, $cli, $proys, $segs);
+    if ($cli) $out[] = filaVisita_($c, $cli, $proys, $segs, $archs);
   }
   return ['ok' => true, 'desde' => $desde, 'hasta' => $hoy, 'visitas' => $out];
 }
@@ -190,6 +210,24 @@ function accVisitaApunte_(array $u, array $p): array {
   return visitaFresca_($u, $cap['id']);
 }
 
+/**
+ * Pedir el proyecto al ingeniero desde la visita: se guarda la descripción
+ * en la carpeta del cliente y, con al menos una foto (la regla de la casa),
+ * el proyecto entra solo en la cola y le llega el aviso al ingeniero.
+ * Las fotos se suben antes con subirArchivo, como en la ficha.
+ */
+function accVisitaProyecto_(array $u, array $p): array {
+  $v = visitaDe_($u, $p['id'] ?? '');
+  if (isset($v['error'])) return ['ok' => false, 'error' => $v['error']];
+  $desc = trozo_(txt_($p['descripcion'] ?? ''), 0, 4000);
+  if ($desc === '') return ['ok' => false, 'error' => 'Describe el proyecto para que el ingeniero sepa qué hacer.'];
+  $r = accGuardarProyecto_($u, ['cliente_id' => $v['cli']['id'], 'descripcion' => $desc]);
+  if (empty($r['ok'])) return $r;
+  $f = visitaFresca_($u, $v['cap']['id']);
+  $f['pedido'] = in_array(normal_($r['proyecto']['estado'] ?? ''), ['pedido', 'en_curso', 'entregado', 'enviado'], true);
+  return $f;
+}
+
 function visitaFresca_(array $u, $id): array {
   $v = visitaDe_($u, $id);
   if (isset($v['error'])) return ['ok' => false, 'error' => $v['error']];
@@ -199,5 +237,7 @@ function visitaFresca_(array $u, $id): array {
   $ss = filtrar_('SEGUIMIENTO', fn($s) => mismo_($s['cliente_id'], $v['cli']['id']));
   usort($ss, fn($a, $b) => strcmp(txt_($b['fecha']) . ' ' . txt_($b['creado']), txt_($a['fecha']) . ' ' . txt_($a['creado'])));
   if ($ss) $segs[(string)$v['cli']['id']] = $ss[0];
-  return ['ok' => true, 'visita' => filaVisita_($v['cap'], $v['cli'], $proys, $segs)];
+  $archs = [(string)$v['cli']['id'] => array_values(array_filter(filtrar_('ARCHIVOS', fn($a) => mismo_($a['cliente_id'], $v['cli']['id'])),
+    fn($a) => !function_exists('veArchivo_') || veArchivo_($u, $a)))];
+  return ['ok' => true, 'visita' => filaVisita_($v['cap'], $v['cli'], $proys, $segs, $archs)];
 }

@@ -9,6 +9,13 @@ luego no hay manera de reconstruir.
 
 
 
+## 12/11/2026 · Mis visitas: descargar o pedir el proyecto
+
+- Cada visita muestra el proyecto: si está hecho, botón «Descargar proyecto»; si está pedido, desde cuándo y si el ingeniero lo prepara.
+- Si no está hecho: «Describir el proyecto y pedírselo al ingeniero» con descripción, hacer foto o subir fotos/PDF. Con al menos una foto entra solo en la cola y avisa al ingeniero.
+- Si el ingeniero marca «faltan datos», sale en rojo lo que necesita y se completa y vuelve a pedir desde la misma tarjeta.
+- Acción nueva `visitaProyecto`.
+
 ## 10/11/2026 · Seguimiento de operaciones editable y copia editable del Excel
 
 Lo pidió Nando: «el seguimiento de operaciones se tiene que poder editar si se
