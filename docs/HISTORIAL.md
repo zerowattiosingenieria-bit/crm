@@ -9,6 +9,12 @@ luego no hay manera de reconstruir.
 
 
 
+## 12/11/2026 · Comisiones ya pagadas y captador por recomendación
+
+- Nóminas: todo lo anterior al periodo actual (comisiones hasta el 15/10/2026 incluido) sale marcado «✓ Comisionado» para todo el equipo: en el día a día, en el KPI de comisiones (ya comisionado / pendiente) y en las nóminas de octubre y anteriores. Solo es una marca: no cambia importes ni reglas. Se mueve con la configuración `comisiones_pagadas_hasta`.
+- Ficha del cliente: la línea «Captador por recomendación…» se queda siempre en «Últimos movimientos» con su fecha, aunque haya movimientos más nuevos.
+- Habana 29D (C-000011): captador Abraham por recomendación desde el 03/09/2026, comisión ya pagada.
+
 ## 12/11/2026 · Calendario de instalaciones
 
 - Pestaña nueva «Calendario de instalaciones» (vista mes y lista): obras de cada instalador (FV en lima, aerotermia en azul; discontinua si aún no ha empezado) con su avance, fases hechas el día que se marcaron, lo que queda por hacer con fecha (en rojo si va atrasado), visitas de instaladores, instalación prevista sin instalador asignado, firma, instalada y legalizada.

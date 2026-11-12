@@ -141,7 +141,7 @@ function detalle(n) {
 }
 function desglose(n) {
   const partes = [];
-  if (num(n.comisiones)) partes.push('comisiones ' + eur2(n.comisiones));
+  if (num(n.comisiones)) partes.push('comisiones ' + eur2(n.comisiones) + (n.comisionado ? ' (✓ comisionado)' : ''));
   if (num(n.dietas)) partes.push('dietas ' + eur2(n.dietas));
   return partes.join(' · ');
 }
@@ -299,7 +299,8 @@ function pintaDias(d) {
     {clave: 'devengo', et: 'Sueldo del día', num: true, pinta: x => x.devengo ? eur2(x.devengo) : '—'},
     {clave: 'dietas', et: 'Dietas', num: true, pinta: x => x.dietas ? eur2(x.dietas) : '—'},
     {clave: 'comisiones', et: 'Comisiones', num: true, pinta: x => x.comisiones
-      ? h('b', {estilo: {color: 'var(--bien)'}}, eur2(x.comisiones)) : '—'},
+      ? h('div', h('b', {estilo: {color: 'var(--bien)'}}, eur2(x.comisiones)),
+          x.comisionado ? h('div', h('span.etiqueta.bien', {title: 'Ya pagada'}, '✓ Comisionado')) : null) : '—'},
     {clave: 'total_dia', et: 'Total', num: true, pinta: x => h('b', eur2(x.total_dia))},
     {clave: 'actividad', et: 'Actividad', noOrden: true, valor: x => x.sentadas + x.puertas + x.fichas,
      pinta: x => {
@@ -317,11 +318,16 @@ function pintaDias(d) {
           {texto: eur2(t.dietas), num: true}, {texto: eur2(t.comisiones), num: true},
           {texto: eur2(t.bruto_periodo), num: true}, {texto: '', colspan: 2}]});
 
+  const hastaPag = txt(d.comisionado_hasta);
   return h('div',
+    hastaPag ? h('p.nota.ci-alerta-ok', {estilo: {background: 'var(--bien-b)', borderLeft: '4px solid var(--lima-osc)', padding: '8px 12px', borderRadius: '6px', margin: '0 0 10px'}},
+      '✓ Todas las comisiones hasta el ' + fechaCorta(hastaPag) + ' (incluido) ya están comisionadas, para todo el equipo.') : null,
     kpis(
       kpi('Devengado', eur2(t.bruto_periodo), fechaCorta(d.desde) + ' — ' + fechaCorta(d.hasta)),
       kpi('Sueldo', eur2(t.devengo), miles(t.laborables) + ' días trabajados'),
-      kpi('Comisiones', eur2(t.comisiones), 'en el periodo'),
+      kpi('Comisiones', eur2(t.comisiones), num(t.comisiones_comisionadas)
+        ? (num(t.comisiones_pendientes) ? eur2(t.comisiones_comisionadas) + ' ya comisionado · ' + eur2(t.comisiones_pendientes) + ' pendiente' : '✓ Todo ya comisionado')
+        : 'en el periodo'),
       kpi('Neto estimado', eur2(t.neto_periodo), 'tras IRPF y Seguridad Social')
     ),
     tarjeta('Día a día', tablaDias, {sinRelleno: true,

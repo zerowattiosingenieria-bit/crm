@@ -19,6 +19,17 @@ function periodoNomina_($v): string {
   return preg_match('/^(\d{4})-(\d{2})/', $t, $m) ? $m[1] . '-' . $m[2] : $t;
 }
 
+/**
+ * Hasta qué día están ya pagadas las comisiones (12/11/2026, Nando: «todo lo
+ * anterior a este periodo indicar que ya está comisionado», para captadores,
+ * comerciales y cualquier miembro). Solo es una marca: no cambia importes ni
+ * reglas de comisión. Se mueve en configuración: comisiones_pagadas_hasta.
+ */
+function comisionesPagadasHasta_(): string {
+  $f = txt_(config_()['comisiones_pagadas_hasta'] ?? '');
+  return preg_match('/^\d{4}-\d{2}-\d{2}$/', $f) ? $f : '2026-10-15';
+}
+
 function accNominas_(array $u, array $p): array {
   $per = permisos_($u);
   $objetivoId = txt_($p['usuario_id'] ?? '') ?: $u['id'];
@@ -26,10 +37,13 @@ function accNominas_(array $u, array $p): array {
     return ['ok' => false, 'error' => 'Solo puedes ver tu propia nómina.'];
   }
   $nominas = array_values(array_filter(leer_('NOMINAS'), fn($n) => mismo_($n['usuario_id'], $objetivoId)));
-  $nominas = array_map(function ($n) { $n['periodo'] = periodoNomina_($n['periodo']); return $n; }, $nominas);
+  $hastaPag = comisionesPagadasHasta_();
+  /* La nómina de un mes lleva las comisiones del 16 del anterior al 15 de ese mes. */
+  $nominas = array_map(function ($n) use ($hastaPag) { $n['periodo'] = periodoNomina_($n['periodo']);
+    $n['comisionado'] = preg_match('/^\d{4}-\d{2}$/', $n['periodo']) && strcmp($n['periodo'] . '-15', $hastaPag) <= 0; return $n; }, $nominas);
   $nominas = ordenar_($nominas, fn($a, $b) => comparar_($b['periodo'], $a['periodo']));
   $persona = buscar1_('USUARIOS', fn($x) => mismo_($x['id'], $objetivoId));
-  return ['ok' => true, 'nominas' => $nominas, 'persona' => $persona ? publicoConNomina_($persona) : null];
+  return ['ok' => true, 'nominas' => $nominas, 'persona' => $persona ? publicoConNomina_($persona) : null, 'comisionado_hasta' => $hastaPag];
 }
 
 /**
@@ -111,6 +125,7 @@ function accNominaDias_(array $u, array $p): array {
       'tipo' => $tipo, 'horas' => $laborable ? ($j ? (num_($j['horas']) ?: $jornadaH) : $jornadaH) : 0,
       'devengo' => $devengo, 'dietas' => $dieta, 'comisiones' => $com,
       'concepto_comision' => isset($comisionDia[$cursor]) ? implode(' · ', $comisionDia[$cursor]['conceptos']) : '',
+      'comisionado' => $com > 0 && strcmp($cursor, comisionesPagadasHasta_()) <= 0,
       'total_dia' => redondear_($devengo + $dieta + $com, 2),
       'sentadas' => $parte ? num_($parte['sentadas']) : 0,
       'puertas' => $parte ? num_($parte['puertas']) : 0,
@@ -133,6 +148,8 @@ function accNominaDias_(array $u, array $p): array {
   }
 
   foreach (array_keys($totales) as $k) $totales[$k] = redondear_($totales[$k], 2);
+  $totales['comisiones_comisionadas'] = redondear_(array_sum(array_map(fn($d) => !empty($d['comisionado']) ? $d['comisiones'] : 0, $dias)), 2);
+  $totales['comisiones_pendientes'] = redondear_($totales['comisiones'] - $totales['comisiones_comisionadas'], 2);
   $totales['bruto_periodo'] = redondear_($totales['devengo'] + $totales['dietas'] + $totales['comisiones'], 2);
   $irpf = redondear_($totales['bruto_periodo'] * num_($persona['irpf_pct']) / 100, 2);
   $ss = redondear_($totales['devengo'] * num_($persona['ss_pct']) / 100, 2);
@@ -140,7 +157,7 @@ function accNominaDias_(array $u, array $p): array {
   $totales['neto_periodo'] = redondear_($totales['bruto_periodo'] - $irpf - $ss, 2);
 
   return ['ok' => true, 'persona' => publicoConNomina_($persona), 'desde' => $desde, 'hasta' => $hasta,
-          'dias' => $dias, 'totales' => $totales];
+          'dias' => $dias, 'totales' => $totales, 'comisionado_hasta' => comisionesPagadasHasta_()];
 }
 
 function diasLaborables_($mesISO): int {
