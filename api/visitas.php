@@ -201,26 +201,163 @@ function accVisitaApunte_(array $u, array $p): array {
     if (empty($r['ok'])) return $r;
   }
 
+  $cambios = [];
   if ($estado !== '') {
     $validos = array_map(fn($x) => $x[0], CATALOGO['estadosOperacion'] ?? []);
     if ($validos && !in_array($estado, $validos, true)) return ['ok' => false, 'error' => 'Ese estado no existe.'];
+    $r = ponerEstadoVisita_($u, $cap, $cli, $estado);
+    if (isset($r['error'])) return ['ok' => false, 'error' => $r['error']];
+  }
+  /* Lo que cuenta el comercial manda: se lee el comentario y se actualizan los estados solos. */
+  if ($nota !== '' || $accion !== '') {
+    $cambios = aplicarComentario_($u, $cap, $cli, trim($nota . ' ' . $accion), $estado !== '');
+  }
+  $f = visitaFresca_($u, $cap['id']);
+  $f['cambios'] = $cambios;
+  return $f;
+}
+
+/**
+ * Repasa los comentarios ya apuntados de las visitas de los últimos 30 días
+ * (en «Mis visitas» o con «+ Apuntar» en la ficha) y dice qué estados
+ * cambiaría. Solo dirección. Con aplicar=true los aplica.
+ */
+function accRevisarComentariosVisitas_(array $u, array $p): array {
+  if ((permisos_($u)['alcance'] ?? '') !== 'todo') return ['ok' => false, 'error' => 'Solo dirección.'];
+  $dias = max(1, min(60, (int)($p['dias'] ?? 30)));
+  $desde = (new DateTime(hoyISO_()))->modify('-' . $dias . ' days')->format('Y-m-d');
+  $aplicar = !empty($p['aplicar']);
+  $solo = is_array($p['ids'] ?? null) ? array_map('strval', $p['ids']) : null;
+  $caps = filtrar_('CAPTACIONES', fn($c) => substr(txt_($c['fecha'] ?? ''), 0, 10) >= $desde && substr(txt_($c['fecha'] ?? ''), 0, 10) <= hoyISO_() && txt_($c['comercial_id'] ?? '') !== '');
+  $out = [];
+  foreach ($caps as $cap) {
+    if ($solo !== null && !in_array((string)$cap['id'], $solo, true)) continue;
+    $cli = buscar1_('CLIENTES', fn($c) => mismo_($c['id'], $cap['cliente_id']));
+    if (!$cli) continue;
+    $f = substr(txt_($cap['fecha']), 0, 10);
+    $notas = filtrar_('SEGUIMIENTO', fn($s) => mismo_($s['cliente_id'], $cli['id']) && substr(txt_($s['fecha'] ?? ''), 0, 10) >= $f);
+    if (!$notas) continue;
+    usort($notas, fn($a, $b) => strcmp(txt_($a['fecha']) . txt_($a['creado']), txt_($b['fecha']) . txt_($b['creado'])));
+    $texto = implode(' . ', array_map(fn($s) => trim(txt_($s['nota']) . ' ' . txt_($s['proximo_paso'])), $notas));
+    $l = leerComentario_($texto);
+    /* Lo último que se ha dicho es lo que vale para la operación. */
+    $ultima = end($notas); $lu = leerComentario_(trim(txt_($ultima['nota']) . ' ' . txt_($ultima['proximo_paso'])));
+    if (isset($l['op']) && !isset($lu['op'])) unset($l['op']);
+    if (isset($lu['op'])) $l['op'] = $lu['op'];
+    if (!$l) continue;
     $op = operacionVisita_($cli['id']);
-    if ($op) {
-      if (normal_($op['estado'] ?? '') !== $estado) {
-        /* Solo el estado: los importes no se tocan. */
-        $r = actualizar_('OPERACIONES', $op['id'], ['estado' => $estado, 'modificado' => ahora_(), 'modificado_por' => $u['id']]);
-        if (function_exists('sincronizarEstadoCliente_')) sincronizarEstadoCliente_($u, $r);
-        registrar_($u, 'editar_operacion', 'OPERACIONES', $op['id'], $estado);
-      }
-    } else {
-      $tec = normal_($cap['tecnologia'] ?? '');
-      $tipo = strpos($tec, 'aero') !== false && strpos($tec, 'foto') !== false ? 'fv_aero' : (strpos($tec, 'aero') !== false ? 'aero' : (strpos($tec, 'foto') !== false ? 'fv' : ''));
-      $r = accGuardarOperacion_($u, ['operacion' => ['cliente_id' => $cli['id'], 'estado' => $estado, 'tipo' => $tipo]]);
-      if (empty($r['ok'])) return $r;
-      if (txt_($cap['operacion_id'] ?? '') === '') actualizar_('CAPTACIONES', $cap['id'], ['operacion_id' => $r['operacion']['id']]);
+    $fila = ['id' => $cap['id'], 'cliente' => txt_($cli['nombre']) . ' · ' . txt_($cli['direccion']), 'comercial' => txt_($cap['comercial_id']),
+             'texto' => trozo_($texto, 0, 400), 'detectado' => $l, 'operacion' => $op ? txt_($op['estado']) : '', 'cliente_estado' => txt_($cli['estado'])];
+    if ($aplicar) $fila['hecho'] = aplicarComentario_($u, $cap, $cli, txt_($ultima['nota']) . ' ' . txt_($ultima['proximo_paso']) . (isset($l['enviado']) && !isset($lu['enviado']) ? ' . le he enviado el proyecto' : ''), false);
+    $out[] = $fila;
+  }
+  return ['ok' => true, 'aplicado' => $aplicar, 'visitas' => $out];
+}
+
+/** Pone el estado a la operación del cliente (o la crea). Solo el estado: los importes no se tocan. */
+function ponerEstadoVisita_(array $u, array $cap, array $cli, string $estado, string $motivo = ''): array {
+  $op = operacionVisita_($cli['id']);
+  if ($op) {
+    if (normal_($op['estado'] ?? '') === $estado) return ['op' => $op, 'igual' => true];
+    $c = ['estado' => $estado, 'modificado' => ahora_(), 'modificado_por' => $u['id']];
+    if ($estado === 'cancelada' && $motivo !== '' && txt_($op['motivo_perdida'] ?? '') === '') $c['motivo_perdida'] = trozo_($motivo, 0, 300);
+    if ($estado === 'firmada' && txt_($op['fecha_firma'] ?? '') === '') $c['fecha_firma'] = hoyISO_();
+    $r = actualizar_('OPERACIONES', $op['id'], $c);
+    if (function_exists('sincronizarEstadoCliente_')) sincronizarEstadoCliente_($u, $r);
+    registrar_($u, 'editar_operacion', 'OPERACIONES', $op['id'], $estado);
+    return ['op' => $r];
+  }
+  $tec = normal_($cap['tecnologia'] ?? '');
+  $tipo = strpos($tec, 'aero') !== false && strpos($tec, 'foto') !== false ? 'fv_aero' : (strpos($tec, 'aero') !== false ? 'aero' : (strpos($tec, 'foto') !== false ? 'fv' : ''));
+  $datos = ['cliente_id' => $cli['id'], 'estado' => $estado, 'tipo' => $tipo];
+  if ($estado === 'cancelada' && $motivo !== '') $datos['motivo_perdida'] = trozo_($motivo, 0, 300);
+  $r = accGuardarOperacion_($u, ['operacion' => $datos]);
+  if (empty($r['ok'])) return ['error' => $r['error'] ?? 'No se ha podido crear la operación.'];
+  if (txt_($cap['operacion_id'] ?? '') === '') actualizar_('CAPTACIONES', $cap['id'], ['operacion_id' => $r['operacion']['id']]);
+  return ['op' => $r['operacion']];
+}
+
+/**
+ * Lee el comentario del comercial y saca qué ha pasado (12/11/2026, Nando:
+ * «ten en cuenta todos los comentarios para actualizar estados»).
+ * Reglas sencillas y prudentes: una frase negada («todavía no ha firmado»)
+ * no cuenta, y la operación solo avanza (salvo que el cliente diga que no).
+ * Devuelve lo que ha detectado, sin tocar nada.
+ */
+function leerComentario_(string $texto): array {
+  $t = ' ' . preg_replace('/\s+/', ' ', normal_($texto)) . ' ';
+  $hay = function (string $re) use ($t): bool {
+    if (!preg_match_all('/' . $re . '/u', $t, $m, PREG_OFFSET_CAPTURE)) return false;
+    foreach ($m[0] as [$txt, $pos]) {
+      if (preg_match('/\\b(no|aun no|todavia no|ni)\\b/u', $txt)) continue;   // «la financiera aún no lo ha aprobado»
+      $antes = substr($t, max(0, $pos - 22), min(22, $pos));
+      if (!preg_match('/\b(no|aun no|todavia no|sin|ni|falta|faltan|pendiente de que)\s+(\w+\s+){0,2}$/u', $antes)) return true;
+    }
+    return false;
+  };
+  $r = [];
+  if (preg_match('/no (le |les )?interesa|no esta(n)? interesad|descart|no quiere(n)? (seguir|hacer|hacerlo|nada|la instalacion|continuar)|lo deja(n|mos)?\b|(se va|se van|ha elegido|han elegido|ha contratado|han contratado|contrata(n)?) (con )?(otra|otro)|desist|no (lo )?va(n)? a hacer|cancela(do|da)? (la )?(operacion|instalacion|todo)|no sigue|no seguimos/u', $t)) $r['op'] = 'cancelada';
+  elseif ($hay('(financiera|financiacion|banco|sabadell|caixa|caixabank|finlight|cetelem|prestamo)[^.]{0,30}aprobad|aprobad[oa][^.]{0,30}(financ|banco|prestamo)|(le|les) (han )?aprobado')) $r['op'] = 'tramite';
+  elseif ($hay('(enviad|mandad|pasad|presentad|subid)[oa]s? [^.]{0,25}financiera|financiacion en estudio|en estudio (la|por la|de la) financ|estudiando la financ|pendiente de (la )?financiera|esperando (a )?(la )?financiera|documentacion (para|de) (la )?financ')) $r['op'] = 'financiacion';
+  elseif ($hay('\b(ha|han|hemos) firmado|\bfirmad[oa]\b|\bfirmo\b|firma hecha|contrato firmado|ya esta firmad')) $r['op'] = 'firmada';
+  if ($hay('(he|hemos|le he|le hemos|les he|ya le he|ya le hemos) (enviado|mandado|pasado) (el |la )?(proyecto|propuesta|presupuesto|oferta)|(proyecto|propuesta|oferta) enviad[oa]|enviad[oa] (el |la )?(proyecto|propuesta)')) $r['enviado'] = true;
+  if (preg_match('/no se presento|no estaba(n)? en casa|no (nos )?abri|no habia nadie|plantad|plantón|planton|no aparec|anulo la cita|cancelo la cita|no pudo atendernos/u', $t)) $r['sentada'] = false;
+  if ($hay('(ha|han) pagado|pago (recibido|hecho|realizado)|transferencia (hecha|recibida|realizada)|ha(n)? abonado|reserva pagada|ha(n)? pagado la reserva|ha(n)? hecho la transferencia')) $r['pago'] = true;
+  if (!isset($r['op']) && preg_match('/lo (esta(n)? )?pensando|lo piensa|lo (tiene|tienen) que (hablar|pensar|consultar)|lo habla(n)? con|le parece caro|les parece caro|pide(n)? (descuento|rebaja|mejor precio)|comparando|otro presupuesto|otra(s)? oferta|mas presupuestos/u', $t)) $r['negociando'] = true;
+  return $r;
+}
+
+/** Aplica lo que dice el comentario. Devuelve la lista de cambios hechos, en palabras. */
+function aplicarComentario_(array $u, array $cap, array $cli, string $texto, bool $estadoElegido): array {
+  $l = leerComentario_($texto);
+  $hechos = [];
+  $nombres = [];
+  foreach (CATALOGO['estadosOperacion'] ?? [] as $x) $nombres[$x[0]] = $x[1];
+  $orden = array_keys($nombres);
+
+  if (!$estadoElegido && isset($l['op'])) {
+    $op = operacionVisita_($cli['id']);
+    $actual = $op ? normal_($op['estado'] ?? '') : '';
+    $avanza = $l['op'] === 'cancelada' ? $actual !== 'cancelada'
+      : (array_search($l['op'], $orden, true) > ($actual === '' ? -1 : (int)array_search($actual, $orden, true)) || $actual === 'cancelada');
+    if ($avanza) {
+      $r = ponerEstadoVisita_($u, $cap, $cli, $l['op'], $l['op'] === 'cancelada' ? $texto : '');
+      if (!isset($r['error'])) $hechos[] = 'Operación → ' . ($nombres[$l['op']] ?? $l['op']);
     }
   }
-  return visitaFresca_($u, $cap['id']);
+  if (!empty($l['enviado'])) {
+    $f = visitaFresca_($u, $cap['id']);
+    if (empty($f['visita']['enviado'])) {
+      $r = accVisitaMarcar_($u, ['id' => $cap['id'], 'campo' => 'enviado', 'valor' => true]);
+      if (!empty($r['ok'])) $hechos[] = 'Proyecto marcado como enviado (llamada en una semana)';
+    }
+  }
+  if (isset($l['sentada']) && $l['sentada'] === false && normal_($cap['resultado'] ?? '') !== 'no_sentada'
+      && !in_array(normal_($cap['resultado'] ?? ''), ['venta'], true)) {
+    actualizar_('CAPTACIONES', $cap['id'], ['resultado' => 'no_sentada', 'fecha_resultado' => hoyISO_()]);
+    registrar_($u, 'visita_sentada', 'CAPTACIONES', $cap['id'], 'no_sentada (por comentario)');
+    $hechos[] = 'Visita → no llegó a sentada';
+  }
+  if (!empty($l['negociando'])) {
+    $c = buscar1_('CLIENTES', fn($x) => mismo_($x['id'], $cli['id']));
+    if ($c && in_array(normal_($c['estado'] ?? ''), ['sentada', 'propuesta', 'cita', 'captado', 'nuevo', ''], true)) {
+      actualizar_('CLIENTES', $cli['id'], ['estado' => 'negociando', 'fecha_estado' => hoyISO_(), 'modificado' => ahora_(), 'modificado_por' => $u['id']]);
+      $hechos[] = 'Cliente → Negociando';
+    }
+  }
+  if (!empty($l['pago'])) {
+    /* Los cobros son cosa de dirección: se le avisa para que lo compruebe y lo apunte. */
+    try {
+      $destino = function_exists('correoDeAvisos_') ? correoDeAvisos_() : '';
+      if ($destino !== '') correo_(['to' => $destino, 'subject' => 'Revisar cobro · ' . txt_($cli['nombre']) . ' · ' . txt_($cli['direccion']),
+        'htmlBody' => '<p>' . htmlspecialchars(txt_($u['nombre'] ?? '')) . ' ha apuntado en «Mis visitas» que el cliente <b>' . htmlspecialchars(txt_($cli['nombre'])) .
+          '</b> (' . htmlspecialchars(txt_($cli['direccion'])) . ') ha pagado:</p><blockquote>' . htmlspecialchars($texto) .
+          '</blockquote><p>Compruébalo en el banco y apunta el cobro: entonces contará como venta.</p>', 'name' => 'CRM ZERO WATTIOS']);
+      $hechos[] = 'Aviso a dirección para comprobar el pago';
+    } catch (Throwable $e) {}
+  }
+  if ($hechos) registrar_($u, 'estado_por_comentario', 'CAPTACIONES', $cap['id'], implode(' · ', $hechos));
+  return $hechos;
 }
 
 /**

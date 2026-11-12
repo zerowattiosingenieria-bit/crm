@@ -218,7 +218,7 @@ export async function vistaVisitas({ir}) {
         try {
           const r = await api.visitaApunte({id: v.id, nota: nota.value, fecha: fNota.value, siguiente: accion.value, siguiente_fecha: fAcc.value, estado});
           Object.assign(v, r.visita);
-          aviso('Apuntado en la ficha del cliente.');
+          aviso((r.cambios && r.cambios.length) ? 'Apuntado. Según tu comentario: ' + r.cambios.join(' · ') : 'Apuntado en la ficha del cliente.');
           poner(cuerpo, ...contenido());
           refrescarCabecera();
         } catch (e) { avisoError(e); guardar.disabled = false; }

@@ -218,6 +218,9 @@ function sincronizarEstadoCliente_(array $u, ?array $op): void {
   $cap = captacionActual_($op['cliente_id'] ?? '', $op['id'] ?? '');
   if ($cap) {
     $res = $nuevo === 'ganado' ? 'venta' : ($nuevo === 'perdido' ? 'no_sentada' : 'sentada');
+    /* Un cliente que se sentó y luego dice que no sigue habiéndose sentado:
+       perderlo no borra la sentada (12/11/2026). */
+    if ($nuevo === 'perdido' && in_array(normal_($cap['resultado'] ?? ''), ['sentada', 'venta', 'potencial'], true)) $res = 'sentada';
     if (normal_($cap['resultado']) !== $res) {
       $nuevaCap = actualizar_('CAPTACIONES', $cap['id'], ['resultado' => $res, 'fecha_resultado' => hoyISO_(), 'operacion_id' => $op['id']]);
       avisarCaptador_($nuevaCap, $cli);

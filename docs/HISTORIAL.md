@@ -9,6 +9,13 @@ luego no hay manera de reconstruir.
 
 
 
+## 12/11/2026 · Los comentarios de «Mis visitas» actualizan los estados solos
+
+- Al guardar un apunte, el CRM lee el comentario y actualiza: operación (firmada, financiación en estudio, aprobada → en trámite, cancelada), cliente (negociando), sentada (no se presentó) y proyecto enviado (con su llamada a la semana). Si el cliente dice que ha pagado, se avisa a dirección para que compruebe y apunte el cobro.
+- Prudente: las frases negadas no cuentan («todavía no ha firmado»), la operación solo avanza salvo que el cliente diga que no, y el estado elegido a mano en el desplegable manda sobre el comentario. El comercial ve en el aviso qué se ha cambiado.
+- Acción para dirección `revisarComentariosVisitas` (30 días; con aplicar=true aplica) para repasar los comentarios ya apuntados.
+- Arreglo: un cliente que se sentó y pasa a «perdido» ya no marca la cita como «no llegó a sentada».
+
 ## 12/11/2026 · Mis visitas: descargar o pedir el proyecto
 
 - Cada visita muestra el proyecto: si está hecho, botón «Descargar proyecto»; si está pedido, desde cuándo y si el ingeniero lo prepara.
