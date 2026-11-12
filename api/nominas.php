@@ -62,8 +62,20 @@ function accEstimacionComisiones_(array $u, array $p): array {
   }
   usort($lineas, fn($a, $b) => strcmp($a['fecha'], $b['fecha']));
   $seguro = array_sum(array_map(fn($l) => $l['sin_aprobar'] ? 0 : $l['importe'], $lineas));
+  /* Lo ya comisionado (hasta el corte): solo quién, sin fechas ni importes (12/11/2026). */
+  $pasado = comisionesPeriodo_($persona, '2000-01-01', min(comisionesPagadasHasta_(), sumarDias_($desde, -1)));
+  $ya = [];
+  foreach ($pasado['detalle'] ?? [] as $l) {
+    $cli = $clientes[txt_($l['cliente_id'] ?? '')] ?? [];
+    $dir = txt_($cli['direccion'] ?? '') ?: txt_($l['direccion'] ?? '');
+    $nom = txt_($cli['nombre'] ?? '');
+    $k = normal_($dir . '|' . $nom);
+    if ($k !== '|' && !isset($ya[$k])) $ya[$k] = ['direccion' => $dir, 'cliente' => $nom];
+  }
+  $ya = array_values($ya);
+  usort($ya, fn($a, $b) => strcmp(normal_($a['direccion']), normal_($b['direccion'])));
   return ['ok' => true, 'desde' => $desde, 'hasta' => $hasta, 'total' => redondear_(num_($com['total'] ?? 0), 2),
-          'aprobado' => redondear_($seguro, 2), 'lineas' => $lineas];
+          'aprobado' => redondear_($seguro, 2), 'lineas' => $lineas, 'comisionadas' => $ya];
 }
 
 /**

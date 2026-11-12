@@ -110,7 +110,13 @@ function estimacion(p) {
         'Del ' + fechaCorta(r.desde) + ' al ' + fechaCorta(r.hasta) + ': ', h('b', eur2(r.total)),
         num(r.total) !== num(r.aprobado) ? h('span.nota', ' · ' + eur2(r.aprobado) + ' de ventas ya aprobadas o pagadas; el resto, a falta de aprobación de la financiera o del pago') : null,
         h('span.nota', ' · Estimación: lo definitivo es la nómina en PDF.')),
-      t);
+      t,
+      h('details', {estilo: {padding: '10px 14px', borderTop: '1px solid var(--linea)'}},
+        h('summary', {estilo: {cursor: 'pointer', fontWeight: '700'}}, '✓ Ya comisionadas (' + (r.comisionadas || []).length + ')'),
+        (r.comisionadas || []).length
+          ? h('ul', {estilo: {margin: '8px 0 0', paddingLeft: '18px', columns: '2 260px', fontSize: '13px'}},
+              r.comisionadas.map(c => h('li', h('b', c.direccion || '—'), c.cliente ? ' · ' + c.cliente : '')))
+          : h('p.nota', 'Todavía no hay ninguna.')));
   }).catch(e => poner(cuerpo, h('.vacio', txt(e.message))));
   return caja;
 }
