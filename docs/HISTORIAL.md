@@ -15,6 +15,8 @@ luego no hay manera de reconstruir.
 - Si no está hecho: «Describir el proyecto y pedírselo al ingeniero» con descripción, hacer foto o subir fotos/PDF. Con al menos una foto entra solo en la cola y avisa al ingeniero.
 - Si el ingeniero marca «faltan datos», sale en rojo lo que necesita y se completa y vuelve a pedir desde la misma tarjeta.
 - Acción nueva `visitaProyecto`.
+- Las visitas pasan de 14 a 30 días.
+- Paso nuevo «Venta»: lo marca el comercial cuando la financiera aprueba o el cliente paga (columna `venta_marcada`), o sale solo si la operación ya está en trámite o más allá. Firmada o en estudio de financiación aún no cuenta. KPI de ventas y filtro «Sin venta».
 
 ## 10/11/2026 · Seguimiento de operaciones editable y copia editable del Excel
 

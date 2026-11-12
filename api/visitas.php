@@ -3,7 +3,7 @@
  * visitas.php — «Mis visitas» (12/11/2026, petición de Nando).
  *
  * Una pestaña muy visual para los comerciales: las visitas que tenían en las
- * dos últimas semanas, de la más nueva a la más antigua, y en cada una se ve y
+ * últimos 30 días, de la más nueva a la más antigua, y en cada una se ve y
  * se marca si hubo sentada, si el proyecto está hecho y si se envió; y se
  * apunta qué ha dicho el cliente (con fecha), cuál es la siguiente acción y
  * el estado de la operación.
@@ -77,18 +77,22 @@ function filaVisita_(array $cap, array $cli, array $proys, array $segs, array $a
     'enviado_auto' => $estP === 'enviado',
     'proy' => proyectoVisita_($proy, $archs[(string)$cli['id']] ?? []),
     'enviado' => $estP === 'enviado' || txt_($cap['proyecto_enviado'] ?? '') !== '',
+    /* venta: marcada a mano en la cita, o la operación ya pasó de firmada/financiación (aprobada o pagando) */
+    'venta_auto' => $op !== null && in_array(normal_($op['estado'] ?? ''), ['tramite', 'material', 'instalacion', 'instalada', 'legalizada', 'cerrada'], true),
+    'venta' => txt_($cap['venta_marcada'] ?? '') !== ''
+      || ($op !== null && in_array(normal_($op['estado'] ?? ''), ['tramite', 'material', 'instalacion', 'instalada', 'legalizada', 'cerrada'], true)),
     'operacion' => $op ? ['id' => $op['id'], 'estado' => txt_($op['estado'])] : null,
     'ultimo' => $ult ? ['fecha' => txt_($ult['fecha']), 'nota' => txt_($ult['nota']), 'proximo_paso' => txt_($ult['proximo_paso']),
                         'proxima_fecha' => txt_($ult['proxima_fecha']), 'quien' => txt_($ult['usuario_id'])] : null,
   ];
 }
 
-/** Las visitas de los últimos `dias` (14 por defecto), la más nueva primero. */
+/** Las visitas de los últimos `dias` (30 por defecto), la más nueva primero. */
 function accVisitasRecientes_(array $u, array $p): array {
   $per = permisos_($u);
   $direccion = ($per['alcance'] ?? '') === 'todo';
   if (!$direccion && ($u['rol'] ?? '') !== 'comercial') return ['ok' => false, 'error' => 'Esta pestaña es de los comerciales.'];
-  $dias = max(1, min(60, (int)($p['dias'] ?? 14)));
+  $dias = max(1, min(60, (int)($p['dias'] ?? 30)));
   $hoy = hoyISO_();
   $desde = (new DateTime($hoy))->modify('-' . $dias . ' days')->format('Y-m-d');
   $quien = $direccion ? txt_($p['comercial_id'] ?? '') : (string)$u['id'];
@@ -143,6 +147,14 @@ function accVisitaMarcar_(array $u, array $p): array {
       actualizar_('CLIENTES', $cli['id'], ['estado' => 'sentada', 'modificado' => ahora_(), 'modificado_por' => $u['id']]);
     }
     registrar_($u, 'visita_sentada', 'CAPTACIONES', $cap['id'], $res);
+  } elseif ($campo === 'venta') {
+    /* La venta solo cuenta cuando la financiera la aprueba o el cliente paga: va en su propia marca. */
+    actualizar_('CAPTACIONES', $cap['id'], ['venta_marcada' => $valor ? ahora_() : '',
+      'resultado' => $valor ? 'venta' : (normal_($cap['resultado'] ?? '') === 'venta' ? 'sentada' : txt_($cap['resultado'] ?? '')), 'fecha_resultado' => hoyISO_()]);
+    if ($valor && in_array(normal_($cli['estado'] ?? ''), ['', 'nuevo', 'captado', 'cita', 'sentada', 'propuesta'], true)) {
+      actualizar_('CLIENTES', $cli['id'], ['estado' => 'ganado', 'modificado' => ahora_(), 'modificado_por' => $u['id']]);
+    }
+    registrar_($u, 'visita_venta', 'CAPTACIONES', $cap['id'], $valor ? 'venta' : 'no');
   } elseif ($campo === 'proyecto') {
     actualizar_('CAPTACIONES', $cap['id'], ['proyecto_creado' => $valor ? ahora_() : '']);
     registrar_($u, 'visita_proyecto', 'CAPTACIONES', $cap['id'], $valor ? 'hecho' : 'no');

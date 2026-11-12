@@ -1,6 +1,6 @@
 /* vistas/visitas.js — «Mis visitas» (12/11/2026, petición de Nando).
  *
- * Las visitas de las dos últimas semanas, de la más nueva a la más antigua.
+ * Las visitas de los últimos 30 días, de la más nueva a la más antigua.
  * En cada una, de un vistazo y con un toque: ¿hubo sentada?, ¿proyecto
  * hecho?, ¿proyecto enviado? Y debajo, qué ha dicho el cliente (con fecha),
  * la siguiente acción y el estado de la operación. Pulsando en el cliente o
@@ -56,7 +56,7 @@ export async function vistaVisitas({ir}) {
 
   async function cargar() {
     try {
-      const r = await api.visitasRecientes(14, comercial);
+      const r = await api.visitasRecientes(30, comercial);
       lista = r.visitas || [];
       pinta();
     } catch (e) { poner(caja, h('p.nota', 'No se han podido cargar las visitas: ' + e.message)); }
@@ -68,6 +68,7 @@ export async function vistaVisitas({ir}) {
     ['sentada', 'Sin marcar sentada', v => v.sentada === null],
     ['proyecto', 'Sin proyecto', v => v.sentada !== false && !v.proyecto],
     ['enviar', 'Sin enviar', v => v.proyecto && !v.enviado],
+    ['venta', 'Sin venta', v => v.sentada !== false && !v.venta],
     ['apunte', 'Sin apunte del cliente', v => v.sentada !== false && sinApunte(v)]
   ];
 
@@ -76,6 +77,7 @@ export async function vistaVisitas({ir}) {
     const sent = lista.filter(v => v.sentada === true).length;
     const proy = lista.filter(v => v.proyecto).length;
     const env = lista.filter(v => v.enviado).length;
+    const vent = lista.filter(v => v.venta).length;
     const pend = lista.filter(v => v.sentada !== false && sinApunte(v)).length;
     const tarj = (valor, et, total, clase) => {
       const p = total ? Math.round(valor / total * 100) : 0;
@@ -85,10 +87,11 @@ export async function vistaVisitas({ir}) {
         total !== null ? h('div.vis-barra', h('i', {estilo: {width: p + '%'}})) : null);
     };
     return h('div.vis-kpis',
-      tarj(n, 'visitas en 14 días', null),
+      tarj(n, 'visitas en 30 días', null),
       tarj(sent, 'sentadas', n),
       tarj(proy, 'proyectos hechos', sent || n),
       tarj(env, 'proyectos enviados', proy || n),
+      tarj(vent, 'ventas', sent || n, vent ? 'bien' : ''),
       tarj(pend, 'sin apuntar qué dijo el cliente', null, pend ? 'alerta' : 'bien'));
   }
 
@@ -195,7 +198,12 @@ export async function vistaVisitas({ir}) {
         paso('Enviado al cliente', '✉', v.enviado ? true : null, () => {
           if (v.enviado_auto && !direccion) return aviso('Ya consta como enviado en el CRM.');
           marcar('enviado', !v.enviado);
-        }, {auto: v.enviado_auto, titulo: 'Márcalo cuando le hayas mandado el proyecto al cliente'}));
+        }, {auto: v.enviado_auto, titulo: 'Márcalo cuando le hayas mandado el proyecto al cliente'}),
+        h('span.vis-linea' + (v.venta ? '.ok' : '')),
+        paso('Venta', '€', v.venta ? true : null, () => {
+          if (v.venta_auto) return aviso('La operación ya está aprobada o en marcha: cuenta como venta.');
+          marcar('venta', !v.venta);
+        }, {auto: v.venta_auto, titulo: 'Márcalo cuando la financiera la apruebe o el cliente pague'}));
 
       const ops = api.opciones('estadosOperacion');
       const sel = h('select.vis-sel', h('option', {value: ''}, v.operacion ? '— sin cambiar —' : '— elige —'),
@@ -272,10 +280,10 @@ export async function vistaVisitas({ir}) {
       grupos.push(tarjetaVisita(v));
     });
     poner(caja,
-      h('p.nota.vis-intro', 'Tus visitas de las dos últimas semanas, la más nueva arriba. Marca con un toque si hubo sentada, si el proyecto está hecho y si se lo has enviado, y apunta qué te ha dicho el cliente. Pulsa en el nombre o en la dirección para abrir su ficha.'),
+      h('p.nota.vis-intro', 'Tus visitas de los últimos 30 días, la más nueva arriba. Marca con un toque si hubo sentada, si el proyecto está hecho, si se lo has enviado y si acabó en venta, y apunta qué te ha dicho el cliente. Pulsa en el nombre o en la dirección para abrir su ficha.'),
       cab,
       h('div.vis-barra-filtros', chips, selCom),
-      vis.length ? h('div.vis-lista', grupos) : h('p.nota.vis-vacio', lista.length ? 'Nada pendiente en este filtro. ¡Bien!' : 'No tienes visitas en las dos últimas semanas.'));
+      vis.length ? h('div.vis-lista', grupos) : h('p.nota.vis-vacio', lista.length ? 'Nada pendiente en este filtro. ¡Bien!' : 'No tienes visitas en los últimos 30 días.'));
   }
 
   cargar();
