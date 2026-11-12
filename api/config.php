@@ -76,7 +76,7 @@ const ESQUEMA = [
   "FACTURAS" => ['id', 'numero', 'operacion_id', 'cliente_id', 'fecha_emision', 'concepto', 'base', 'iva_pct', 'iva', 'total', 'estado', 'fecha_vencimiento', 'fecha_cobro', 'url', 'emitida_por', 'notas'],
   "GASTOS" => ['id', 'operacion_id', 'categoria', 'proveedor', 'concepto', 'importe', 'iva_pct', 'fecha', 'estado_pago', 'fecha_pago', 'factura_proveedor', 'creado', 'creado_por', 'notas'],
   "SEGUIMIENTO" => ['id', 'cliente_id', 'operacion_id', 'usuario_id', 'fecha', 'canal', 'nota', 'proximo_paso', 'proxima_fecha', 'estado_resultante', 'origen', 'creado'],
-  "CAPTACIONES" => ['id', 'cliente_id', 'captador_id', 'fecha', 'hora_cita', 'estado_cita', 'tecnologia', 'comercial_id', 'resultado', 'fecha_resultado', 'operacion_id', 'interes', 'notas', 'volver_llamar', 'creado'],
+  "CAPTACIONES" => ['id', 'cliente_id', 'captador_id', 'fecha', 'hora_cita', 'estado_cita', 'tecnologia', 'comercial_id', 'resultado', 'fecha_resultado', 'operacion_id', 'interes', 'notas', 'volver_llamar', 'creado', 'proyecto_creado', 'proyecto_enviado'],
   /* 02/11/2026: cada cita reagendada o cancelada (estadísticas) y el histórico de cambios de cada lead. */
   "CITAS_CAMBIOS" => ['id', 'captacion_id', 'cliente_id', 'captador_id', 'comercial_id', 'tipo', 'fecha_antes', 'hora_antes', 'fecha_nueva', 'hora_nueva', 'motivo', 'usuario_id', 'creado'],
   "CAMBIOS" => ['id', 'fecha', 'usuario_id', 'cliente_id', 'entidad', 'entidad_id', 'campo', 'antes', 'despues'],

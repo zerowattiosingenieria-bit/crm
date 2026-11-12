@@ -1395,3 +1395,11 @@ _Sin más detalle._
 
 ## 10/11/2026 · Seguimiento de operaciones (Rubén)
 - Nueva pantalla «Seguimiento de operaciones» (solo dirección): lee las pestañas CORREOS-WHATSSAP y DOCUMENTACIÓN PROYECTOS del Excel «SEGUIMIENTO OPERACIONES ZERO WATTIOS BUENO» (Drive, solo lectura, caché 10 min, botón Actualizar). Contadores, pastillas de lo que falta por check (filtran), matriz de checks con avance por bloque y siguiente paso. No muestra DNI, teléfono ni email.
+
+## 12/11/2026 · Pestaña «Mis visitas» (petición de Nando)
+- Nueva pantalla `#visitas` para comerciales («Mis visitas») y dirección («Visitas de los comerciales», con filtro por comercial).
+- Visitas de las dos últimas semanas, de la más nueva a la más antigua, agrupadas por día.
+- En cada visita, tres botones grandes: sentada (sin marcar → sí → no llegó), proyecto hecho y enviado al cliente. Hecho/enviado salen solos del proyecto del CRM; si se hizo fuera, se marcan a mano (columnas nuevas `CAPTACIONES.proyecto_creado` y `proyecto_enviado`).
+- Campo «¿Qué te ha dicho el cliente?» con fecha, «Siguiente acción» con fecha y desplegable de estado de la operación: se guarda como contacto del historial (SEGUIMIENTO, mueve la próxima acción de la ficha) y el estado en la operación sin tocar importes (si no hay operación, se crea).
+- Pulsar en el nombre o la dirección abre la ficha del cliente. Resumen arriba (visitas, sentadas, proyectos, enviados, sin apuntar) y filtros rápidos.
+- Backend: `api/visitas.php` (visitasRecientes, visitaMarcar, visitaApunte). Pruebas contra MariaDB local: 16/16.

@@ -14,6 +14,7 @@ import {vistaIncidencias, vistaAvisarIncidencia} from './vistas/incidencias.js';
 import {vistaTramites, veTramites} from './vistas/tramites.js';
 import {vistaSubcontratas, vistaCuentasPortal} from './vistas/subcontratas.js';
 import {vistaSeguimiento} from './vistas/seguimiento.js';
+import {vistaVisitas} from './vistas/visitas.js';
 import {vistaMapa} from './vistas/mapa.js';
 import {vistaDirectorio} from './vistas/directorio.js';
 import {vistaContabilidad, vistaFacturas, vistaGastos, vistaCobros} from './vistas/finanzas.js';
@@ -44,6 +45,7 @@ const VISTAS = {
   panel:        {titulo: 'Panel',              pinta: vistaPanel},
   tablero:      {titulo: 'Mi tablero',         pinta: vistaTablero},
   agenda:       {titulo: 'Agenda',             pinta: vistaAgenda},
+  visitas:      {titulo: 'Mis visitas',        pinta: vistaVisitas},
   clientes:     {titulo: 'Clientes',           pinta: vistaClientes},
   cliente:      {titulo: 'Ficha de cliente',   pinta: vistaCliente},
   operaciones:  {titulo: 'Instalaciones',      pinta: vistaOperaciones},
@@ -114,6 +116,7 @@ function menuDe(rol) {
       {id: 'panel', et: 'Panel', ico: '▦'},
       {id: 'tablero', et: 'Mi tablero', ico: '◑'},
       {id: 'agenda', et: 'Agenda', ico: '◷'},
+      {id: 'visitas', et: 'Mis visitas', ico: '✔'},
       {id: 'clientes', et: 'Mis clientes', ico: '☰'},
       {id: 'visor', et: 'Visor 3D', ico: '⌂'},
       {id: 'cotizador', et: 'Cotizador', ico: '€'},
@@ -137,6 +140,7 @@ function menuDe(rol) {
     {id: 'tablero', et: etiquetaTablero(), ico: '◑'},
     {id: 'incidencias', et: 'Incidencias', ico: '⚠'},
     {id: 'agenda', et: 'Agenda', ico: '◷'},
+    {id: 'visitas', et: 'Visitas de los comerciales', ico: '✔'},
     {id: 'clientes', et: 'Clientes', ico: '☰'},
     {id: 'visor', et: 'Visor 3D', ico: '⌂'},
     {id: 'cotizador', et: 'Cotizador', ico: '€'},
@@ -183,8 +187,8 @@ function rutaActual() {
 const K_MENU = 'zw.crm.menuSimple';
 const MENU_CORTO = {
   captador: ['hoy', 'agenda', 'captaciones', 'estadisticas', 'clientes', 'parte', 'tramites', 'avisar', 'perfil'],
-  comercial: ['hoy', 'agenda', 'clientes', 'visor', 'cotizador', 'operaciones', 'parte', 'avisar', 'perfil'],
-  otro: ['hoy', 'panel', 'tablero', 'incidencias', 'agenda', 'clientes', 'operaciones', 'seguimiento', 'subcontratas', 'tramites', 'captaciones', 'estadisticas', 'cobros', 'banco', 'perfil']
+  comercial: ['hoy', 'agenda', 'visitas', 'clientes', 'visor', 'cotizador', 'operaciones', 'parte', 'avisar', 'perfil'],
+  otro: ['hoy', 'panel', 'tablero', 'incidencias', 'agenda', 'visitas', 'clientes', 'operaciones', 'seguimiento', 'subcontratas', 'tramites', 'captaciones', 'estadisticas', 'cobros', 'banco', 'perfil']
 };
 const menuCorto = () => { try { return localStorage.getItem(K_MENU) === '1'; } catch (e) { return false; } };
 
@@ -288,7 +292,7 @@ export async function pintar() {
   const {vista, id} = rutaActual();
   const def = VISTAS[vista] || VISTAS.panel;
 
-  $('#titulo').textContent = vista === 'tablero' ? tituloTablero(api.estado.usuario) : def.titulo;
+  $('#titulo').textContent = vista === 'tablero' ? tituloTablero(api.estado.usuario) : (vista === 'visitas' && api.esDireccion() ? 'Visitas de los comerciales' : def.titulo);
   poner($('#acciones-barra'));
   pintaMenu();
 
