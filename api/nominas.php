@@ -416,6 +416,12 @@ function accDescargarNomina_(array $u, array $p): array {
     return ['ok' => false, 'error' => 'Esa nómina no es tuya.'];
   }
   if (txt_($n['archivo_id']) === '') return ['ok' => false, 'error' => 'Esa nómina todavía no tiene PDF subido.'];
+  /* Cada uno solo puede bajarse su ÚLTIMA nómina (12/11/2026, Nando). Dirección, todas. */
+  if (empty(permisos_($u)['nominasAjenas'])) {
+    $mias = array_filter(leer_('NOMINAS'), fn($x) => mismo_($x['usuario_id'], $u['id']) && txt_($x['archivo_id']) !== '');
+    usort($mias, fn($a, $b) => strcmp(periodoNomina_($b['periodo']), periodoNomina_($a['periodo'])));
+    if (!$mias || !mismo_(reset($mias)['id'], $n['id'])) return ['ok' => false, 'error' => 'Solo se puede descargar la última nómina.'];
+  }
   try { $archivo = driveDescargar_(txt_($n['archivo_id'])); }
   catch (Throwable $e) { return ['ok' => false, 'error' => 'El archivo ya no está en el Drive de la empresa.']; }
   registrar_($u, 'ver_nomina', 'NOMINAS', $n['id'], txt_($n['periodo']));

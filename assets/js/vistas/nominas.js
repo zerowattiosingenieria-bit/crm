@@ -55,7 +55,9 @@ function pinta(d, est, puedeOtras, recargar, ir) {
   const lista = (d.nominas || [])
     .filter(n => !est.anio || txt(n.periodo).startsWith(est.anio))
     .filter(n => puedeOtras || txt(n.archivo_id))
-    .sort((a, b) => txt(b.periodo).localeCompare(txt(a.periodo)));
+    .sort((a, b) => txt(b.periodo).localeCompare(txt(a.periodo)))
+    /* Cada uno solo se descarga su última nómina (12/11/2026); dirección las ve todas. */
+    .slice(0, puedeOtras ? undefined : 1);
 
   const t = tabla([
     {clave: 'periodo', et: 'Mes', pinta: n => h('b', mesLargoCompleto(n.periodo))},
@@ -81,8 +83,8 @@ function pinta(d, est, puedeOtras, recargar, ir) {
       borderRadius: '6px', margin: '0 0 14px', fontWeight: '600'}},
       '✓ Comisiones ajustadas hasta el periodo anterior al actual' + (hasta ? ' (hasta el ' + fechaCorta(hasta) + ' incluido).' : '.')),
     estimacion(p),
-    tarjeta('Mis nóminas', t, {sinRelleno: true,
-      subtitulo: 'Pulsa «Descargar PDF» para bajarte la de ese mes',
+    tarjeta(puedeOtras ? 'Nóminas' : 'Mi última nómina', t, {sinRelleno: true,
+      subtitulo: puedeOtras ? 'Cada persona solo puede descargarse su última nómina' : 'Tu última nómina: pulsa «Descargar PDF» para bajártela',
       acciones: puedeOtras
         ? [h('button.btn.mini.primario', {onclick: () => subir(p.id, recargar)}, '+ Subir nómina')]
         : null}));

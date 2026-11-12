@@ -15,6 +15,7 @@ luego no hay manera de reconstruir.
 - Estimación de comisiones del periodo en curso (16→15) con los clientes de los que vienen, por qué, fecha de firma, estado y comisión; las firmadas sin aprobar se marcan aparte. Acción `estimacionComisiones` (cada uno la suya, dirección la de todos). Sin importes de venta.
 - Botón «⚠ Reportar un error» en la estimación: hueco para el comentario y le llega por correo a Nando (`avisos_nominas_a`) con la estimación que se estaba viendo.
 - Listado «✓ Ya comisionadas»: solo cliente y dirección de todo lo comisionado hasta el corte, sin fechas ni importes.
+- Cada persona solo puede descargarse su ÚLTIMA nómina (también comprobado en el servidor); dirección las sigue viendo todas.
 - Aviso fijo: «Comisiones ajustadas hasta el periodo anterior al actual (hasta el 15/10/26 incluido)», sale de `comisiones_pagadas_hasta`.
 
 ## 12/11/2026 · Comisiones ya pagadas y captador por recomendación
