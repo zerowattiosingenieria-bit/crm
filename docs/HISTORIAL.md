@@ -9,6 +9,13 @@ luego no hay manera de reconstruir.
 
 
 
+## 12/11/2026 · Calendario de instalaciones
+
+- Pestaña nueva «Calendario de instalaciones» (vista mes y lista): obras de cada instalador (FV en lima, aerotermia en azul; discontinua si aún no ha empezado) con su avance, fases hechas el día que se marcaron, lo que queda por hacer con fecha (en rojo si va atrasado), visitas de instaladores, instalación prevista sin instalador asignado, firma, instalada y legalizada.
+- Al pulsar cualquier cosa: la instalación entera (qué se instala, quién, fases, pendientes, visitas e hitos).
+- Dirección ve todas y puede filtrar por comercial; cada comercial solo sus operaciones. Sin importes.
+- Acción `calendarioInstalaciones` (api/calinstalaciones.php).
+
 ## 12/11/2026 · Los comentarios de «Mis visitas» actualizan los estados solos
 
 - Al guardar un apunte, el CRM lee el comentario y actualiza: operación (firmada, financiación en estudio, aprobada → en trámite, cancelada), cliente (negociando), sentada (no se presentó) y proyecto enviado (con su llamada a la semana). Si el cliente dice que ha pagado, se avisa a dirección para que compruebe y apunte el cobro.

@@ -159,7 +159,7 @@ function acciones_(): array {
     'syncContabilidad' => 'accSyncContabilidad_',
     /* Panel de seguimiento de operaciones: checks del Excel de Rubén (seguimiento.php, 10/11/2026) */
     'seguimientoOperaciones' => 'accSeguimientoOperaciones_', 'seguimientoCambiar' => 'accSeguimientoCambiar_',
-    'visitasRecientes' => 'accVisitasRecientes_', 'visitaMarcar' => 'accVisitaMarcar_', 'visitaProyecto' => 'accVisitaProyecto_', 'revisarComentariosVisitas' => 'accRevisarComentariosVisitas_',
+    'visitasRecientes' => 'accVisitasRecientes_', 'visitaMarcar' => 'accVisitaMarcar_', 'visitaProyecto' => 'accVisitaProyecto_', 'calendarioInstalaciones' => 'accCalendarioInstalaciones_', 'revisarComentariosVisitas' => 'accRevisarComentariosVisitas_',
     'visitaApunte' => 'accVisitaApunte_',
     /* Apps de clientes y subcontratas, lado CRM (portal.php, 10/11/2026) */
     'cuentasPortal' => 'accCuentasPortal_', 'guardarCuentaPortal' => 'accGuardarCuentaPortal_', 'verComoPortal' => 'accVerComoPortal_',

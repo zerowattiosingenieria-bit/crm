@@ -29,7 +29,7 @@ if (empty($GLOBALS['ZW_DB_CFG']) && !($GLOBALS['ZW_DB'] ?? null)) {
 /* Los módulos, en el mismo orden que en Apps Script. */
 foreach (['auth', 'registro', 'clientes', 'finanzas', 'partes', 'resumen', 'nominas', 'mapa', 'api',
           'vacaciones', 'backup', 'banco', 'resumen_semanal', 'importar', 'directorio', 'proyectos',
-          'tablero', 'mejoras', 'ficha', 'recordatorios', 'estadisticas', 'historial', 'incidencias', 'tramites', 'seguimiento', 'visitas', 'portal', 'instalar'] as $m) {
+          'tablero', 'mejoras', 'ficha', 'recordatorios', 'estadisticas', 'historial', 'incidencias', 'tramites', 'seguimiento', 'visitas', 'portal', 'calinstalaciones', 'instalar'] as $m) {
   $f = __DIR__ . '/' . $m . '.php';
   if (is_file($f)) require_once $f;
 }
