@@ -9,6 +9,11 @@ luego no hay manera de reconstruir.
 
 
 
+## 12/11/2026 · Nóminas: solo los PDF
+
+- La pantalla de Nóminas solo enseña los meses con su botón «Descargar PDF»: sin importes, KPIs ni devengo día a día. Dirección sigue pudiendo subir, corregir y borrar.
+- Aviso fijo: «Comisiones ajustadas hasta el periodo anterior al actual (hasta el 15/10/26 incluido)», sale de `comisiones_pagadas_hasta`.
+
 ## 12/11/2026 · Comisiones ya pagadas y captador por recomendación
 
 - Nóminas: todo lo anterior al periodo actual (comisiones hasta el 15/10/2026 incluido) sale marcado «✓ Comisionado» para todo el equipo: en el día a día, en el KPI de comisiones (ya comisionado / pendiente) y en las nóminas de octubre y anteriores. Solo es una marca: no cambia importes ni reglas. Se mueve con la configuración `comisiones_pagadas_hasta`.

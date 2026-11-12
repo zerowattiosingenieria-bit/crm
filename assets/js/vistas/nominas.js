@@ -1,8 +1,8 @@
 /* vistas/nominas.js — nóminas.
  *
- * Lo principal es sencillo: Rubén y Fernando suben cada mes el PDF de la
- * nómina de cada persona, y cada uno consulta las suyas por meses. Debajo,
- * para quien lo quiera, queda el devengo día a día calculado por el CRM.
+ * Rubén y Fernando suben cada mes el PDF de la nómina de cada persona y
+ * cada uno se descarga las suyas. Solo eso (12/11/2026): sin importes ni
+ * devengo; y el aviso de comisiones ajustadas hasta el periodo anterior.
  */
 
 import {h, poner, txt, num, eur, eur2, miles, pct, fechaCorta, fechaLarga, mesLargo,
@@ -44,42 +44,24 @@ export async function vistaNomina({id, ir, refrescar}) {
   return caja;
 }
 
-/* ---------- pantalla ---------- */
+/* ---------- pantalla ----------
+ * 12/11/2026, Nando: «en la parte de nóminas solo muestra los PDF de las
+ * nóminas para que se las puedan descargar, no des más detalles», y un aviso
+ * de que las comisiones están ajustadas hasta el periodo anterior al actual.
+ * Nada de importes, KPIs ni devengo día a día. Dirección conserva subir,
+ * corregir y borrar, que es como llegan los PDF. */
 function pinta(d, est, puedeOtras, recargar, ir) {
   const p = d.persona;
   const lista = (d.nominas || [])
     .filter(n => !est.anio || txt(n.periodo).startsWith(est.anio))
+    .filter(n => puedeOtras || txt(n.archivo_id))
     .sort((a, b) => txt(b.periodo).localeCompare(txt(a.periodo)));
 
-  const conPdf = lista.filter(n => txt(n.archivo_id));
-  const cobradas = lista.filter(n => txt(n.estado) === 'pagada');
-
   const t = tabla([
-    {clave: 'periodo', et: 'Mes', pinta: n => h('div', h('b', mesLargoCompleto(n.periodo)),
-      txt(n.subida_fecha) ? h('div.nota', 'subida ' + fechaCorta(txt(n.subida_fecha).slice(0, 10))) : null)},
-    {clave: 'bruto_total', et: 'Devengado', num: true, valor: n => num(n.bruto_total),
-     pinta: n => num(n.bruto_total) ? h('div', eur2(n.bruto_total),
-       desglose(n) ? h('div.nota', desglose(n)) : null) : '—'},
-    {clave: 'irpf', et: 'IRPF', num: true, valor: n => num(n.irpf),
-     pinta: n => num(n.bruto_total) ? h('div', eur2(n.irpf),
-       num(n.irpf_pct) ? h('div.nota', pct(num(n.irpf_pct))) : null) : '—'},
-    {clave: 'ss', et: 'Seg. Social', num: true, valor: n => num(n.ss),
-     pinta: n => num(n.bruto_total) ? eur2(n.ss) : '—'},
-    {clave: 'otras', et: 'Otras deducc.', num: true, valor: n => otrasDeducciones(n),
-     pinta: n => otrasDeducciones(n) ? h('div', eur2(otrasDeducciones(n)),
-       h('div.nota', textoOtras(n))) : '—'},
-    {clave: 'neto', et: 'Neto', num: true, valor: n => num(n.neto),
-     pinta: n => num(n.neto) ? h('b', eur2(n.neto)) : '—'},
-    puedeOtras ? {clave: 'coste', et: 'Coste empresa', num: true, valor: n => num(detalle(n).coste_empresa),
-     pinta: n => num(detalle(n).coste_empresa) ? h('div', eur2(detalle(n).coste_empresa),
-       h('div.nota', 'SS empresa ' + eur2(detalle(n).ss_empresa || 0))) : '—'} : null,
-    {clave: 'estado', et: 'Estado', pinta: n => etiquetaEstado(
-      txt(n.estado) === 'pagada' ? 'ganado' : 'pendiente', capital(txt(n.estado) || 'pendiente'))},
-    {clave: 'fecha_pago', et: 'Pagada el', pinta: n => txt(n.fecha_pago) ? fechaCorta(n.fecha_pago) : '—'},
-    {clave: 'notas', et: 'Notas', noOrden: true, pinta: n => txt(n.notas) ? h('span.nota', n.notas) : '—'},
+    {clave: 'periodo', et: 'Mes', pinta: n => h('b', mesLargoCompleto(n.periodo))},
     {clave: 'acciones', et: '', noOrden: true, pinta: n => h('.acciones',
       txt(n.archivo_id)
-        ? h('button.btn.mini.lima', {onclick: e => descargar(n, e.target)}, 'Ver PDF')
+        ? h('button.btn.mini.lima', {onclick: e => descargar(n, e.target)}, '⤓ Descargar PDF')
         : h('span.nota', 'sin PDF'),
       puedeOtras ? h('button.btn.mini', {onclick: () => editar(n, recargar)}, 'Editar') : null,
       puedeOtras ? h('button.btn.mini.peligro', {onclick: async () => {
@@ -88,74 +70,21 @@ function pinta(d, est, puedeOtras, recargar, ir) {
         try { await api.pedir('borrarNomina', {id: n.id}); aviso('Nómina borrada.'); await recargar(); }
         catch (e) { avisoError(e); }
       }}, 'Borrar') : null)}
-  ].filter(Boolean), lista, {csv: 'nominas.csv', vacio: puedeOtras
+  ], lista, {vacio: puedeOtras
     ? 'Todavía no hay nóminas subidas para esta persona.'
     : 'Todavía no te han subido ninguna nómina. En cuanto lo hagan, aparecerá aquí.'});
 
-  const ultima = lista[0];
-  const suma = c => lista.reduce((a, n) => a + num(n[c]), 0);
-  const costeAnio = lista.reduce((a, n) => a + num(detalle(n).coste_empresa), 0);
-
+  const hasta = txt(d.comisionado_hasta);
   return h('div',
-    h('div', {estilo: {marginBottom: '14px'}},
-      h('h2', p.nombre),
-      h('p.nota', capital(p.rol) +
-        (txt(p.fecha_alta) ? ' · alta el ' + fechaLarga(p.fecha_alta) : ''))),
-
-    kpis(
-      kpi('Nóminas disponibles', miles(conPdf.length), est.anio ? 'en ' + est.anio : 'en total',
-        {destacado: true}),
-      kpi('Última', ultima ? mesLargoCompleto(ultima.periodo) : '—',
-        ultima && num(ultima.neto) ? eur2(ultima.neto) + ' netos' : 'sin importe apuntado'),
-      kpi('Pagadas', miles(cobradas.length), 'marcadas como pagadas'),
-      suma('bruto_total') ? kpi('Devengado', eur(suma('bruto_total')),
-        eur(suma('neto')) + ' netos · ' + eur(suma('irpf')) + ' de IRPF') : null,
-      puedeOtras && costeAnio ? kpi('Coste para la empresa', eur(costeAnio),
-        'devengado + Seguridad Social de la empresa') : null,
-      p.salario_bruto !== undefined
-        ? kpi('Sueldo bruto', eur(p.salario_bruto), eur(p.dietas_mes) + ' de dietas')
-        : null
-    ),
-
+    h('div', {estilo: {marginBottom: '12px'}}, h('h2', p.nombre)),
+    h('p', {estilo: {background: 'var(--bien-b)', borderLeft: '4px solid var(--lima-osc)', padding: '10px 14px',
+      borderRadius: '6px', margin: '0 0 14px', fontWeight: '600'}},
+      '✓ Comisiones ajustadas hasta el periodo anterior al actual' + (hasta ? ' (hasta el ' + fechaCorta(hasta) + ' incluido).' : '.')),
     tarjeta('Mis nóminas', t, {sinRelleno: true,
-      subtitulo: 'Pulsa "Ver PDF" para abrir la de ese mes',
+      subtitulo: 'Pulsa «Descargar PDF» para bajarte la de ese mes',
       acciones: puedeOtras
         ? [h('button.btn.mini.primario', {onclick: () => subir(p.id, recargar)}, '+ Subir nómina')]
-        : null}),
-
-    h('details', {estilo: {marginTop: '4px'}},
-      h('summary', {estilo: {cursor: 'pointer', padding: '12px 4px', fontWeight: '600',
-        fontSize: '14px', color: 'var(--tx-2)'}},
-        'Ver el devengo día a día que calcula el CRM'),
-      h('div', {estilo: {paddingTop: '8px'}}, devengo(p, ir)))
-  );
-}
-
-/* Lo que la gestoría pone en la nómina y no tiene columna propia. */
-function detalle(n) {
-  if (n._det) return n._det;
-  let d = {};
-  try { d = JSON.parse(txt(n.detalle) || '{}') || {}; } catch (e) { d = {}; }
-  n._det = d;
-  return d;
-}
-function desglose(n) {
-  const partes = [];
-  if (num(n.comisiones)) partes.push('comisiones ' + eur2(n.comisiones) + (n.comisionado ? ' (✓ comisionado)' : ''));
-  if (num(n.dietas)) partes.push('dietas ' + eur2(n.dietas));
-  return partes.join(' · ');
-}
-function otrasDeducciones(n) {
-  const d = detalle(n);
-  return num(d.especie) + num(d.embargo) + num(d.otras);
-}
-function textoOtras(n) {
-  const d = detalle(n);
-  const partes = [];
-  if (num(d.especie)) partes.push('especie ' + eur2(d.especie));
-  if (num(d.embargo)) partes.push('embargo ' + eur2(d.embargo));
-  if (num(d.otras)) partes.push('otras ' + eur2(d.otras));
-  return partes.join(' · ');
+        : null}));
 }
 
 function mesLargoCompleto(periodo) {
