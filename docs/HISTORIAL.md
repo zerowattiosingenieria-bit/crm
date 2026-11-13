@@ -1453,5 +1453,5 @@ _Sin más detalle._
 
 ## 13/11/2026 · Monitorización de plantas SolaX Cloud
 - Tabla nueva `MONITOREO`: una lectura por planta y día (estado, red, kWp, batería, generación del día, carga/descarga, incidencia y recomendación).
-- `importarMonitorizacion` (solo dirección): la tarea diaria manda las plantas de global.solaxcloud.com; cada planta se enlaza con su cliente por la dirección, por el nombre o por un mapa fijo (`SOLAX_MAPA`).
+- `importarMonitorizacion` (solo dirección): la tarea diaria manda las plantas de global.solaxcloud.com; cada planta se enlaza con su cliente por la dirección (primero entre los proyectos firmados; si no encaja, la calle más próxima de un proyecto firmado, como pidió Nando), por el nombre o por un mapa fijo (`SOLAX_MAPA`).
 - `monitorizacionCliente` y la tarjeta **Monitorización SolaX** en la ficha del cliente: última lectura, generación de hoy, 7 y 30 días (kWh/kWp), batería, incidencia y recomendación, e incidencias anteriores. Solo aparece si el cliente tiene planta.
