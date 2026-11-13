@@ -520,25 +520,46 @@ function tarjetaMonitorizacion(c) {
     t.style.display = '';
     const u = L[0], n = v => (v === '' || v === null || v === undefined) ? null : Number(v);
     const fmt = v => n(v) === null ? '—' : num(n(v)).toLocaleString('es-ES', {maximumFractionDigits: 1});
-    const suma = dias => { const lim = new Date(Date.now() - dias * 864e5).toISOString().slice(0, 10);
-      return L.filter(x => x.fecha >= lim && n(x.gen_dia) !== null).reduce((a, x) => a + n(x.gen_dia), 0); };
+    /* 13/11/2026 (Nando): 7 y 30 días salían igual que «hoy» porque solo había una lectura.
+       Se calcula con lecturas reales: diferencia de la producción total de SolaX entre la
+       última lectura y la de hace N días (o suma diaria si faltan totales). Si el histórico
+       aún no cubre el periodo, se dice desde cuándo hay datos en vez de inventar la cifra. */
+    const dia0 = L[L.length - 1].fecha;
+    const periodo = dias => {
+      const lim = new Date(new Date(u.fecha + 'T12:00:00').getTime() - dias * 864e5).toISOString().slice(0, 10);
+      const ant = L.filter(x => x.fecha <= lim);
+      if (!ant.length) {
+        const nd = new Set(L.map(x => x.fecha)).size;
+        return {v: null, txt: 'aún sin datos suficientes · ' + nd + (nd === 1 ? ' día registrado' : ' días registrados') + ' (desde ' + fechaCorta(dia0) + ')'};
+      }
+      const enVentana = L.filter(x => x.fecha > lim && n(x.gen_dia) !== null);
+      if (new Set(enVentana.map(x => x.fecha)).size >= dias) return {v: enVentana.reduce((a, x) => a + n(x.gen_dia), 0)};
+      /* Faltan días (planta caída o sin revisión): diferencia de la producción total. */
+      const ref = ant[0];
+      if (n(u.gen_total) !== null && n(ref.gen_total) !== null && n(u.gen_total) >= n(ref.gen_total))
+        return {v: n(u.gen_total) - n(ref.gen_total)};
+      return {v: enVentana.reduce((a, x) => a + n(x.gen_dia), 0)};
+    };
+    const p7 = periodo(7), p30 = periodo(30);
     const ok = /normal/i.test(u.estado);
     const kwp = n(u.kwp);
-    const esp = kwp ? suma(30) / kwp : null;
+    const esp = kwp && p30.v !== null ? p30.v / kwp : null;
+    const conBat = n(u.bat_kwh) || n(u.carga_dia) || n(u.descarga_dia) || (n(u.soc) !== null && n(u.soc) > 0);
     poner(caja, h('div',
       h('p', h('b', ok ? '✓ ' : '⚠ '), h('b', u.estado || 'sin estado'), u.red ? ' · ' + u.red : '',
         h('span.nota', ' · lectura del ' + fechaCorta(u.fecha) + (u.planta ? ' · planta «' + u.planta + '»' : ''))),
       dato('Generación hoy', fmt(u.gen_dia) + ' kWh'),
-      dato('Últimos 7 días', fmt(suma(7)) + ' kWh'),
-      dato('Últimos 30 días', fmt(suma(30)) + ' kWh' + (esp ? ' · ' + fmt(esp) + ' kWh/kWp' : '')),
+      dato('Últimos 7 días', p7.v === null ? p7.txt : fmt(p7.v) + ' kWh'),
+      dato('Últimos 30 días', p30.v === null ? p30.txt : fmt(p30.v) + ' kWh' + (esp ? ' · ' + fmt(esp) + ' kWh/kWp' : '')),
       (n(u.carga_dia) || n(u.descarga_dia)) ? dato('Batería hoy', 'carga ' + fmt(u.carga_dia) + ' kWh · descarga ' + fmt(u.descarga_dia) + ' kWh') : null,
-      dato('Instalación', [kwp ? fmt(kwp) + ' kWp' : '', n(u.bat_kwh) ? fmt(u.bat_kwh) + ' kWh de batería' : ''].filter(Boolean).join(' · ')),
+      dato('Instalación', [kwp ? fmt(kwp) + ' kWp' : 'kWp sin configurar en SolaX',
+        n(u.bat_kwh) ? fmt(u.bat_kwh) + ' kWh de batería' : (conBat ? 'con batería (capacidad sin configurar en SolaX)' : 'sin batería')].join(' · ')),
       n(u.consumo_dia) !== null ? dato('Consumo hoy', fmt(u.consumo_dia) + ' kWh' + (n(u.importado_dia) !== null ? ' · de la red ' + fmt(u.importado_dia) + ' kWh' : '')) : null,
       n(u.importado_mes) !== null ? dato('Importado de la red este mes', fmt(u.importado_mes) + ' kWh') : null,
       n(u.autoconsumo_mes) !== null ? dato('Autoconsumo del mes', fmt(u.autoconsumo_mes) + ' %') : null,
       n(u.factura_mes_est) !== null ? dato('Factura de luz estimada este mes', fmt(u.factura_mes_est) + ' € (IVA incl.)' + (u.tarifa_luz ? ' · ' + u.tarifa_luz : '')) : null,
       n(u.gen_total) !== null ? dato('Producción total', fmt(u.gen_total) + ' kWh') : null,
-      n(u.soc) !== null && n(u.bat_kwh) ? dato('Batería ahora', fmt(u.soc) + ' %') : null,
+      n(u.soc) !== null && conBat ? dato('Batería ahora', fmt(u.soc) + ' %') : null,
       equiposMon(u.datos),
       u.incidencia ? h('p', {estilo: {color: '#C0392B', margin: '8px 0 0'}}, '⚠ ' + u.incidencia) : null,
       u.recomendacion ? h('p.nota', {estilo: {margin: '6px 0 0'}}, '💡 ' + u.recomendacion) : null,
