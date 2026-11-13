@@ -21,6 +21,61 @@ function mapaSolax_(): array {
   return is_array($m) ? $m : [];
 }
 
+/* Tarifas de luz de los clientes (Nando 13/11/2026: «todos tienen batería virtual»; la
+   compañía y tarifa salen del cambio de WIXER o de la ficha). Precios sin impuestos:
+   energía €/kWh, potencia €/kW·día (punta+valle) y compensación de excedentes €/kWh.
+   Se pueden cambiar con la propiedad TARIFAS_LUZ (JSON, misma forma). */
+const TARIFAS_LUZ_DEF = [
+  ['patron' => 'naturgy', 'nombre' => 'Naturgy · Por Uso Luz', 'energia' => 0.148, 'potencia' => 0.18459, 'compensacion' => 0.07],
+  ['patron' => 'iberdrola', 'nombre' => 'Iberdrola · Plan Especial Plus 15 %', 'energia' => 0.1274, 'potencia' => 0.197, 'compensacion' => 0.07],
+  ['patron' => '', 'nombre' => 'Tarifa media estimada', 'energia' => 0.15, 'potencia' => 0.19, 'compensacion' => 0.07],
+];
+
+function tarifasLuz_(): array {
+  $t = json_decode((string)prop_('TARIFAS_LUZ'), true);
+  return is_array($t) && $t ? $t : TARIFAS_LUZ_DEF;
+}
+
+/** Factura de luz estimada del mes (IVA incl.) a partir de lo importado en lo que va de mes,
+ *  la potencia contratada, la tarifa y lo vertido a la batería virtual. */
+function facturaLuzEst_(array $fila, array $cli, array $hoy): array {
+  $imp = $fila['importado_mes'];
+  if ($imp === '' || $imp === null || !preg_match('/normal|parcial/i', $fila['estado'] ?? '')) return ['', ''];
+  $dia = max(1, (int)substr($fila['fecha'], 8, 2));
+  $dias = (int)date('t', strtotime($fila['fecha']));
+  $comer = normal_(txt_($cli['comercializadora'] ?? ''));
+  $tar = null;
+  foreach (tarifasLuz_() as $t) { $pt = normal_(txt_($t['patron'] ?? '')); if ($pt === '' || ($comer !== '' && str_contains($comer, $pt))) { $tar = $t; break; } }
+  if (!$tar) return ['', ''];
+  $kw = (float)str_replace(',', '.', (string)($cli['potencia_contratada'] ?? '')); if ($kw <= 0) $kw = 5.75;
+  $e = (float)$imp / $dia * $dias;
+  $vert = ((float)($fila['gen_dia'] ?: 0)) * ((float)str_replace(',', '.', (string)($hoy['a_red'] ?? 0))) / 100 * $dias;
+  $base = max(0, $e * $tar['energia'] - $vert * $tar['compensacion']) + $kw * $tar['potencia'] * $dias;
+  $total = ($base * 1.0511 + 0.8) * 1.21;
+  return [round($total, 2), $tar['nombre'] . ($comer === '' ? ' (sin compañía en la ficha)' : '') . ' · ' . str_replace('.', ',', (string)$kw) . ' kW'];
+}
+
+/* La compañía, tarifa y potencia tras el cambio de WIXER (las apunta Sandra) mandan sobre
+   la ficha: así la factura estimada se actualiza sola en cuanto se rellenan. */
+function luzDeWixer_(array $cli): array {
+  static $wx = null;
+  if ($cli === []) return $cli;
+  if ($wx === null) $wx = array_values(array_filter(leer_('TRAMITES'), fn($t) => txt_($t['tipo'] ?? '') === 'wixer'));
+  $dir = normal_(txt_($cli['direccion'] ?? ''));
+  foreach ($wx as $t) {
+    $mismo = mismo_($t['cliente_id'] ?? '', $cli['id'] ?? '');
+    if (!$mismo && $dir !== '') { [$pa, $na] = calleMon_(txt_($t['direccion'] ?? '')); [$pc, $nc] = calleMon_($dir); $mismo = $pa && $pc && $na && $na === $nc && array_intersect($pa, $pc); }
+    if (!$mismo) continue;
+    $d = is_array($t['datos'] ?? null) ? $t['datos'] : (json_decode((string)($t['datos'] ?? ''), true) ?: []);
+    $comp = txt_($d['compania_cambio'] ?? '');
+    if ($comp === '' || preg_match('/pendiente|solicit/i', $comp)) continue;
+    $cli['comercializadora'] = $comp . (txt_($d['tarifa'] ?? '') !== '' ? ' · ' . txt_($d['tarifa']) : '');
+    if (preg_match_all('/(\d+(?:[.,]\d+)?)\s*kw/i', txt_($d['potencia'] ?? ''), $m) && $m[1]) $cli['potencia_contratada'] = str_replace(',', '.', end($m[1]));
+    break;
+  }
+  return $cli;
+}
+
 function clienteDePlanta_(array $d, array $clientes, array $mapa): string {
   $planta = txt_($d['planta'] ?? '');
   if (txt_($d['cliente_id'] ?? '') !== '') return txt_($d['cliente_id']);
@@ -109,6 +164,11 @@ function accImportarMonitorizacion_(array $u, array $p): array {
       $fila[$c] = (isset($d[$c]) && $d[$c] !== '' && $d[$c] !== '--' && $d[$c] !== null) ? (float)str_replace(',', '.', (string)$d[$c]) : '';
     // Datos completos del inversor, dongle, cargador y planta (JSON) tal cual salen de SolaX.
     $fila['datos'] = isset($d['datos']) ? (is_string($d['datos']) ? $d['datos'] : json_encode($d['datos'], JSON_UNESCAPED_UNICODE)) : '';
+    $dd = is_array($d['datos'] ?? null) ? $d['datos'] : (json_decode((string)($d['datos'] ?? ''), true) ?: []);
+    $cli = [];
+    foreach ($clientes as $c) if ($cid !== '' && mismo_($c['id'] ?? '', $cid)) { $cli = $c; break; }
+    $cli = luzDeWixer_($cli);
+    [$fila['factura_mes_est'], $fila['tarifa_luz']] = facturaLuzEst_($fila, $cli, $dd['hoy'] ?? []);
     $ya = null;
     foreach ($hoy as $r) if (txt_($r['planta'] ?? '') === $fila['planta']) { $ya = $r; break; }
     if ($ya) { actualizar_('MONITOREO', $ya['id'], $fila); $cambiadas++; }

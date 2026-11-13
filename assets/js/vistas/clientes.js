@@ -536,6 +536,7 @@ function tarjetaMonitorizacion(c) {
       n(u.consumo_dia) !== null ? dato('Consumo hoy', fmt(u.consumo_dia) + ' kWh' + (n(u.importado_dia) !== null ? ' · de la red ' + fmt(u.importado_dia) + ' kWh' : '')) : null,
       n(u.importado_mes) !== null ? dato('Importado de la red este mes', fmt(u.importado_mes) + ' kWh') : null,
       n(u.autoconsumo_mes) !== null ? dato('Autoconsumo del mes', fmt(u.autoconsumo_mes) + ' %') : null,
+      n(u.factura_mes_est) !== null ? dato('Factura de luz estimada este mes', fmt(u.factura_mes_est) + ' € (IVA incl.)' + (u.tarifa_luz ? ' · ' + u.tarifa_luz : '')) : null,
       n(u.gen_total) !== null ? dato('Producción total', fmt(u.gen_total) + ' kWh') : null,
       n(u.soc) !== null && n(u.bat_kwh) ? dato('Batería ahora', fmt(u.soc) + ' %') : null,
       equiposMon(u.datos),
