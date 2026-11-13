@@ -116,7 +116,7 @@ const VACIA = {
   cp: '', telefono: '', email: '', cups: '', aero: 'si', pv: 'si', bateria: 'no', cargador: 'no',
   zona: 'D', m2: 120, altura: 2.6, anyoConst: '', anyo: '1980-2007', personas: 4, banos: 2,
   caldera: 'gasoil', calderaKw: 24, emisor: 'rad_bt', suministro: 'mono', potenciaContratada: 5.75,
-  ec: 'si', refrig: 'si',
+  ec: 'si', refrig: 'si', aeroMono: '',
   gastoLuzMes: 110, gastoCombAnio: 1800, consumo: 6000, ibiAnual: 0, factorSust: 0, coberturaFV: 60,
   acsL: 0, modulo: 'trio', inerciaL: 0, distDep: 1.5, distExt: 8,
   placas: 0, tipoPlaca: '', numInversores: 1, inversor: '', tejado: 'teja',
@@ -248,6 +248,12 @@ const SECCIONES = [
      opciones: [['suelo', 'Suelo radiante'], ['rad_bt', 'Radiador baja Tª'], ['rad_at', 'Radiador tradicional'], ['fancoil', 'Fancoil']]},
     {id: 'suministro', et: 'Suministro eléctrico', tipo: 'select', vacio: false,
      opciones: [['mono', 'Monofásico 230 V'], ['tri', 'Trifásico 400 V']]},
+    /* 13/11/2026 (Nando): la Dual Clima de 22 kW solo existe en trifásica.
+       En una casa monofásica que pediría 22 kW hay que preguntar al cliente
+       si va con dos máquinas de 12 kW o con una de 19 kW. */
+    {id: 'aeroMono', et: 'Casa monofásica: la de 22 kW solo es trifásica. ¿Qué ponemos?', tipo: 'select', ancho: 2,
+     vacio: '— Pregúntaselo al cliente —', opciones: [['19', 'Una máquina de 19 kW'], ['2x12', 'Dos máquinas de 12 kW (cascada)']],
+     solo: f => conA(f) && f.suministro === 'mono' && num(f.m2) > 350},
     {id: 'potenciaContratada', et: 'Potencia contratada (kW)', tipo: 'numero', paso: '0.01'},
     {id: 'ec', et: 'Módulo wifi Easy Connect', tipo: 'select', vacio: false, opciones: SI_NO, solo: conA},
     {id: 'refrig', et: 'Refrigeración', tipo: 'select', vacio: false, opciones: SI_NO, solo: conA}
@@ -333,8 +339,13 @@ export function normalizar(f) {
 export function calcular(fEntrada) {
   const f = normalizar(fEntrada);
   const conAero = f.aero === 'si', conFV = f.pv === 'si';
-  const cascada = f.m2 > 500;
-  const kw = f.m2 <= 160 ? 12 : f.m2 <= 270 ? 16 : f.m2 <= 350 ? 19 : 22;
+  const kwTarifa = f.m2 <= 160 ? 12 : f.m2 <= 270 ? 16 : f.m2 <= 350 ? 19 : 22;
+  /* Monofásica: no hay 22 kW. Se va a una de 19 kW o a dos de 12 kW, según
+     lo que elija el cliente (sin elegir, se queda en 22 y salta el aviso). */
+  const monoSin22 = f.suministro === 'mono' && kwTarifa === 22;
+  const eleccionMono = monoSin22 ? String(f.aeroMono || '') : '';
+  const cascada = eleccionMono === '2x12' ? true : (eleccionMono === '19' ? false : f.m2 > 500);
+  const kw = eleccionMono === '2x12' ? 12 : eleccionMono === '19' ? 19 : kwTarifa;
   const demanda = f.m2 * AISL[f.anyo] * ZONAS[f.zona] * (f.altura / 2.5) / 1000;
   const acs = f.acsL || (f.personas <= 6 ? 200 : 300);
   const ht = f.suministro === 'tri' ? 'HTT' : 'HT';
@@ -420,7 +431,7 @@ export function calcular(fEntrada) {
   const wp = (String(f.tipoPlaca).match(/(\d{3})\s*W/i) || [])[1];
   const kwp = conFV && f.placas && wp ? Math.round(f.placas * Number(wp) / 10) / 100 : 0;
 
-  return {f, conAero, conFV, conBat, conCar, kw, cascada, unidades, demanda, acs, acsCat, acumulador,
+  return {f, conAero, conFV, conBat, conCar, kw, cascada, monoSin22, eleccionMono, unidades, demanda, acs, acsCat, acumulador,
     modelo, gama, tanque, separador, tejadoTxt, factor, luzAnio, combAnio, actual, futuro, ahorro, ahorroMes,
     modulosBat, kwhBat, precioBatSug, precioAero, precioFV, precioBat, precioCar, inversion,
     tramo, baseIrpf, baseAeroIrpf, baseFVIrpf, deduccionAero, deduccionFV, deduccion, muni, ibiMun, ibiTotal, cae, ayudas, facturado,
@@ -448,8 +459,10 @@ export function avisosFicha(fEntrada, r) {
   else if (mun.nota) I(r.muni + ': ' + mun.nota);
   if (!f.cups) W('Falta el CUPS. Está en la factura de la luz y hace falta para la legalización.');
 
-  if (r.conAero && r.cascada) W('Superficie por encima de 500 m²: cascada de dos unidades de igual potencia. La combinación final la decide el técnico.');
-  if (r.conAero && r.kw >= 22 && f.suministro === 'mono') W('22 kW en monofásico: comprobar potencia contratada y arranque. Recomendable trifásica 400 V.');
+  if (r.conAero && r.monoSin22 && !r.eleccionMono) E('Casa monofásica: la Dual Clima de 22 kW solo existe en trifásica. Pregunta al cliente si quiere dos máquinas de 12 kW o una de 19 kW y márcalo en «3 · Instalación actual».');
+  else if (r.conAero && r.eleccionMono === '2x12') I('Monofásica: dos Dual Clima de 12 kW en cascada (24 kW en total) en lugar de la de 22 kW, que solo es trifásica. Revisa la potencia contratada y el precio con el técnico.');
+  else if (r.conAero && r.eleccionMono === '19') I('Monofásica: una Dual Clima de 19 kW en lugar de la de 22 kW, que solo es trifásica.');
+  if (r.conAero && r.cascada && r.eleccionMono !== '2x12') W('Superficie por encima de 500 m²: cascada de dos unidades de igual potencia. La combinación final la decide el técnico.');
   if (r.conAero && f.refrig === 'si' && (f.emisor === 'rad_at' || f.emisor === 'rad_bt')) W('Los radiadores no dan frío: prever fancoils o suelo refrescante en las estancias a refrigerar.');
   if (r.conAero && f.emisor === 'rad_at') I('Radiador tradicional a 60–75 °C: la Dual Clima HT/HTT (R290) llega a 75 °C de impulsión, no hace falta apoyo de caldera.');
   if (r.conAero && Math.abs(r.demanda - r.kw) / r.kw > 0.3) W('La estimación por zona y aislamiento da ' + coma(r.demanda) + ' kW frente a los ' + r.kw + ' kW de tarifa. Revisar si procede subir o bajar un escalón.');

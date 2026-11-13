@@ -1445,3 +1445,7 @@ _Sin más detalle._
 - Campo «¿Qué te ha dicho el cliente?» con fecha, «Siguiente acción» con fecha y desplegable de estado de la operación: se guarda como contacto del historial (SEGUIMIENTO, mueve la próxima acción de la ficha) y el estado en la operación sin tocar importes (si no hay operación, se crea).
 - Pulsar en el nombre o la dirección abre la ficha del cliente. Resumen arriba (visitas, sentadas, proyectos, enviados, sin apuntar) y filtros rápidos.
 - Backend: `api/visitas.php` (visitasRecientes, visitaMarcar, visitaApunte). Pruebas contra MariaDB local: 16/16.
+
+## 13/11/2026 · Ficha de dimensionado: nada de 22 kW en monofásica
+- La Dual Clima de 22 kW solo existe en trifásica. En una casa monofásica que por superficie pediría 22 kW, la ficha pregunta en «3 · Instalación actual» si va con **una máquina de 19 kW** o con **dos de 12 kW en cascada**.
+- Mientras no se elija, la ficha marca un error («pregunta al cliente…»). Con la elección, el equipo recomendado, la cascada y los avisos salen ya con 19 kW o 2 × 12 kW.
