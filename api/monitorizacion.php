@@ -67,7 +67,7 @@ function luzDeWixer_(array $cli): array {
     if (!$mismo && $dir !== '') { [$pa, $na] = calleMon_(txt_($t['direccion'] ?? '')); [$pc, $nc] = calleMon_($dir); $mismo = $pa && $pc && $na && $na === $nc && array_intersect($pa, $pc); }
     if (!$mismo) continue;
     $d = is_array($t['datos'] ?? null) ? $t['datos'] : (json_decode((string)($t['datos'] ?? ''), true) ?: []);
-    $comp = txt_($d['compania_cambio'] ?? '');
+    $comp = txt_($d['compania_nueva'] ?? ($d['compania_cambio'] ?? ''));
     if ($comp === '' || preg_match('/pendiente|solicit/i', $comp)) continue;
     $cli['comercializadora'] = $comp . (txt_($d['tarifa'] ?? '') !== '' ? ' · ' . txt_($d['tarifa']) : '');
     if (preg_match_all('/(\d+(?:[.,]\d+)?)\s*kw/i', txt_($d['potencia'] ?? ''), $m) && $m[1]) $cli['potencia_contratada'] = str_replace(',', '.', end($m[1]));
