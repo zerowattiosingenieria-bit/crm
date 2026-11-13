@@ -168,6 +168,16 @@ function accImportarMonitorizacion_(array $u, array $p): array {
     $cli = [];
     foreach ($clientes as $c) if ($cid !== '' && mismo_($c['id'] ?? '', $cid)) { $cli = $c; break; }
     $cli = luzDeWixer_($cli);
+    /* Nando (13/11/2026): los kWp reales salen de la operación (nº de placas × W por placa);
+       en SolaX casi todas tienen 10 kWp de relleno. */
+    if ($cid !== '') {
+      static $opsMon = null;
+      if ($opsMon === null) $opsMon = leer_('OPERACIONES');
+      $kwpOp = 0;
+      foreach ($opsMon as $o) if (mismo_($o['cliente_id'] ?? '', $cid) && (float)($o['paneles_num'] ?? 0) > 0 && (float)($o['panel_wp'] ?? 0) > 0)
+        $kwpOp = round((float)$o['paneles_num'] * (float)$o['panel_wp'] / 1000, 2);
+      if ($kwpOp > 0) $fila['kwp'] = $kwpOp;
+    }
     [$fila['factura_mes_est'], $fila['tarifa_luz']] = facturaLuzEst_($fila, $cli, $dd['hoy'] ?? []);
     $ya = null;
     foreach ($hoy as $r) if (txt_($r['planta'] ?? '') === $fila['planta']) { $ya = $r; break; }
