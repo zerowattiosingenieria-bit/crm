@@ -159,6 +159,8 @@ function acciones_(): array {
     /* CAEs (Novawatt) y WIXER, y estado de la sincronización contable (tramites.php, 09/11/2026) */
     'tramites' => 'accTramites_', 'guardarTramite' => 'accGuardarTramite_', 'importarTramites' => 'accImportarTramites_',
     'syncContabilidad' => 'accSyncContabilidad_',
+    /* Monitorización de plantas SolaX Cloud (monitorizacion.php, 13/11/2026) */
+    'importarMonitorizacion' => 'accImportarMonitorizacion_', 'monitorizacionCliente' => 'accMonitorizacionCliente_', 'monitorizacion' => 'accMonitorizacion_',
     /* Panel de seguimiento de operaciones: checks del Excel de Rubén (seguimiento.php, 10/11/2026) */
     'seguimientoOperaciones' => 'accSeguimientoOperaciones_', 'seguimientoCambiar' => 'accSeguimientoCambiar_',
     'visitasRecientes' => 'accVisitasRecientes_', 'visitaMarcar' => 'accVisitaMarcar_', 'visitaProyecto' => 'accVisitaProyecto_', 'calendarioInstalaciones' => 'accCalendarioInstalaciones_', 'revisarComentariosVisitas' => 'accRevisarComentariosVisitas_',

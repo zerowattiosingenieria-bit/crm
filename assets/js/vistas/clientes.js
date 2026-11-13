@@ -503,7 +503,42 @@ function panelResumen(c, ops, seg, refrescar, {acc, abrir, ir}) {
           h('.cuando', fechaCorta(e.fecha) + ' · ' + e.titulo),
           e.texto ? h('.que', e.texto) : null, e.pie ? h('.nota', e.pie) : null)))
           : h('.vacio', 'Todavía no hay nada apuntado.');
-      })(), {acciones: [h('button.btn.mini', {onclick: () => abrir('historial')}, 'Ver todo')]}))));
+      })(), {acciones: [h('button.btn.mini', {onclick: () => abrir('historial')}, 'Ver todo')]}),
+      tarjetaMonitorizacion(c))));
+}
+
+/* Monitorización SolaX Cloud (13/11/2026): última lectura diaria de la planta del cliente,
+   generación acumulada, estado e incidencias/recomendaciones. Se carga aparte y solo se
+   enseña si el cliente tiene planta en SolaX. */
+function tarjetaMonitorizacion(c) {
+  const caja = h('div', h('.vacio', 'Cargando la monitorización…'));
+  const t = tarjeta('Monitorización SolaX', caja);
+  t.style.display = 'none';
+  api.pedir('monitorizacionCliente', {cliente_id: c.id}).then(r => {
+    const L = (r && r.lecturas) || [];
+    if (!L.length) return;
+    t.style.display = '';
+    const u = L[0], n = v => (v === '' || v === null || v === undefined) ? null : Number(v);
+    const fmt = v => n(v) === null ? '—' : num(n(v)).toLocaleString('es-ES', {maximumFractionDigits: 1});
+    const suma = dias => { const lim = new Date(Date.now() - dias * 864e5).toISOString().slice(0, 10);
+      return L.filter(x => x.fecha >= lim && n(x.gen_dia) !== null).reduce((a, x) => a + n(x.gen_dia), 0); };
+    const ok = /normal/i.test(u.estado);
+    const kwp = n(u.kwp);
+    const esp = kwp ? suma(30) / kwp : null;
+    poner(caja, h('div',
+      h('p', h('b', ok ? '✓ ' : '⚠ '), h('b', u.estado || 'sin estado'), u.red ? ' · ' + u.red : '',
+        h('span.nota', ' · lectura del ' + fechaCorta(u.fecha) + (u.planta ? ' · planta «' + u.planta + '»' : ''))),
+      dato('Generación hoy', fmt(u.gen_dia) + ' kWh'),
+      dato('Últimos 7 días', fmt(suma(7)) + ' kWh'),
+      dato('Últimos 30 días', fmt(suma(30)) + ' kWh' + (esp ? ' · ' + fmt(esp) + ' kWh/kWp' : '')),
+      (n(u.carga_dia) || n(u.descarga_dia)) ? dato('Batería hoy', 'carga ' + fmt(u.carga_dia) + ' kWh · descarga ' + fmt(u.descarga_dia) + ' kWh') : null,
+      dato('Instalación', [kwp ? fmt(kwp) + ' kWp' : '', n(u.bat_kwh) ? fmt(u.bat_kwh) + ' kWh de batería' : ''].filter(Boolean).join(' · ')),
+      u.incidencia ? h('p', {estilo: {color: '#C0392B', margin: '8px 0 0'}}, '⚠ ' + u.incidencia) : null,
+      u.recomendacion ? h('p.nota', {estilo: {margin: '6px 0 0'}}, '💡 ' + u.recomendacion) : null,
+      L.filter(x => x.incidencia).length > 1 ? h('details', {estilo: {marginTop: '6px'}}, h('summary.nota', 'Incidencias anteriores'),
+        h('ul.linea-tiempo', L.slice(1).filter(x => x.incidencia).slice(0, 8).map(x => h('li', h('.cuando', fechaCorta(x.fecha)), h('.que', x.incidencia))))) : null));
+  }).catch(() => {});
+  return t;
 }
 
 function tarjetaComentarios(c, refrescar) {

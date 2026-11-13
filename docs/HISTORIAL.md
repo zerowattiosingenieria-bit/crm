@@ -1450,3 +1450,8 @@ _Sin más detalle._
 - La Dual Clima de 22 kW solo existe en trifásica. En una casa monofásica que por superficie pediría 22 kW, la ficha pregunta en «3 · Instalación actual» si va con **una máquina de 19 kW** o con **dos de 12 kW en cascada**.
 - Mientras no se elija, la ficha marca un error («pregunta al cliente…»). Con la elección, el equipo recomendado, la cascada y los avisos salen ya con 19 kW o 2 × 12 kW.
 - Ajuste (Nando, 13/11): por defecto va con la de **19 kW**; el comercial solo cambia a dos de 12 kW si el cliente lo prefiere. Ya no sale error; con más de 500 m² avisa de que una de 19 kW puede quedarse corta.
+
+## 13/11/2026 · Monitorización de plantas SolaX Cloud
+- Tabla nueva `MONITOREO`: una lectura por planta y día (estado, red, kWp, batería, generación del día, carga/descarga, incidencia y recomendación).
+- `importarMonitorizacion` (solo dirección): la tarea diaria manda las plantas de global.solaxcloud.com; cada planta se enlaza con su cliente por la dirección, por el nombre o por un mapa fijo (`SOLAX_MAPA`).
+- `monitorizacionCliente` y la tarjeta **Monitorización SolaX** en la ficha del cliente: última lectura, generación de hoy, 7 y 30 días (kWh/kWp), batería, incidencia y recomendación, e incidencias anteriores. Solo aparece si el cliente tiene planta.
