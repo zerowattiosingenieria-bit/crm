@@ -533,12 +533,36 @@ function tarjetaMonitorizacion(c) {
       dato('Últimos 30 días', fmt(suma(30)) + ' kWh' + (esp ? ' · ' + fmt(esp) + ' kWh/kWp' : '')),
       (n(u.carga_dia) || n(u.descarga_dia)) ? dato('Batería hoy', 'carga ' + fmt(u.carga_dia) + ' kWh · descarga ' + fmt(u.descarga_dia) + ' kWh') : null,
       dato('Instalación', [kwp ? fmt(kwp) + ' kWp' : '', n(u.bat_kwh) ? fmt(u.bat_kwh) + ' kWh de batería' : ''].filter(Boolean).join(' · ')),
+      n(u.consumo_dia) !== null ? dato('Consumo hoy', fmt(u.consumo_dia) + ' kWh' + (n(u.importado_dia) !== null ? ' · de la red ' + fmt(u.importado_dia) + ' kWh' : '')) : null,
+      n(u.importado_mes) !== null ? dato('Importado de la red este mes', fmt(u.importado_mes) + ' kWh') : null,
+      n(u.autoconsumo_mes) !== null ? dato('Autoconsumo del mes', fmt(u.autoconsumo_mes) + ' %') : null,
+      n(u.gen_total) !== null ? dato('Producción total', fmt(u.gen_total) + ' kWh') : null,
+      n(u.soc) !== null && n(u.bat_kwh) ? dato('Batería ahora', fmt(u.soc) + ' %') : null,
+      equiposMon(u.datos),
       u.incidencia ? h('p', {estilo: {color: '#C0392B', margin: '8px 0 0'}}, '⚠ ' + u.incidencia) : null,
       u.recomendacion ? h('p.nota', {estilo: {margin: '6px 0 0'}}, '💡 ' + u.recomendacion) : null,
       L.filter(x => x.incidencia).length > 1 ? h('details', {estilo: {marginTop: '6px'}}, h('summary.nota', 'Incidencias anteriores'),
         h('ul.linea-tiempo', L.slice(1).filter(x => x.incidencia).slice(0, 8).map(x => h('li', h('.cuando', fechaCorta(x.fecha)), h('.que', x.incidencia))))) : null));
   }).catch(() => {});
   return t;
+}
+
+/* Equipos de la planta guardados desde SolaX: inversores, dongles y cargadores con modelo,
+   número de serie, registro, potencia, estado y producción. */
+function equiposMon(datos) {
+  let d = null;
+  try { d = typeof datos === 'string' ? JSON.parse(datos || 'null') : datos; } catch (e) { d = null; }
+  if (!d) return null;
+  const grupos = [['Inversores', d.inversores], ['Dongles', d.dongles], ['Cargadores EV', d.cargadores]].filter(g => g[1] && g[1].length);
+  if (!grupos.length) return null;
+  const linea = e => [e.modelo, e.sn ? 'SN ' + e.sn : '', e.registro ? 'registro ' + e.registro : '',
+    e.potencia ? e.potencia + ' kW' : '', e.online, e.alarma ? 'alarma: ' + e.alarma : '',
+    e.hoy !== undefined && e.hoy !== null && e.hoy !== '' ? 'hoy ' + e.hoy + ' kWh' : '',
+    e.total !== undefined && e.total !== null && e.total !== '' ? 'total ' + e.total + ' kWh' : '',
+    e.alta ? 'conectado desde ' + e.alta : ''].filter(Boolean).join(' · ');
+  return h('details', {estilo: {marginTop: '8px'}}, h('summary.nota', 'Equipos instalados (SolaX)'),
+    grupos.map(g => h('div', h('p', {estilo: {margin: '6px 0 2px'}}, h('b', g[0])),
+      h('ul', {estilo: {margin: 0, paddingLeft: '18px'}}, g[1].map(e => h('li.nota', linea(e)))))));
 }
 
 function tarjetaComentarios(c, refrescar) {

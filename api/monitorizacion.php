@@ -105,8 +105,10 @@ function accImportarMonitorizacion_(array $u, array $p): array {
     if ($cid === '') $sinCliente[] = txt_($d['planta']) . ' · ' . txt_($d['direccion'] ?? '');
     $fila = ['fecha' => $fecha, 'cliente_id' => $cid];
     foreach (['planta', 'usuario_solax', 'direccion', 'estado', 'red', 'incidencia', 'recomendacion'] as $c) $fila[$c] = mb_substr(txt_($d[$c] ?? ''), 0, 400);
-    foreach (['kwp', 'bat_kwh', 'gen_dia', 'carga_dia', 'descarga_dia', 'gen_mes', 'gen_total'] as $c)
+    foreach (['kwp', 'bat_kwh', 'gen_dia', 'carga_dia', 'descarga_dia', 'gen_mes', 'gen_total', 'consumo_dia', 'consumo_total', 'importado_dia', 'importado_mes', 'autoconsumo_mes', 'soc'] as $c)
       $fila[$c] = (isset($d[$c]) && $d[$c] !== '' && $d[$c] !== '--' && $d[$c] !== null) ? (float)str_replace(',', '.', (string)$d[$c]) : '';
+    // Datos completos del inversor, dongle, cargador y planta (JSON) tal cual salen de SolaX.
+    $fila['datos'] = isset($d['datos']) ? (is_string($d['datos']) ? $d['datos'] : json_encode($d['datos'], JSON_UNESCAPED_UNICODE)) : '';
     $ya = null;
     foreach ($hoy as $r) if (txt_($r['planta'] ?? '') === $fila['planta']) { $ya = $r; break; }
     if ($ya) { actualizar_('MONITOREO', $ya['id'], $fila); $cambiadas++; }
