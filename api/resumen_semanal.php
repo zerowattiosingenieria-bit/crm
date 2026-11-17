@@ -443,6 +443,7 @@ function avisoVencidos($soloA = null): array {
   $gente = filtrar_('USUARIOS', function ($u) use ($soloA) {
     if (normal_($u['activo']) !== 'si' || txt_($u['email']) === '') return false;
     if (!in_array($u['rol'], ['comercial', 'captador'], true)) return false;
+    if (in_array(txt_($u['id']), SIN_CORREOS_SEGUIMIENTO, true)) return false;
     return $soloA ? (mismo_($u['id'], $soloA) || normal_($u['usuario']) === normal_($soloA)) : true;
   });
   /* `String.replace(texto, nuevo)` de JS: solo la primera aparición. */

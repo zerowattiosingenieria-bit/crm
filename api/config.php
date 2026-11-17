@@ -2,6 +2,10 @@
 /* config.php — generado desde apps-script/00_Config.gs por tools/gen_config.js. NO editar a mano: edita el .gs y regenera. */
 
 const VERSION = '1.0.0';
+/* Orden de Nando (17/11/2026): a estos usuarios no se les mandan correos
+   automáticos de seguimiento ("Faltan cosas por meter", "Tu semana y tus vencidos").
+   Siguen recibiendo los avisos de proyecto listo / parado. */
+const SIN_CORREOS_SEGUIMIENTO = ['U-000005'];
 const NOMBRE_BASE = 'CRM · ZERO WATTIOS — Base de datos';
 const HORAS_SESION = 12;
 const MINUTOS_INACTIVIDAD = 120;

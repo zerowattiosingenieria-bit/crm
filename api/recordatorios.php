@@ -191,7 +191,8 @@ function enviarRecordatorios_(array $opciones = []): array {
   $deDireccion = [];
   foreach ($todos as $x) if (!in_array(normal_($x['rol']), ROLES_RECORD, true) && txt_($x['email']) !== '') $deDireccion[normal_($x['email'])] = 1;
   $usuarios = array_values(array_filter($todos, fn($x) =>
-    in_array(normal_($x['rol']), ROLES_RECORD, true) && normal_($x['activo']) === 'si' && txt_($x['email']) !== '' && empty($deDireccion[normal_($x['email'])])));
+    in_array(normal_($x['rol']), ROLES_RECORD, true) && normal_($x['activo']) === 'si' && txt_($x['email']) !== '' && empty($deDireccion[normal_($x['email'])])
+    && !in_array(txt_($x['id']), SIN_CORREOS_SEGUIMIENTO, true)));
   $correos = [];
   foreach ($usuarios as $us) {
     $fuera = array_values(array_filter($cola, fn($x) => mismo_($x['usuario_id'] ?? '', $us['id']) && !$reciente($us['id'], $x['clave'] ?? '')));
