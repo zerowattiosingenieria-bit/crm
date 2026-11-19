@@ -378,7 +378,14 @@ function permisos_(array $u): array {
   foreach ($base as $k => $v) $o[$k] = $v;
   /* El directorio no va por rol sino por lista de personas. */
   $o['directorio'] = veDirectorio_($u);
+  /* Los Gantt, solo las personas de GANTT_USUARIOS (config.php). */
+  $o['gantt'] = veGantt_($u);
+  $o['calfechas'] = in_array(txt_($u['id'] ?? ''), defined('CALFECHAS_USUARIOS') ? CALFECHAS_USUARIOS : [], true);
   return $o;
+}
+
+function veGantt_(array $u): bool {
+  return in_array(txt_($u['id'] ?? ''), defined('GANTT_USUARIOS') ? GANTT_USUARIOS : [], true);
 }
 
 function exigir_(array $u, string $permiso): void {

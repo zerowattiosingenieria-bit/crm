@@ -164,7 +164,9 @@ function acciones_(): array {
     'importarMonitorizacion' => 'accImportarMonitorizacion_', 'monitorizacionCliente' => 'accMonitorizacionCliente_', 'monitorizacion' => 'accMonitorizacion_',
     /* Panel de seguimiento de operaciones: checks del Excel de Rubén (seguimiento.php, 10/11/2026) */
     'seguimientoOperaciones' => 'accSeguimientoOperaciones_', 'seguimientoCambiar' => 'accSeguimientoCambiar_',
-    'visitasRecientes' => 'accVisitasRecientes_', 'visitaMarcar' => 'accVisitaMarcar_', 'visitaProyecto' => 'accVisitaProyecto_', 'calendarioInstalaciones' => 'accCalendarioInstalaciones_', 'revisarComentariosVisitas' => 'accRevisarComentariosVisitas_',
+    'visitasRecientes' => 'accVisitasRecientes_', 'visitaMarcar' => 'accVisitaMarcar_', 'visitaProyecto' => 'accVisitaProyecto_', 'calendarioInstalaciones' => 'accCalendarioInstalaciones_',
+    'gantt' => 'accGantt_', 'guardarGanttCalendario' => 'accGuardarGanttCalendario_', 'guardarGanttOrden' => 'accGuardarGanttOrden_',
+    'ganttOrdenes' => 'accGanttOrdenes_', 'resolverGanttOrden' => 'accResolverGanttOrden_', 'ganttEquipo' => 'accGanttEquipo_', 'calendarioFechas' => 'accCalendarioFechas_', 'revisarComentariosVisitas' => 'accRevisarComentariosVisitas_',
     'visitaApunte' => 'accVisitaApunte_',
     /* Apps de clientes y subcontratas, lado CRM (portal.php, 10/11/2026) */
     'cuentasPortal' => 'accCuentasPortal_', 'guardarCuentaPortal' => 'accGuardarCuentaPortal_', 'verComoPortal' => 'accVerComoPortal_',

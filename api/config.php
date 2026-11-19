@@ -6,6 +6,12 @@ const VERSION = '1.0.0';
    automáticos de seguimiento ("Faltan cosas por meter", "Tu semana y tus vencidos").
    Siguen recibiendo los avisos de proyecto listo / parado. */
 const SIN_CORREOS_SEGUIMIENTO = ['U-000005'];
+/* Orden de Nando (19/11/2026): los diagramas de Gantt solo los ven Rubén y el superadmin.
+   GANTT_GESTORES: además pueden volcar el calendario y resolver órdenes (la sesión del asistente). */
+const GANTT_USUARIOS = ['U-000001', 'U-000002'];
+const GANTT_GESTORES = ['U-000004'];
+/* El calendario FECHAS AEROTERMIA Y FOTOVOLTAICA en el CRM: superadmin, Fernando y Nando (19/11/2026). */
+const CALFECHAS_USUARIOS = ['U-000001', 'U-000003', 'U-000004'];
 const NOMBRE_BASE = 'CRM · ZERO WATTIOS — Base de datos';
 const HORAS_SESION = 12;
 const MINUTOS_INACTIVIDAD = 120;
@@ -110,6 +116,8 @@ const ESQUEMA = [
   "OBRA_EVENTOS" => ['id', 'obra_id', 'fecha', 'cuenta_id', 'autor', 'tipo', 'detalle', 'visible_cliente'],
   "TICKETS" => ['id', 'obra_id', 'cliente_id', 'contrata_id', 'cuenta_id', 'origen', 'titulo', 'detalle', 'prioridad', 'estado', 'creado', 'limite_respuesta', 'limite_resolucion', 'primera_respuesta', 'aviso_respuesta', 'resuelto', 'escalado', 'mensajes', 'incidencia_id', 'modificado'],
   "VISITAS_INSTALADOR" => ['id', 'cliente_id', 'operacion_id', 'contrata_id', 'fecha', 'hora', 'tipo', 'notas', 'estado', 'resultado', 'hecha', 'creado', 'creado_por', 'modificado', 'modificado_por'],
+  "GANTT_EVENTOS" => ['id', 'evento_id', 'calendario', 'titulo', 'inicio', 'fin', 'todo_dia', 'tipo', 'especialidad', 'operacion_id', 'cliente_id', 'descripcion', 'color', 'actualizado'],
+  "GANTT_ORDENES" => ['id', 'fecha', 'usuario_id', 'usuario', 'texto', 'vista', 'operacion_id', 'estado', 'respuesta', 'resuelta', 'resuelta_por'],
   "LOG" => ['fecha', 'usuario_id', 'usuario', 'accion', 'entidad', 'entidad_id', 'detalle', 'tipo', 'equipo', 'agente', 'ip', 'lugar']
 ];
 

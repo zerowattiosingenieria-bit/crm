@@ -16,6 +16,7 @@ import {vistaSubcontratas, vistaCuentasPortal} from './vistas/subcontratas.js';
 import {vistaSeguimiento} from './vistas/seguimiento.js';
 import {vistaVisitas} from './vistas/visitas.js';
 import {vistaCalInstalaciones} from './vistas/calinstalaciones.js';
+import {vistaGantt, vistaCalFechas} from './vistas/gantt.js';
 import {vistaMapa} from './vistas/mapa.js';
 import {vistaDirectorio} from './vistas/directorio.js';
 import {vistaContabilidad, vistaFacturas, vistaGastos, vistaCobros} from './vistas/finanzas.js';
@@ -48,6 +49,8 @@ const VISTAS = {
   agenda:       {titulo: 'Agenda',             pinta: vistaAgenda},
   visitas:      {titulo: 'Mis visitas',        pinta: vistaVisitas},
   calinstalaciones: {titulo: 'Calendario de instalaciones', pinta: vistaCalInstalaciones},
+  gantt:        {titulo: 'Gantt y calendario del equipo', pinta: vistaGantt, permiso: 'gantt'},
+  calfechas:    {titulo: 'Calendario FECHAS aerotermia y fotovoltaica', pinta: vistaCalFechas, permiso: 'calfechas'},
   clientes:     {titulo: 'Clientes',           pinta: vistaClientes},
   cliente:      {titulo: 'Ficha de cliente',   pinta: vistaCliente},
   operaciones:  {titulo: 'Instalaciones',      pinta: vistaOperaciones},
@@ -124,6 +127,7 @@ function menuDe(rol) {
       {id: 'cotizador', et: 'Cotizador', ico: '€'},
       {id: 'operaciones', et: 'Mis instalaciones', ico: '⚡'},
       {id: 'calinstalaciones', et: 'Calendario de instalaciones', ico: '▦'},
+      {id: 'calfechas', et: 'Calendario FECHAS', ico: '📅'},
       {id: 'captaciones', et: 'Captaciones', ico: '⚑'},
       {id: 'estadisticas', et: 'Estadísticas', ico: '▥'},
       {id: 'parte', et: 'Parte del día', ico: '✓'},
@@ -149,6 +153,8 @@ function menuDe(rol) {
     {id: 'cotizador', et: 'Cotizador', ico: '€'},
     {id: 'operaciones', et: 'Instalaciones', ico: '⚡'},
     {id: 'calinstalaciones', et: 'Calendario de instalaciones', ico: '▦'},
+    {id: 'calfechas', et: 'Calendario FECHAS', ico: '📅'},
+    {id: 'gantt', et: 'Gantt y equipo', ico: '▤'},
     {id: 'seguimiento', et: 'Seguimiento de operaciones', ico: '☑'},
     {id: 'subcontratas', et: 'Obras de subcontratas', ico: '⚒'},
     {id: 'tramites', et: 'CAEs y WIXER', ico: '♻'},
@@ -191,8 +197,8 @@ function rutaActual() {
 const K_MENU = 'zw.crm.menuSimple';
 const MENU_CORTO = {
   captador: ['hoy', 'agenda', 'captaciones', 'estadisticas', 'clientes', 'parte', 'tramites', 'avisar', 'perfil'],
-  comercial: ['hoy', 'agenda', 'visitas', 'clientes', 'visor', 'cotizador', 'operaciones', 'calinstalaciones', 'parte', 'avisar', 'perfil'],
-  otro: ['hoy', 'panel', 'tablero', 'incidencias', 'agenda', 'visitas', 'clientes', 'operaciones', 'calinstalaciones', 'seguimiento', 'subcontratas', 'tramites', 'captaciones', 'estadisticas', 'cobros', 'banco', 'perfil']
+  comercial: ['hoy', 'agenda', 'visitas', 'clientes', 'visor', 'cotizador', 'operaciones', 'calinstalaciones', 'calfechas', 'parte', 'avisar', 'perfil'],
+  otro: ['hoy', 'panel', 'tablero', 'incidencias', 'agenda', 'visitas', 'clientes', 'operaciones', 'calinstalaciones', 'calfechas', 'gantt', 'seguimiento', 'subcontratas', 'tramites', 'captaciones', 'estadisticas', 'cobros', 'banco', 'perfil']
 };
 const menuCorto = () => { try { return localStorage.getItem(K_MENU) === '1'; } catch (e) { return false; } };
 
