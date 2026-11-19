@@ -10,6 +10,7 @@
 require_once __DIR__ . '/base.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/registro.php';
+require_once __DIR__ . '/guardia.php';
 
 /* El mapa se construye al recibir la petición. Son NOMBRES de función: así
    da igual que el módulo que define una acción no esté cargado todavía. */
@@ -187,7 +188,9 @@ function despachar_($p): array {
   } catch (Throwable $err) {
     $r = ['ok' => false, 'error' => $err->getMessage() !== '' ? $err->getMessage() : get_class($err)];
   }
+  $quien = is_array($GLOBALS['ZW_PETICION'] ?? null) ? ($GLOBALS['ZW_PETICION']['usuario'] ?? null) : null;
   cerrarPeticion_($r);
+  guardia_($quien, $accion, $r);   // guardia.php: corta el acceso ante borrados o cambios en masa
   return $r;
 }
 
