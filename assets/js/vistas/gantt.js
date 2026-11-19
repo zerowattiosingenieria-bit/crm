@@ -35,6 +35,10 @@ const fCorta = f => /^\d{4}-\d{2}-\d{2}/.test(f || '') ? f.slice(8, 10) + '/' + 
 const diaSem = iso => (new Date(iso + 'T12:00:00').getDay() + 6) % 7;   // 0 = lunes
 const diaLargo = iso => { const d = new Date(iso + 'T12:00:00'); const s = DIAS[d.getDay()]; return s[0].toUpperCase() + s.slice(1) + ' ' + d.getDate() + ' de ' + MESES[d.getMonth()]; };
 const calle = s => txt(s).split(' · ')[0];
+/* El parte guarda las sentadas como lista JSON: [{direccion|cliente, resultado|estado, …}]. */
+const sentadasTexto = v => { let l; try { l = JSON.parse(v); } catch (e) { return txt(v); }
+  if (!Array.isArray(l)) return txt(v);
+  return l.map(x => typeof x === 'string' ? x : [x.direccion || x.cliente || x.nombre, x.resultado || x.estado].filter(Boolean).join(' — ')).filter(Boolean).join(' · '); };
 const lunes = iso => sumar(iso, -diaSem(iso));
 /* «MATERIAL FOTOVOLTAICA RIO TAJO 56» → «Material fotovoltaica Rio Tajo 56». */
 const bonito = t => { const p = txt(t).toLowerCase().split(/\s+/); const tipo = ['material', 'fotovoltaica', 'aerotermia', 'finalizar', 'instalacion', 'instalación'];
@@ -380,7 +384,7 @@ async function crearVista(modo) {
       pa ? h('div',
         h('div.ci-kpis.mini', ...[['visitas', 'Visitas'], ['puertas', 'Puertas'], ['fichas', 'Fichas'], ['sentadas', 'Sentadas'], ['ventas', 'Ventas']]
           .filter(([k]) => pa[k]).map(([k, et]) => h('div.ci-kpi', h('b', String(pa[k])), h('span', et)))),
-        pa.sentadas_detalle ? h('p', h('b', 'Sentadas: '), pa.sentadas_detalle) : null,
+        sentadasTexto(pa.sentadas_detalle) ? h('p', h('b', 'Sentadas: '), sentadasTexto(pa.sentadas_detalle)) : null,
         pa.resumen ? h('p.gt-parte', pa.resumen) : h('p.nota', 'Sin resumen escrito.'))
         : h('p.nota', 'No entregó parte este día.'),
       ...lista('Fichas metidas', 'fichas'), ...lista('Visitas', 'visitas'), ...lista('Seguimientos', 'seguimientos'), ...lista('Tareas cerradas', 'tareas'))});
