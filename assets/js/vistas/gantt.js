@@ -36,6 +36,9 @@ const diaSem = iso => (new Date(iso + 'T12:00:00').getDay() + 6) % 7;   // 0 = l
 const diaLargo = iso => { const d = new Date(iso + 'T12:00:00'); const s = DIAS[d.getDay()]; return s[0].toUpperCase() + s.slice(1) + ' ' + d.getDate() + ' de ' + MESES[d.getMonth()]; };
 const calle = s => txt(s).split(' · ')[0];
 const lunes = iso => sumar(iso, -diaSem(iso));
+/* «MATERIAL FOTOVOLTAICA RIO TAJO 56» → «Material fotovoltaica Rio Tajo 56». */
+const bonito = t => { const p = txt(t).toLowerCase().split(/\s+/); const tipo = ['material', 'fotovoltaica', 'aerotermia', 'finalizar', 'instalacion', 'instalación'];
+  return p.map((w, i) => i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : tipo.includes(w) || /^(de|del|la|las|los|el|y)$/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)).join(' '); };
 
 /* ---------- fases de cada operación ---------- */
 
@@ -312,7 +315,7 @@ async function crearVista(modo) {
       celdas.push(h('div.ci-dia' + (d.slice(0, 7) !== mesCal ? '.fuera' : '') + (d === datos.hoy ? '.hoy' : '') + (evs.length ? '.lleno' : ''),
         h('span.ci-num', String(Number(d.slice(8)))),
         evs.map(e => h('button.gt-cev.' + claseCal(e).split(' ').join('.'), {type: 'button', title: e.titulo + (e.descripcion ? ' — ' + e.descripcion : ''), onclick: () => verEvento(e)},
-          e.titulo.charAt(0) + e.titulo.slice(1).toLowerCase(), e.descripcion ? ' 📝' : ''))));
+          (hora(e.inicio) && !e.todo_dia ? hora(e.inicio) + ' ' : ''), bonito(e.titulo), e.descripcion ? ' 📝' : ''))));
     }
     const delMes = datos.eventos.filter(e => dia(e.inicio).slice(0, 7) === mesCal);
     const l = (cl, et) => h('span.gt-ley', h('i.gt-cev.' + cl.split(' ').join('.')), et);
