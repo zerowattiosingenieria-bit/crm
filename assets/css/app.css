@@ -901,3 +901,4 @@ ul.zw-faltan li::before{content:'!'; position:absolute; left:0; top:6px; width:1
   .gt-marco{grid-template-columns:120px minmax(0,1fr)}
   .gt-et{padding:0 8px} .gt-sync{margin-left:0; width:100%}
 }
+.gt-lab{position:absolute; top:11px; font-size:11px; font-weight:600; color:var(--tx); white-space:nowrap; cursor:pointer; z-index:2; line-height:16px}

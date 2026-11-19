@@ -52,7 +52,9 @@ function fasesDe(op, eventos, hoy) {
   const instal = esp => {
     const ini = de('instalacion', esp); const fin = de('finalizar', esp); const ob = obra(esp);
     if (!ini.length && !(ob && (ob.llegada || ob.prevista))) return null;
-    const a = (ob && ob.llegada) || (ini[0] && ini[0].d) || ob.prevista;
+    /* Sin fecha en el calendario ni llegada real: solo la prevista de la obra en el CRM. */
+    if (!ini.length && !(ob && ob.llegada)) return {soloPrevista: true, a: ob.prevista, b: ob.prevista, evs: [], quien: ob.quien, progreso: ob.progreso};
+    const a = (ob && ob.llegada) || ini[0].d;
     let b = (ob && ob.terminada) || (fin.length ? fin[fin.length - 1].d : '');
     let estimado = false;
     if (!b) { b = sumar(a, esp === 'aerotermia' ? 1 : 0); estimado = true; }
@@ -63,17 +65,23 @@ function fasesDe(op, eventos, hoy) {
   const fv = instal('fotovoltaica');
   const ae = instal('aerotermia');
   const primera = [...hitos.map(x => x.d), fv && fv.a, ae && ae.a].filter(Boolean).sort()[0] || op.prevista || '';
+  const conFecha = x => x && !x.soloPrevista;
 
   if (op.firma && primera && primera > op.firma) barras.push({cl: 'tramite', a: op.firma, b: sumar(primera, -1), et: 'Trámites y material'});
-  if (fv) barras.push({cl: 'fv' + (fv.estimado ? ' est' : '') + (fv.pend ? ' pend' : ''), a: fv.a, b: fv.b, et: 'Fotovoltaica', info: fv});
-  if (ae) barras.push({cl: 'aero' + (ae.estimado ? ' est' : '') + (ae.pend ? ' pend' : ''), a: ae.a, b: ae.b, et: 'Aerotermia', info: ae});
+  const pon = (x, cl, et, corto) => {
+    if (!x) return;
+    if (x.soloPrevista) barras.push({cl: 'prevista', a: x.a, b: x.b, et: et + ' prevista en el CRM (sin fecha en el calendario)', corto: corto + '?', info: x});
+    else barras.push({cl: cl + (x.estimado ? ' est' : '') + (x.pend ? ' pend' : ''), a: x.a, b: x.b, et, corto, info: x});
+  };
+  pon(fv, 'fv', 'Fotovoltaica', 'FV');
+  pon(ae, 'aero', 'Aerotermia', 'Aero');
   if (!fv && !ae && op.prevista) barras.push({cl: 'prevista', a: op.prevista, b: op.prevista, et: 'Instalación prevista (sin fecha en el calendario)'});
 
-  const finInst = [fv && fv.b, ae && ae.b, op.instalada].filter(Boolean).sort().pop();
+  const finInst = [conFecha(fv) && fv.b, conFecha(ae) && ae.b, op.instalada].filter(Boolean).sort().pop();
   if (finInst) {
     const a = sumar(finInst, 1);
-    if (op.legalizada) barras.push({cl: 'legal', a, b: op.legalizada < a ? a : op.legalizada, et: 'Legalización (hecha ' + fCorta(op.legalizada) + ')'});
-    else barras.push({cl: 'legal est', a, b: sumar(a, 29), et: 'Legalización (estimada, 30 días)'});
+    if (op.legalizada) barras.push({cl: 'legal', a, b: op.legalizada < a ? a : op.legalizada, et: 'Legalización (hecha ' + fCorta(op.legalizada) + ')', corto: 'Legalización'});
+    else barras.push({cl: 'legal est', a, b: sumar(a, 29), et: 'Legalización (estimada, 30 días)', corto: 'Legalización'});
   }
   if (op.firma) hitos.push({cl: 'firma', d: op.firma, et: 'Firma'});
   if (op.legalizada) hitos.push({cl: 'legalizada', d: op.legalizada, et: 'Legalizada'});
@@ -81,7 +89,7 @@ function fasesDe(op, eventos, hoy) {
   const fechas = [...barras.flatMap(x => [x.a, x.b]), ...hitos.map(x => x.d)].filter(Boolean).sort();
   const proxima = fechas.find(f => f >= hoy) || '';
   const pend = barras.some(x => x.cl.includes('pend'));
-  return {barras, hitos, evs, desde: fechas[0] || '', hasta: fechas[fechas.length - 1] || '', proxima, pend, sinFecha: !fv && !ae};
+  return {barras, hitos, evs, desde: fechas[0] || '', hasta: fechas[fechas.length - 1] || '', proxima, pend, sinFecha: !conFecha(fv) && !conFecha(ae)};
 }
 
 /* ---------- la vista ---------- */
@@ -102,7 +110,7 @@ async function crearVista(modo) {
   let mesCal = hoyISO().slice(0, 7);
   let ini = '';          // primer día del Gantt
   let zoom = 'dias';     // dias · semanas
-  let filtro = 'todas';  // todas · curso · pendientes
+  let filtro = 'activas';  // activas · todas · curso · pendientes
 
   async function cargar() {
     try {
@@ -146,8 +154,12 @@ async function crearVista(modo) {
     if (b.b < ini || b.a > fin) return null;
     const a = b.a < ini ? ini : b.a; const z = b.b > fin ? fin : b.b;
     const l = entre(ini, a) * w; const an = (entre(a, z) + 1) * w;
-    return h('button.gt-bar.' + b.cl.split(' ').join('.'), {type: 'button', title: b.et + ' · ' + fCorta(b.a) + (b.b !== b.a ? ' → ' + fCorta(b.b) : ''),
-      estilo: {left: l + 'px', width: Math.max(an - 2, 6) + 'px'}, onclick}, an > 46 ? (b.corto || b.et.split(' (')[0]) : '');
+    const texto = b.corto || b.et.split(' (')[0];
+    const cabe = an >= Math.min(texto.length * 7 + 12, 160);
+    const el = h('button.gt-bar.' + b.cl.split(' ').join('.'), {type: 'button', title: b.et + ' · ' + fCorta(b.a) + (b.b !== b.a ? ' → ' + fCorta(b.b) : ''),
+      estilo: {left: l + 'px', width: Math.max(an - 2, 6) + 'px'}, onclick}, cabe ? texto : '');
+    /* Si no cabe dentro, la etiqueta va a la derecha de la barra. */
+    return cabe || !b.fuera ? el : [el, h('span.gt-lab', {estilo: {left: l + an + 3 + 'px'}, onclick}, texto)];
   }
   function hito(m, n, w, onclick) {
     const x = entre(ini, m.d);
@@ -166,7 +178,7 @@ async function crearVista(modo) {
         h('button.btn.plano', {type: 'button', onclick: () => mover(1), 'aria-label': 'Después'}, '›'),
         h('button.btn.plano', {type: 'button', onclick: () => { ini = lunes(sumar(datos.hoy, -14)); pinta(); }}, 'Hoy')),
       h('div.vis-filtros', chip('z', 'dias', 'Días', zoom, v => { zoom = v; }), chip('z', 'semanas', 'Semanas', zoom, v => { zoom = v; })),
-      pest === 'operaciones' ? h('div.vis-filtros', chip('f', 'todas', 'Todas', filtro, v => { filtro = v; }),
+      pest === 'operaciones' ? h('div.vis-filtros', chip('f', 'activas', 'En curso', filtro, v => { filtro = v; }), chip('f', 'todas', 'Todas', filtro, v => { filtro = v; }),
         chip('f', 'curso', 'Con fechas', filtro, v => { filtro = v; }), chip('f', 'pendientes', 'Sin fecha de instalación', filtro, v => { filtro = v; })) : null);
   }
 
@@ -181,6 +193,7 @@ async function crearVista(modo) {
   function ganttOperaciones() {
     const n = numDias(); const w = ancho();
     let filas = datos.operaciones.map(op => ({op, f: fasesDe(op, datos.eventos, datos.hoy)}));
+    if (filtro === 'activas') filas = filas.filter(x => !['legalizada', 'cerrada'].includes(x.op.estado) || (x.f.hasta && x.f.hasta >= ini));
     if (filtro === 'curso') filas = filas.filter(x => !x.f.sinFecha);
     if (filtro === 'pendientes') filas = filas.filter(x => x.f.sinFecha && !['instalada', 'legalizada'].includes(x.op.estado));
     filas.sort((a, b) => (a.f.proxima ? 0 : 1) - (b.f.proxima ? 0 : 1) || (a.f.proxima || a.f.hasta || '9').localeCompare(b.f.proxima || b.f.hasta || '9'));
@@ -227,11 +240,11 @@ async function crearVista(modo) {
     const opIdx = Object.fromEntries(datos.operaciones.map(op => [op.id, op]));
     const fases = datos.operaciones.map(op => ({op, f: fasesDe(op, datos.eventos, datos.hoy)}));
     const carriles = [
-      {et: 'Llegada de material', cl: 'material', items: datos.eventos.filter(e => e.tipo === 'material').map(e => ({a: dia(e.inicio), b: dia(e.inicio), cl: 'material' + (e.pendiente ? ' pend' : ''), et: e.titulo, corto: calle((opIdx[e.op_id] || {}).cliente) || e.titulo.replace(/^material\s+\S+\s*/i, ''), op: opIdx[e.op_id], ev: e}))},
-      {et: 'Fotovoltaica', cl: 'fv', items: fases.flatMap(({op, f}) => f.barras.filter(b => b.cl.startsWith('fv')).map(b => ({...b, et: 'FV · ' + calle(op.cliente), corto: calle(op.cliente), op})))},
-      {et: 'Aerotermia', cl: 'aero', items: fases.flatMap(({op, f}) => f.barras.filter(b => b.cl.startsWith('aero')).map(b => ({...b, et: 'Aerotermia · ' + calle(op.cliente), corto: calle(op.cliente), op})))},
-      {et: 'Legalizaciones', cl: 'legal', items: fases.flatMap(({op, f}) => f.barras.filter(b => b.cl.startsWith('legal')).map(b => ({...b, et: 'Legalización · ' + calle(op.cliente), corto: calle(op.cliente), op})))},
-      {et: 'Sin operación en el CRM', cl: 'otro', items: datos.eventos.filter(e => !e.op_id).map(e => ({a: dia(e.inicio), b: dia(e.fin) || dia(e.inicio), cl: 'otro', et: e.titulo, corto: e.titulo, ev: e}))}
+      {et: 'Llegada de material', cl: 'material', items: datos.eventos.filter(e => e.tipo === 'material').map(e => ({a: dia(e.inicio), b: dia(e.inicio), cl: 'material' + (e.pendiente ? ' pend' : ''), fuera: true, et: e.titulo, corto: calle((opIdx[e.op_id] || {}).cliente).replace(/,.*$/, '') || e.titulo.replace(/^material\s+\S+\s*/i, ''), op: opIdx[e.op_id], ev: e}))},
+      {et: 'Fotovoltaica', cl: 'fv', items: fases.flatMap(({op, f}) => f.barras.filter(b => b.cl.startsWith('fv')).map(b => ({...b, fuera: true, et: 'FV · ' + calle(op.cliente), corto: calle(op.cliente).replace(/,.*$/, ''), op})))},
+      {et: 'Aerotermia', cl: 'aero', items: fases.flatMap(({op, f}) => f.barras.filter(b => b.cl.startsWith('aero')).map(b => ({...b, fuera: true, et: 'Aerotermia · ' + calle(op.cliente), corto: calle(op.cliente).replace(/,.*$/, ''), op})))},
+      {et: 'Legalizaciones', cl: 'legal', items: fases.flatMap(({op, f}) => f.barras.filter(b => b.cl.startsWith('legal')).map(b => ({...b, et: 'Legalización · ' + calle(op.cliente), corto: calle(op.cliente).replace(/,.*$/, ''), op})))},
+      {et: 'Sin operación en el CRM', cl: 'otro', items: datos.eventos.filter(e => !e.op_id).map(e => ({a: dia(e.inicio), b: dia(e.fin) || dia(e.inicio), cl: 'otro', fuera: true, et: e.titulo, corto: e.titulo, ev: e}))}
     ].filter(c => c.items.length || c.cl !== 'otro');
 
     /* Cada carril se reparte en sub-filas para que no se pisen las barras. */
@@ -239,7 +252,7 @@ async function crearVista(modo) {
       const subs = [];
       for (const it of items.slice().sort((a, b) => a.a.localeCompare(b.a))) {
         const hueco = subs.find(s => s.fin < it.a);
-        const finVisual = sumar(it.b, Math.max(0, Math.ceil(70 / w) - 1 - entre(it.a, it.b)));
+        const finVisual = sumar(it.b, Math.ceil(Math.min(txt(it.corto).length * 7 + 16, 170) / w));
         if (hueco) { hueco.items.push(it); hueco.fin = finVisual; } else subs.push({fin: finVisual, items: [it]});
       }
       return subs.length ? subs : [{items: []}];
@@ -326,7 +339,7 @@ async function crearVista(modo) {
     const celda = (p, d) => {
       const x = ((equipo.dias || {})[p.id] || {})[d];
       const finde = diaSem(d) > 4;
-      if (!x) return h('div.eq-c' + (finde ? '.finde' : '') + (d === equipo.hoy ? '.hoy' : '') + (d < equipo.hoy && !finde ? '.vacio' : ''));
+      if (!x) return h('div.eq-c' + (finde ? '.finde' : '') + (d === equipo.hoy ? '.hoy' : '') + (d < equipo.hoy && !finde && p.rol !== 'admin' ? '.vacio' : ''));
       const n = k => (x[k] || []).length;
       return h('button.eq-c.lleno' + (finde ? '.finde' : '') + (d === equipo.hoy ? '.hoy' : '') + (x.ausencia ? '.ausente' : ''), {type: 'button', onclick: () => verDiaPersona(p, d, x)},
         x.ausencia ? h('span.eq-aus', 'Vac') : null,
