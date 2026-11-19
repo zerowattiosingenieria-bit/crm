@@ -9,7 +9,7 @@ import * as api from '../api.js';
 import {tarjeta, tabla, kpi, kpis, etiquetaEstado, marca, ventanaFormulario, ventana,
         aviso, avisoError, confirmar, filtros} from '../ui.js';
 import {editorOperacion, tarjetaOperacion} from './operaciones.js';
-import {panelProyecto} from './proyecto.js';
+import {panelProyecto, abrirArchivo} from './proyecto.js';
 import {panelInstaladores, veSubcontratas} from './subcontratas.js';
 import {panelFicha} from './ficha.js';
 import {avisoDuplicadoVivo, ventanaYaExiste, duplicadoLocal, faltaPorMeter, menuApuntar, panelHistorial, panelCambios,
@@ -203,6 +203,29 @@ export function editarComentario(c, alTerminar) {
 
 /* En el listado sale el último comentario de cada persona (como mucho
    tres), el tuyo primero: así nadie tapa lo que ha escrito otro. */
+/* Botón «Proyecto PDF» en la cabecera de la ficha (19/11/2026, pedido de
+   Nando): si el cliente tiene un proyecto hecho, descarga el último PDF sin
+   tener que entrar en la pestaña Proyecto. Si no hay ninguno, no sale. */
+function botonProyectoPdf(c) {
+  const hueco = h('span', {estilo: {display: 'contents'}});
+  api.proyectoDe(c.id).then(d => {
+    const pdfs = ((d && d.archivos) || []).filter(a => a.clase === 'proyecto' &&
+      (/pdf/i.test(txt(a.mime)) || /\.pdf$/i.test(txt(a.nombre))));
+    if (!pdfs.length || !hueco.isConnected) return;
+    const a = pdfs[0]; // llegan ordenados del más nuevo al más antiguo
+    const b = h('button.btn', {
+      title: 'Descargar el último proyecto: ' + txt(a.nombre) + ' (' + fechaCorta(a.subido) + ')',
+      onclick: async () => {
+        const texto = b.textContent;
+        b.disabled = true; b.textContent = 'Descargando…';
+        try { await abrirArchivo(a); } catch (e) { avisoError(e); }
+        finally { b.disabled = false; b.textContent = texto; }
+      }}, '📄 Proyecto PDF');
+    hueco.replaceWith(b);
+  }).catch(() => {});
+  return hueco;
+}
+
 export function comentariosPorPersona(c) {
   const yo = String((api.estado.usuario || {}).id);
   const vistos = new Set();
@@ -394,6 +417,7 @@ export async function vistaCliente({id, ir, refrescar}) {
           num(c.interes) >= 8 ? 'bien' : (num(c.interes) <= 4 ? 'mal' : 'aviso')) : null,
         h('span.nota', c.id + ' · alta ' + fechaCorta(c.creado)))),
     h('.acciones',
+      botonProyectoPdf(c),
       txt(c.telefono) ? h('a.btn', {href: telHref(c.telefono)}, '☎ Llamar') : null,
       txt(c.telefono) ? h('a.btn', {href: waHref(c.telefono), target: '_blank'}, 'WhatsApp') : null,
       txt(c.coordenadas) || txt(c.direccion)
