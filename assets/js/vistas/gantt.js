@@ -196,7 +196,9 @@ async function crearVista(modo) {
   function ganttOperaciones() {
     const n = numDias(); const w = ancho();
     let filas = datos.operaciones.map(op => ({op, f: fasesDe(op, datos.eventos, datos.hoy)}));
-    if (filtro === 'activas') filas = filas.filter(x => !['legalizada', 'cerrada'].includes(x.op.estado) || (x.f.hasta && x.f.hasta >= ini));
+    const fin = sumar(ini, n - 1);
+    const seVe = f => f.barras.some(b => b.b >= ini && b.a <= fin) || f.hitos.some(m => m.d >= ini && m.d <= fin);
+    if (filtro === 'activas') filas = filas.filter(x => seVe(x.f) || (x.f.sinFecha && !['instalada', 'legalizada', 'cerrada'].includes(x.op.estado)));
     if (filtro === 'curso') filas = filas.filter(x => !x.f.sinFecha);
     if (filtro === 'pendientes') filas = filas.filter(x => x.f.sinFecha && !['instalada', 'legalizada'].includes(x.op.estado));
     filas.sort((a, b) => (a.f.proxima ? 0 : 1) - (b.f.proxima ? 0 : 1) || (a.f.proxima || a.f.hasta || '9').localeCompare(b.f.proxima || b.f.hasta || '9'));
