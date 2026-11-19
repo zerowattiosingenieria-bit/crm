@@ -49,11 +49,12 @@ function ganttDir_(string $s): array {
 /** Qué dice el título del evento: tipo, especialidad y dirección. */
 function ganttTitulo_(string $t): array {
   $n = normal_($t);
-  $tipo = preg_match('/^\s*material/', $n) ? 'material' : (preg_match('/^\s*(finaliz|terminar|fin )/', $n) ? 'finalizar' : 'instalacion');
+  /* «MATERIAL …» y «… LLEGA (LA) MÁQUINA / LLEGA AEROTERMIA» son llegada de material, no instalación (19/11/2026). */
+  $tipo = preg_match('/^\s*material|\bmaterial\b|\bllega\b|\bllegada\b/', $n) ? 'material' : (preg_match('/^\s*(finaliz|terminar|fin )|\bfinalizar\b/', $n) ? 'finalizar' : 'instalacion');
   $esp = preg_match('/aerotermia|aero\b|bomba de calor/', $n) ? 'aerotermia'
     : (preg_match('/fotovoltaica|\bfv\b|placas|paneles|solar/', $n) ? 'fotovoltaica' : '');
   if ($esp === '' && $tipo === 'instalacion') $tipo = 'otro';
-  $resto = preg_replace('/\b(material|finalizar|finalizacion|terminar|instalacion|instalar|aerotermia|aero|fotovoltaica|fv|placas|paneles|bateria|baterias)\b/', ' ', $n);
+  $resto = preg_replace('/\b(material|finalizar|finalizacion|terminar|instalacion|instalar|aerotermia|aero|fotovoltaica|fv|placas|paneles|bateria|baterias|llega|llegada|maquina)\b/', ' ', $n);
   return ['tipo' => $tipo, 'esp' => $esp, 'dir' => ganttDir_($resto)];
 }
 
