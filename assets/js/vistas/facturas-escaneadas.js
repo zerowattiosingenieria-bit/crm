@@ -45,9 +45,9 @@ const aBase64 = blob => new Promise((ok, mal) => {
 const cargarImagen = src => new Promise((ok, mal) => {
   const i = new Image(); i.onload = () => ok(i); i.onerror = () => mal(new Error('La imagen no se puede abrir.')); i.src = src;
 });
-function lienzo(fuente, maxLado) {
+function lienzo(fuente, maxLado, ampliar) {
   const w = fuente.naturalWidth || fuente.width, hh = fuente.naturalHeight || fuente.height;
-  const k = Math.min(1, maxLado / Math.max(w, hh));
+  const k = ampliar ? maxLado / Math.max(w, hh) : Math.min(1, maxLado / Math.max(w, hh));
   const c = document.createElement('canvas');
   c.width = Math.round(w * k); c.height = Math.round(hh * k);
   const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
@@ -125,7 +125,8 @@ async function leerArchivo(archivo, avance) {
   const url = URL.createObjectURL(archivo);
   try {
     const img = await cargarImagen(url);
-    const grande = lienzo(img, 2400);
+    /* el OCR acierta mucho más con la imagen grande: se amplía o reduce a unos 3.000 px */
+    const grande = lienzo(img, 3000, true);
     const texto = await ocr([grande], avance);
     const subirLienzo = lienzo(img, 2000);
     return {texto, metodo: 'OCR de la imagen', miniatura: lienzo(img, 360).toDataURL('image/jpeg', 0.6),
@@ -196,6 +197,9 @@ function clientePorTexto(t) {
 }
 
 function interpretar(texto) {
+  /* El OCR a veces se come la coma decimal: «1.14342€» es 1.143,42 €. Solo se
+     arregla cuando el número va pegado al símbolo del euro y no trae coma. */
+  texto = texto.replace(/(^|[^\d,.])(\d{1,3}(?:\.\d{3})*|\d+)(\d{2})\s?€/g, (m, a, ent, dec) => a + ent + ',' + dec + ' €');
   const lineas = texto.split(/\n/).map(l => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
   const n = normal(texto);
   const d = {};
@@ -220,14 +224,16 @@ function interpretar(texto) {
 
   /* emisor: un proveedor que ya conocemos, una razón social o la primera línea */
   if (d.tipo === 'recibida') {
+    /* proveedores que ya conocemos, pero solo si salen en la cabecera (las 12 primeras líneas) */
+    const cabecera = normal(lineas.slice(0, 12).join(' '));
     const conocidos = [...new Set((api.estado.gastos || []).map(g => txt(g.proveedor)).filter(p => p.length > 3))]
-      .filter(p => n.includes(normal(p))).sort((a, b) => b.length - a.length);
+      .filter(p => cabecera.includes(normal(p))).sort((a, b) => b.length - a.length);
     let social = '';
     for (const l of lineas) {
       const m = l.match(/([A-ZÁÉÍÓÚÑ0-9&'][A-ZÁÉÍÓÚÑ0-9&.,' -]{2,60}?\b(?:S\.?\s?L\.?\s?U?|S\.?\s?A\.?\s?U?|S\.?\s?COOP)\.?)(?=\s|$)/);
       if (m && !/zero\s*wattios/i.test(m[1])) { social = m[1]; break; }
     }
-    d.emisor = conocidos[0] || social.replace(/^(raz[oó]n social|emisor|proveedor)\s*:?\s*/i, '').trim() ||
+    d.emisor = social.replace(/^(raz[oó]n social|emisor|proveedor)\s*:?\s*/i, '').trim() || conocidos[0] ||
       (lineas.find(l => /[a-z]{3}/i.test(l) && !/factura|invoice|fecha|p[aá]gina/i.test(l) && !/zero\s*wattios/i.test(l)) || '');
   } else {
     const c = clientePorTexto(texto);
@@ -242,7 +248,7 @@ function interpretar(texto) {
   /* número de factura */
   for (let i = 0; i < lineas.length && !d.numero; i++) {
     const l = lineas[i];
-    const sn = l.match(/serie\s*\/?\s*n[uú]m(?:ero)?\.?\s*:?\s*([A-Z0-9]+(?:\s*[\/-]\s*[A-Z0-9.]+)?)/i);
+    const sn = l.match(/serie\s*\/?\s*n[uúÚ]m(?:ero)?\.?\s*[:—–-]?\s*([A-Z0-9]+(?:\s*[\/-]\s*[A-Z0-9.]+)?)/iu);
     if (sn && /\d/.test(sn[1])) { d.numero = sn[1].replace(/\s+/g, ''); break; }
     if (/^(n[ºo°.]?\s*(de\s*)?)?factura(\s*n[ºo°.])?\s*:?$/i.test(l)) {
       const sig = lineas.slice(i + 1, i + 4).map(x => x.split(' ')[0]).find(x => /^[A-Z]{0,6}[-\/]?\d{2,}[\w\-\/.]*$/i.test(x) && !fechaDe(x));
@@ -296,7 +302,7 @@ function interpretar(texto) {
   let mejor = null;
   for (const t of todos) {
     for (const b of todos) {
-      if (b >= t) continue;
+      if (b >= t || b < 10) continue;
       for (const pct of [21, 10, 5, 4]) {
         const iv = todos.find(x => Math.abs(x - b * pct / 100) <= 0.02 + b * 0.0005);
         if (iv === undefined) continue;
