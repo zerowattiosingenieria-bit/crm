@@ -182,7 +182,7 @@ function accBorrarFacturaDoc_(array $u, array $p): array {
   exigir_($u, 'finanzas');
   $f = buscar1_('FACTURAS_DOC', fn($x) => mismo_($x['id'], $p['id'] ?? ''));
   if (!$f) return ['ok' => false, 'error' => 'Esa factura ya no está.'];
-  if (txt_($f['banco_id'] ?? '') !== '') soltarMovimiento_($f);
+  soltarCasados_(txt_($f['id']));
   $delDrive = txt_($f['origen'] ?? '') === 'drive';   /* del Drive: el archivo y el gasto/factura no son nuestros, se quedan */
   if (!$delDrive && txt_($f['gasto_id']) !== '') borrar_('GASTOS', $f['gasto_id']);
   if (!$delDrive && txt_($f['factura_id']) !== '') borrar_('FACTURAS', $f['factura_id']);
@@ -201,130 +201,453 @@ function accBorrarFacturaDoc_(array $u, array $p): array {
    Y al revés: los movimientos del banco que no tienen factura casada se listan
    para buscarla. */
 
-const MEDIOS_PAGO = ['banco', 'tarjeta', 'efectivo'];
+/* 20/11/2026 (2.ª parte): «intenta casar todo, y lo que no case déjalo indicado en el CRM
+   para poder casarlo manualmente o indicarlo manualmente». Una factura puede casarse con
+   varios movimientos (pagos parciales) y un movimiento con varias facturas (transferencia
+   que paga varias). Cada trozo es una fila de CASADOS. Lo que no casa queda con su motivo
+   en FACTURAS_DOC.revisar, y los movimientos se pueden marcar «no lleva factura». */
 
-/** ¿El movimiento del banco ya está casado con alguna factura escaneada? */
-function facturaDocDeMovimiento_(string $bancoId): ?array {
-  if ($bancoId === '') return null;
-  return buscar1_('FACTURAS_DOC', fn($x) => mismo_($x['banco_id'], $bancoId));
+const MEDIOS_PAGO = ['banco', 'tarjeta', 'efectivo', 'otro'];
+const TOLERANCIA_CASAR = 0.05;
+
+function casadosDe_(string $campo, string $id): array {
+  return array_values(array_filter(leer_('CASADOS'), fn($c) => mismo_($c[$campo], $id)));
 }
-
-/** Movimientos del banco que pueden ser el pago o el cobro de una factura. */
-function accCandidatosBancoFacturaDoc_(array $u, array $p): array {
-  exigir_($u, 'finanzas');
-  $f = buscar1_('FACTURAS_DOC', fn($x) => mismo_($x['id'], $p['id'] ?? ''));
-  if (!$f) return ['ok' => false, 'error' => 'Esa factura ya no está.'];
-  $total = abs(num_($f['total']));
-  $signo = txt_($f['tipo']) === 'emitida' ? 1 : -1;
-  $fecha = txt_($f['fecha']) ?: hoyISO_();
-  $palabras = array_values(array_filter(preg_split('/\s+/', normal_(preg_replace('/\b(s\.?l\.?u?|s\.?a\.?u?)\b\.?/i', '', txt_($f['emisor']) . ' ' . txt_($f['receptor'])))),
-    fn($w) => strlen($w) >= 4));
-  $lista = [];
-  foreach (leer_('BANCO') as $m) {
-    $imp = num_($m['importe']);
-    if ($imp * $signo <= 0) continue;
-    $dif = abs(abs($imp) - $total);
-    if ($dif > max(0.05, $total * 0.01)) continue;
-    $dias = (int)round((strtotime(txt_($m['fecha'])) - strtotime($fecha)) / 86400);
-    if ($dias < -45 || $dias > 120) continue;
-    $otra = facturaDocDeMovimiento_(txt_($m['id']));
-    if ($otra && !mismo_($otra['id'], $f['id'])) continue;
-    $conc = normal_($m['concepto']);
-    $coincide = 0; foreach ($palabras as $w) if (strpos($conc, $w) !== false) $coincide++;
-    $puntos = 100 - $dif * 20 - abs($dias) * 0.6 + $coincide * 15 + ($dias >= 0 ? 5 : 0);
-    $lista[] = ['id' => $m['id'], 'cuenta' => txt_($m['cuenta']), 'fecha' => txt_($m['fecha']), 'concepto' => txt_($m['concepto']),
-      'importe' => $imp, 'dias' => $dias, 'puntos' => round($puntos, 1), 'casado' => (bool)$otra,
-      'tarjeta' => (bool)preg_match('/tarj|card|compra\s|visa|mastercard/i', txt_($m['concepto']))];
+/** Lo que queda del movimiento sin casar (en positivo). */
+function restoMovimiento_(array $m, ?array $todos = null): float {
+  $usado = 0.0;
+  foreach ($todos ?? leer_('CASADOS') as $c) if (mismo_($c['banco_id'], $m['id'])) $usado += num_($c['importe']);
+  return redondear_(abs(num_($m['importe'])) - $usado, 2);
+}
+/** Lo que queda de la factura sin casar (en positivo). Una línea «otro» (indicada a mano) la da por cerrada. */
+function restoFactura_(array $f, ?array $todos = null): float {
+  $usado = 0.0;
+  foreach ($todos ?? leer_('CASADOS') as $c) if (mismo_($c['factura_doc_id'], $f['id'])) {
+    if (txt_($c['medio']) === 'otro' && num_($c['importe']) == 0) return 0.0;
+    $usado += num_($c['importe']);
   }
-  usort($lista, fn($a, $b) => $b['puntos'] <=> $a['puntos']);
-  return ['ok' => true, 'candidatos' => array_slice($lista, 0, 8)];
+  return redondear_(abs(num_($f['total'])) - $usado, 2);
 }
 
-/**
- * Casa la factura con su pago o cobro. p.id, p.medio (banco | tarjeta | efectivo),
- * p.banco_id (si es un movimiento), p.fecha (efectivo o tarjeta sin movimiento).
- */
-function accCasarFacturaDoc_(array $u, array $p): array {
-  exigir_($u, 'finanzas');
-  $f = buscar1_('FACTURAS_DOC', fn($x) => mismo_($x['id'], $p['id'] ?? ''));
-  if (!$f) return ['ok' => false, 'error' => 'Esa factura ya no está.'];
-  $medio = normal_($p['medio'] ?? '');
-  if (!in_array($medio, MEDIOS_PAGO, true)) return ['ok' => false, 'error' => 'Elige banco, tarjeta o efectivo.'];
-  $bancoId = txt_($p['banco_id'] ?? '');
-  $fecha = txt_($p['fecha'] ?? '') ?: hoyISO_();
-  $nota = '';
-  if ($bancoId !== '') {
-    $m = buscar1_('BANCO', fn($x) => mismo_($x['id'], $bancoId));
-    if (!$m) return ['ok' => false, 'error' => 'Ese movimiento del banco ya no está.'];
-    $otra = facturaDocDeMovimiento_($bancoId);
-    if ($otra && !mismo_($otra['id'], $f['id'])) return ['ok' => false, 'error' => 'Ese movimiento ya está casado con la factura ' . $otra['id'] . '.'];
-    $signo = txt_($f['tipo']) === 'emitida' ? 1 : -1;
-    if (num_($m['importe']) * $signo <= 0) return ['ok' => false, 'error' => txt_($f['tipo']) === 'emitida' ? 'Una factura emitida se casa con un ingreso.' : 'Una factura recibida se casa con un pago.'];
-    $fecha = txt_($m['fecha']);
-    $dif = redondear_(abs(num_($m['importe'])) - abs(num_($f['total'])), 2);
-    if (abs($dif) > 0.01) $nota = 'Diferencia con el banco: ' . txt_($dif) . ' €';
-    $cambiosB = ['conciliado' => 'si', 'notas' => trim(txt_($m['notas']) . ' · Factura ' . txt_($f['id']) . ' ' . txt_($f['numero']), ' ·')];
-    if (txt_($f['gasto_id']) !== '') $cambiosB['gasto_id'] = txt_($f['gasto_id']);
-    if (txt_($f['operacion_id']) !== '' && txt_($m['operacion_id']) === '') $cambiosB['operacion_id'] = txt_($f['operacion_id']);
-    actualizar_('BANCO', $m['id'], $cambiosB);
-  }
-  /* si estaba casada con otro movimiento, se suelta */
-  if (txt_($f['banco_id']) !== '' && !mismo_($f['banco_id'], $bancoId)) soltarMovimiento_($f);
-  $r = actualizar_('FACTURAS_DOC', $f['id'], ['medio_pago' => $medio, 'banco_id' => $bancoId, 'casada' => 'si',
-    'fecha_casada' => ahora_(), 'estado_pago' => 'pagado', 'fecha_pago' => $fecha,
-    'notas' => $nota !== '' ? trim(txt_($f['notas']) . ' · ' . $nota, ' ·') : txt_($f['notas']),
-    'modificado' => ahora_(), 'modificado_por' => $u['id']]);
-  $r = contabilizarFacturaDoc_($u, $r);
-  registrar_($u, 'casar_factura_doc', 'FACTURAS_DOC', $f['id'], $medio . ($bancoId !== '' ? ' ' . $bancoId : ''));
-  return ['ok' => true, 'factura' => facturaDocLigera_($r), 'aviso' => $nota];
+/** Recalcula el estado de la factura a partir de sus casados. */
+function recalcularCasada_(array $u, string $id): array {
+  $f = buscar1_('FACTURAS_DOC', fn($x) => mismo_($x['id'], $id));
+  if (!$f) return [];
+  $cs = casadosDe_('factura_doc_id', $id);
+  $resto = restoFactura_($f, $cs);
+  $usado = redondear_(array_sum(array_map(fn($c) => num_($c['importe']), $cs)), 2);
+  $medios = array_values(array_unique(array_map(fn($c) => txt_($c['medio']), $cs)));
+  $estado = !$cs ? 'no' : (abs($resto) <= TOLERANCIA_CASAR || ($resto < 0 && count($cs) === 1) ? 'si' : ($resto < 0 ? 'si' : 'parcial'));
+  if (num_($f['total']) == 0 && $cs) $estado = 'si';
+  $fechas = array_filter(array_map(fn($c) => txt_($c['fecha']), $cs));
+  $cambios = ['casada' => $estado, 'importe_casado' => $usado,
+    'banco_id' => implode(',', array_filter(array_map(fn($c) => txt_($c['banco_id']), $cs))),
+    'medio_pago' => count($medios) > 1 ? 'varios' : ($medios[0] ?? ''),
+    'fecha_pago' => $fechas ? max($fechas) : '', 'fecha_casada' => $cs ? ahora_() : '',
+    'estado_pago' => $estado === 'si' ? 'pagado' : ($estado === 'parcial' ? 'parcial' : 'pendiente')];
+  if ($estado === 'si') $cambios['revisar'] = '';
+  elseif ($estado === 'parcial') $cambios['revisar'] = 'Casada en parte: faltan ' . number_format($resto, 2, ',', '.') . ' €';
+  $r = actualizar_('FACTURAS_DOC', $id, $cambios);
+  return contabilizarFacturaDoc_($u, $r);
 }
 
-function soltarMovimiento_(array $f): void {
-  $m = buscar1_('BANCO', fn($x) => mismo_($x['id'], $f['banco_id']));
+/** Marca el movimiento como conciliado (o no) según sus casados. */
+function recalcularMovimiento_(string $bancoId): void {
+  $m = buscar1_('BANCO', fn($x) => mismo_($x['id'], $bancoId));
   if (!$m) return;
-  $cambios = ['notas' => trim(str_replace('Factura ' . txt_($f['id']) . ' ' . txt_($f['numero']), '', txt_($m['notas'])), ' ·')];
-  if (txt_($f['gasto_id']) !== '' && mismo_($m['gasto_id'], $f['gasto_id'])) { $cambios['gasto_id'] = ''; $cambios['conciliado'] = 'no'; }
+  $cs = casadosDe_('banco_id', $bancoId);
+  $ids = array_values(array_unique(array_map(fn($c) => txt_($c['factura_doc_id']), $cs)));
+  $notas = trim(preg_replace('/\s*·?\s*Facturas?:[^·]*/u', '', txt_($m['notas'])), ' ·');
+  if ($ids) $notas = trim($notas . ' · Facturas: ' . implode(', ', $ids), ' ·');
+  $cambios = ['notas' => $notas];
+  if ($ids) $cambios['conciliado'] = 'si';
   elseif (txt_($m['gasto_id']) === '' && txt_($m['cobro_id']) === '') $cambios['conciliado'] = 'no';
   actualizar_('BANCO', $m['id'], $cambios);
 }
 
-/** Deshace el casado: la factura vuelve a pendiente y el movimiento queda libre. */
-function accDescasarFacturaDoc_(array $u, array $p): array {
+/** Palabras con las que se reconoce a la otra parte en el concepto del banco (que viene cortado). */
+function claveContraparte_(array $f): array {
+  $quien = txt_($f['tipo']) === 'emitida' ? txt_($f['receptor']) : txt_($f['emisor']);
+  $s = preg_replace('/[^a-z0-9 ]/', ' ', normal_(preg_replace('/\b(s\.?l\.?u?|s\.?a\.?u?|s\.?coop)\b\.?/i', '', $quien)));
+  $pal = array_values(array_filter(explode(' ', $s), fn($w) => strlen($w) >= 3 && !in_array($w, ['del', 'los', 'las', 'grupo', 'factura'], true)));
+  return ['compacto' => str_replace(' ', '', $s), 'palabras' => $pal, 'numero' => preg_replace('/[^a-z0-9]/', '', normal_($f['numero']))];
+}
+const PALABRAS_BANCO_VACIAS = ['pago', 'oferta', 'factura', 'transfer', 'transf', 'transferencia', 'inmediata', 'favor', 'recibo', 'compra', 'tarj', 'tarjeta', 'www', 'com', 'ref', 'adeudo', 'abono', 'para', 'por', 'emitida', 'su'];
+/** ¿El concepto del banco nombra a la otra parte de la factura? */
+function nombraContraparte_(string $concepto, array $clave): bool {
+  $toks = array_filter(explode(' ', preg_replace('/[^a-z0-9 ]/', ' ', normal_($concepto))), fn($w) => strlen($w) >= 3 && !in_array($w, PALABRAS_BANCO_VACIAS, true));
+  $num = preg_replace('/[^a-z0-9]/', '', normal_($concepto));
+  foreach ($toks as $w) {
+    if (strlen($w) >= 4 && $clave['compacto'] !== '' && strpos($clave['compacto'], $w) !== false) return true;
+    foreach ($clave['palabras'] as $p) if (strlen($w) >= 3 && strpos($p, $w) === 0) return true;
+  }
+  if (strlen($clave['numero']) >= 4) foreach ($toks as $w) if (strlen($w) >= 3 && strpos($clave['numero'], $w) === 0 && preg_match('/\d|-/', $concepto)) return true;
+  return false;
+}
+
+/** Movimientos del banco que pueden ser el pago o el cobro de una factura (también los parciales de la misma contraparte). */
+function accCandidatosBancoFacturaDoc_(array $u, array $p): array {
   exigir_($u, 'finanzas');
   $f = buscar1_('FACTURAS_DOC', fn($x) => mismo_($x['id'], $p['id'] ?? ''));
   if (!$f) return ['ok' => false, 'error' => 'Esa factura ya no está.'];
-  if (txt_($f['banco_id']) !== '') soltarMovimiento_($f);
-  $r = actualizar_('FACTURAS_DOC', $f['id'], ['medio_pago' => '', 'banco_id' => '', 'casada' => 'no', 'fecha_casada' => '',
-    'estado_pago' => 'pendiente', 'fecha_pago' => '', 'modificado' => ahora_(), 'modificado_por' => $u['id']]);
-  $r = contabilizarFacturaDoc_($u, $r);
-  registrar_($u, 'descasar_factura_doc', 'FACTURAS_DOC', $f['id'], '');
-  return ['ok' => true, 'factura' => facturaDocLigera_($r)];
+  $todos = leer_('CASADOS');
+  $pend = restoFactura_($f, $todos);
+  $signo = txt_($f['tipo']) === 'emitida' ? 1 : -1;
+  $fecha = txt_($f['fecha']) ?: hoyISO_();
+  $clave = claveContraparte_($f);
+  $lista = [];
+  foreach (leer_('BANCO') as $m) {
+    $imp = num_($m['importe']);
+    if ($imp * $signo <= 0) continue;
+    $resto = restoMovimiento_($m, $todos);
+    if ($resto <= TOLERANCIA_CASAR) continue;
+    $dias = (int)round((strtotime(txt_($m['fecha'])) - strtotime($fecha)) / 86400);
+    if ($dias < -60 || $dias > 180) continue;
+    $nombra = nombraContraparte_(txt_($m['concepto']), $clave);
+    $dif = abs($resto - $pend);
+    $exacto = $dif <= max(TOLERANCIA_CASAR, $pend * 0.01);
+    if (!$exacto && !$nombra) continue;
+    $puntos = ($exacto ? 100 - $dif * 20 : 40) - abs($dias) * 0.4 + ($nombra ? 25 : 0) + ($dias >= 0 ? 5 : 0);
+    $lista[] = ['id' => $m['id'], 'cuenta' => txt_($m['cuenta']), 'fecha' => txt_($m['fecha']), 'concepto' => txt_($m['concepto']),
+      'importe' => $imp, 'resto' => $resto, 'dias' => $dias, 'exacto' => $exacto, 'nombra' => $nombra, 'puntos' => round($puntos, 1),
+      'tarjeta' => (bool)preg_match('/tarj|card|compra\s|visa|mastercard|www\.|amazon|pccomponentes/i', txt_($m['concepto']))];
+  }
+  usort($lista, fn($a, $b) => $b['puntos'] <=> $a['puntos']);
+  return ['ok' => true, 'pendiente' => $pend, 'candidatos' => array_slice($lista, 0, 15)];
+}
+
+/** Guarda un trozo de casado (sin recalcular). Devuelve error o ''. */
+function casarTrozo_(array $u, array $f, string $medio, string $bancoId, float $importe, string $fecha, string $nota): string {
+  if ($bancoId !== '') {
+    $m = buscar1_('BANCO', fn($x) => mismo_($x['id'], $bancoId));
+    if (!$m) return 'Ese movimiento del banco ya no está.';
+    $signo = txt_($f['tipo']) === 'emitida' ? 1 : -1;
+    if (num_($m['importe']) * $signo <= 0) return txt_($f['tipo']) === 'emitida' ? 'Una factura emitida se casa con un ingreso.' : 'Una factura recibida se casa con un pago.';
+    if (buscar1_('CASADOS', fn($c) => mismo_($c['banco_id'], $bancoId) && mismo_($c['factura_doc_id'], $f['id']))) return 'Ese movimiento ya está casado con esta factura.';
+    $resto = restoMovimiento_($m);
+    if ($resto <= TOLERANCIA_CASAR) return 'Ese movimiento ya está casado entero con otras facturas.';
+    if ($importe <= 0) $importe = min($resto, max(restoFactura_($f), 0) ?: $resto);
+    if ($importe > $resto + TOLERANCIA_CASAR) $importe = $resto;
+    $fecha = txt_($m['fecha']);
+  } else {
+    if ($medio === 'banco') return 'Elige el movimiento del banco.';
+    if ($medio === 'otro' && $nota === '') return 'Indica el motivo.';
+    if ($importe <= 0 && $medio !== 'otro') $importe = max(restoFactura_($f), 0);
+    $fecha = $fecha ?: hoyISO_();
+  }
+  insertar_('CASADOS', ['factura_doc_id' => $f['id'], 'banco_id' => $bancoId, 'importe' => redondear_($importe, 2), 'medio' => $medio,
+    'fecha' => $fecha, 'notas' => $nota, 'creado' => ahora_(), 'creado_por' => $u['id']]);
+  if ($bancoId !== '') recalcularMovimiento_($bancoId);
+  return '';
 }
 
 /**
- * Movimientos del banco sin factura escaneada casada (desde p.desde), para
- * buscar la factura que falta. Se marcan los que ya tienen gasto o cobro en el CRM.
+ * Casa la factura con un pago o cobro (se puede repetir para pagos parciales).
+ * p.id, p.medio (banco | tarjeta | efectivo | otro), p.banco_id, p.importe (opcional:
+ * lo que quede), p.fecha (sin movimiento), p.nota (obligatoria con «otro»; «otro» sin importe la da por cerrada).
+ */
+function accCasarFacturaDoc_(array $u, array $p): array {
+  exigir_($u, 'finanzas');
+  asegurarCasados_();
+  $f = buscar1_('FACTURAS_DOC', fn($x) => mismo_($x['id'], $p['id'] ?? ''));
+  if (!$f) return ['ok' => false, 'error' => 'Esa factura ya no está.'];
+  $medio = normal_($p['medio'] ?? '');
+  if (!in_array($medio, MEDIOS_PAGO, true)) return ['ok' => false, 'error' => 'Elige banco, tarjeta, efectivo u otro.'];
+  $bancoId = txt_($p['banco_id'] ?? '');
+  if ($bancoId !== '' && $medio === 'efectivo') $medio = 'banco';
+  $err = casarTrozo_($u, $f, $medio, $bancoId, num_($p['importe'] ?? 0), txt_($p['fecha'] ?? ''), trozo_(txt_($p['nota'] ?? ''), 0, 300));
+  if ($err !== '') return ['ok' => false, 'error' => $err];
+  $r = recalcularCasada_($u, $f['id']);
+  registrar_($u, 'casar_factura_doc', 'FACTURAS_DOC', $f['id'], $medio . ($bancoId !== '' ? ' ' . $bancoId : ''));
+  $resto = restoFactura_($r);
+  return ['ok' => true, 'factura' => facturaDocLigera_($r), 'aviso' => $r['casada'] === 'parcial' ? 'Faltan ' . number_format($resto, 2, ',', '.') . ' € por casar.' : ''];
+}
+
+/**
+ * Casa a la vez varias facturas con varios movimientos (una transferencia que paga varias
+ * facturas, o una factura pagada en varios pagos). p.facturas = [ids], p.movimientos = [ids].
+ * Reparte por orden de fecha.
+ */
+function accCasarLote_(array $u, array $p): array {
+  exigir_($u, 'finanzas');
+  asegurarCasados_();
+  $fs = []; foreach ((array)($p['facturas'] ?? []) as $id) { $f = buscar1_('FACTURAS_DOC', fn($x) => mismo_($x['id'], $id)); if ($f) $fs[] = $f; }
+  $ms = []; foreach ((array)($p['movimientos'] ?? []) as $id) { $m = buscar1_('BANCO', fn($x) => mismo_($x['id'], $id)); if ($m) $ms[] = $m; }
+  if (!$fs || !$ms) return ['ok' => false, 'error' => 'Elige al menos una factura y un movimiento.'];
+  $r = repartirCasado_($u, $fs, $ms, 'banco', trozo_(txt_($p['nota'] ?? ''), 0, 300));
+  registrar_($u, 'casar_lote', 'FACTURAS_DOC', implode(',', array_map(fn($f) => $f['id'], $fs)), implode(',', array_map(fn($m) => $m['id'], $ms)));
+  return ['ok' => true] + $r;
+}
+
+/** Reparte el dinero de los movimientos entre las facturas, por fechas. */
+function repartirCasado_(array $u, array $fs, array $ms, string $medio, string $nota): array {
+  usort($fs, fn($a, $b) => strcmp(txt_($a['fecha']), txt_($b['fecha'])));
+  usort($ms, fn($a, $b) => strcmp(txt_($a['fecha']), txt_($b['fecha'])));
+  $todos = leer_('CASADOS');
+  $restoM = []; foreach ($ms as $m) $restoM[$m['id']] = restoMovimiento_($m, $todos);
+  $trozos = 0;
+  foreach ($fs as $f) {
+    $falta = restoFactura_($f, $todos);
+    foreach ($ms as $m) {
+      if ($falta <= TOLERANCIA_CASAR) break;
+      if ($restoM[$m['id']] <= TOLERANCIA_CASAR) continue;
+      $imp = min($falta, $restoM[$m['id']]);
+      $err = casarTrozo_($u, $f, $medio, $m['id'], $imp, '', $nota);
+      if ($err !== '') continue;
+      $restoM[$m['id']] = redondear_($restoM[$m['id']] - $imp, 2); $falta = redondear_($falta - $imp, 2); $trozos++;
+    }
+  }
+  $out = [];
+  foreach ($fs as $f) $out[] = facturaDocLigera_(recalcularCasada_($u, $f['id']));
+  return ['trozos' => $trozos, 'facturas' => $out];
+}
+
+/** Deshace los casados de la factura (todos, o solo p.casado_id). */
+function accDescasarFacturaDoc_(array $u, array $p): array {
+  exigir_($u, 'finanzas');
+  asegurarCasados_();
+  $f = buscar1_('FACTURAS_DOC', fn($x) => mismo_($x['id'], $p['id'] ?? ''));
+  if (!$f) return ['ok' => false, 'error' => 'Esa factura ya no está.'];
+  soltarCasados_($f['id'], txt_($p['casado_id'] ?? ''));
+  $r = recalcularCasada_($u, $f['id']);
+  registrar_($u, 'descasar_factura_doc', 'FACTURAS_DOC', $f['id'], txt_($p['casado_id'] ?? 'todo'));
+  return ['ok' => true, 'factura' => facturaDocLigera_($r)];
+}
+
+function soltarCasados_(string $facturaId, string $soloCasado = ''): void {
+  foreach (casadosDe_('factura_doc_id', $facturaId) as $c) {
+    if ($soloCasado !== '' && !mismo_($c['id'], $soloCasado)) continue;
+    borrar_('CASADOS', $c['id']);
+    if (txt_($c['banco_id']) !== '') recalcularMovimiento_(txt_($c['banco_id']));
+  }
+}
+/* compatibilidad con el borrado de facturas */
+function soltarMovimiento_(array $f): void { soltarCasados_(txt_($f['id'])); }
+
+/** Casados de una factura, con el concepto del movimiento (para la ventana). */
+function accCasadosFacturaDoc_(array $u, array $p): array {
+  exigir_($u, 'finanzas');
+  asegurarCasados_();
+  $out = [];
+  foreach (casadosDe_('factura_doc_id', txt_($p['id'] ?? '')) as $c) {
+    $m = txt_($c['banco_id']) !== '' ? buscar1_('BANCO', fn($x) => mismo_($x['id'], $c['banco_id'])) : null;
+    unset($c['_fila']);
+    $out[] = $c + ['concepto' => $m ? txt_($m['concepto']) : '', 'cuenta' => $m ? txt_($m['cuenta']) : '', 'importe_mov' => $m ? num_($m['importe']) : 0];
+  }
+  return ['ok' => true, 'casados' => $out];
+}
+
+/** Las casadas antiguas (un solo banco_id en la factura) pasan a CASADOS. Una vez. */
+function asegurarCasados_(): void {
+  static $hecho = false;
+  if ($hecho) return; $hecho = true;
+  if (prop_('casados_migrados') === 'si') return;
+  $ya = [];
+  foreach (leer_('CASADOS') as $c) $ya[txt_($c['factura_doc_id'])] = 1;
+  foreach (leer_('FACTURAS_DOC') as $f) {
+    if (txt_($f['casada']) !== 'si' || isset($ya[txt_($f['id'])])) continue;
+    $b = txt_($f['banco_id']);
+    insertar_('CASADOS', ['factura_doc_id' => $f['id'], 'banco_id' => $b, 'importe' => abs(num_($f['total'])),
+      'medio' => txt_($f['medio_pago']) ?: ($b !== '' ? 'banco' : 'efectivo'), 'fecha' => txt_($f['fecha_pago']),
+      'notas' => '', 'creado' => ahora_(), 'creado_por' => 'migracion']);
+    actualizar_('FACTURAS_DOC', $f['id'], ['importe_casado' => abs(num_($f['total']))]);
+  }
+  setProp_('casados_migrados', 'si');
+}
+
+/* ---------- casado automático de todo lo pendiente ---------- */
+
+/** Subconjuntos de $items (cada uno [id, importe]) que suman $objetivo. Para en 2 soluciones (para saber si es única). */
+function subconjuntosQueSuman_(array $items, float $objetivo, int $max = 6): array {
+  usort($items, fn($a, $b) => $b[1] <=> $a[1]);
+  $items = array_slice($items, 0, 26);
+  $sol = []; $n = count($items); $pasos = 0;
+  $suf = array_fill(0, $n + 1, 0.0);
+  for ($i = $n - 1; $i >= 0; $i--) $suf[$i] = $suf[$i + 1] + $items[$i][1];
+  $rec = function ($i, $suma, $elegidos) use (&$rec, &$sol, &$pasos, $items, $n, $objetivo, $max, $suf) {
+    if (count($sol) >= 2 || ++$pasos > 200000) return;
+    if (abs($suma - $objetivo) <= TOLERANCIA_CASAR && $elegidos) { $sol[] = $elegidos; return; }
+    if ($i >= $n || count($elegidos) >= $max || $suma > $objetivo + TOLERANCIA_CASAR || $suma + $suf[$i] < $objetivo - TOLERANCIA_CASAR) return;
+    $rec($i + 1, $suma + $items[$i][1], array_merge($elegidos, [$items[$i][0]]));
+    $rec($i + 1, $suma, $elegidos);
+  };
+  $rec(0, 0.0, []);
+  return $sol;
+}
+
+/**
+ * Intenta casar todo lo pendiente:
+ *  1) factura ↔ movimiento con el mismo importe (si es único o el más cercano en fecha);
+ *  2) un movimiento que paga varias facturas de la misma contraparte (suma exacta y única);
+ *  3) una factura pagada en varios movimientos de la misma contraparte (suma exacta y única).
+ * Lo que queda se marca con su motivo en FACTURAS_DOC.revisar.
+ */
+function accAutoCasar_(array $u, array $p): array {
+  exigir_($u, 'finanzas');
+  asegurarCasados_();
+  $res = ['exactas' => 0, 'agrupadas' => 0, 'fraccionadas' => 0];
+  $banco = leer_('BANCO');
+  $ignorar = '/traspaso|n[oó]mina|seg\.?\s*social|tgss|aeat|agencia tributaria|hacienda|impuesto|pr[eé]stamo|liquidaci[oó]n/i';
+  $pendientes = function () { $t = leer_('CASADOS'); return array_values(array_filter(leer_('FACTURAS_DOC'), fn($f) => num_($f['total']) != 0 && restoFactura_($f, $t) > TOLERANCIA_CASAR)); };
+  $libres = function () use ($banco, $ignorar) { $t = leer_('CASADOS'); $o = [];
+    foreach ($banco as $m) { if (txt_($m['sin_factura'] ?? '') === 'si' || preg_match($ignorar, txt_($m['concepto']) . ' ' . txt_($m['categoria']))) continue;
+      $r = restoMovimiento_($m, $t); if ($r > TOLERANCIA_CASAR) $o[] = $m + ['_resto' => $r]; } return $o; };
+  $dias = fn($a, $b) => (int)round((strtotime($b) - strtotime($a)) / 86400);
+  $signoOk = fn($f, $m) => num_($m['importe']) * (txt_($f['tipo']) === 'emitida' ? 1 : -1) > 0;
+
+  /* 1) mismo importe: emparejar por cercanía de fecha, nombre primero */
+  $fs = $pendientes(); $ms = $libres(); $pares = [];
+  $t = leer_('CASADOS');
+  foreach ($fs as $f) {
+    $pend = restoFactura_($f, $t); $clave = claveContraparte_($f); $fe = txt_($f['fecha']) ?: hoyISO_();
+    foreach ($ms as $m) {
+      if (!$signoOk($f, $m) || abs($m['_resto'] - $pend) > TOLERANCIA_CASAR) continue;
+      $d = $dias($fe, txt_($m['fecha'])); if ($d < -20 || $d > 120) continue;
+      $nom = nombraContraparte_(txt_($m['concepto']), $clave);
+      $pares[] = ['f' => $f, 'm' => $m, 'peso' => ($nom ? 0 : 1000) + ($d < 0 ? 3 * -$d + 10 : $d)];
+    }
+  }
+  usort($pares, fn($a, $b) => $a['peso'] <=> $b['peso']);
+  $uf = []; $um = [];
+  foreach ($pares as $x) {
+    if (isset($uf[$x['f']['id']]) || isset($um[$x['m']['id']])) continue;
+    if ($x['peso'] >= 1000 && $x['peso'] - 1000 > 60) continue;   /* sin nombre y lejos en fecha: no */
+    if (casarTrozo_($u, $x['f'], preg_match('/www\.|amazon|pccomponentes|compra|tarj/i', txt_($x['m']['concepto'])) ? 'tarjeta' : 'banco', $x['m']['id'], 0, '', 'Casado automático') === '') {
+      $uf[$x['f']['id']] = 1; $um[$x['m']['id']] = 1; recalcularCasada_($u, $x['f']['id']); $res['exactas']++;
+    }
+  }
+
+  /* 2) un movimiento → varias facturas de la misma contraparte */
+  $fs = $pendientes(); $t = leer_('CASADOS');
+  foreach ($libres() as $m) {
+    $cand = [];
+    foreach ($fs as $f) {
+      if (!$signoOk($f, $m) || txt_($f['casada']) === 'si') continue;
+      $d = $dias(txt_($f['fecha']) ?: hoyISO_(), txt_($m['fecha'])); if ($d < -10 || $d > 150) continue;
+      if (!nombraContraparte_(txt_($m['concepto']), claveContraparte_($f))) continue;
+      $cand[] = [$f['id'], restoFactura_($f, $t)];
+    }
+    if (count($cand) < 2) continue;
+    $sol = subconjuntosQueSuman_($cand, $m['_resto']);
+    if (count($sol) !== 1 || count($sol[0]) < 2) continue;
+    $elegidas = array_values(array_filter($fs, fn($f) => in_array($f['id'], $sol[0], true)));
+    repartirCasado_($u, $elegidas, [$m], 'banco', 'Casado automático: una transferencia para ' . count($elegidas) . ' facturas');
+    $res['agrupadas'] += count($elegidas);
+    $fs = $pendientes(); $t = leer_('CASADOS');
+  }
+
+  /* 3) una factura → varios movimientos de la misma contraparte */
+  foreach ($pendientes() as $f) {
+    $t = leer_('CASADOS'); $pend = restoFactura_($f, $t); $clave = claveContraparte_($f); $fe = txt_($f['fecha']) ?: hoyISO_();
+    $cand = []; $porId = [];
+    foreach ($libres() as $m) {
+      if (!$signoOk($f, $m)) continue;
+      $d = $dias($fe, txt_($m['fecha'])); if ($d < -90 || $d > 180) continue;
+      if (!nombraContraparte_(txt_($m['concepto']), $clave)) continue;
+      $cand[] = [$m['id'], $m['_resto']]; $porId[$m['id']] = $m;
+    }
+    if (count($cand) < 2) continue;
+    $sol = subconjuntosQueSuman_($cand, $pend, 4);
+    if (count($sol) !== 1 || count($sol[0]) < 2) continue;
+    repartirCasado_($u, [$f], array_map(fn($id) => $porId[$id], $sol[0]), 'banco', 'Casado automático: pagada en ' . count($sol[0]) . ' veces');
+    $res['fraccionadas']++;
+  }
+
+  /* motivo de lo que queda */
+  $t = leer_('CASADOS'); $libresAhora = $libres(); $marcadas = 0;
+  foreach (leer_('FACTURAS_DOC') as $f) {
+    $resto = restoFactura_($f, $t);
+    if (num_($f['total']) != 0 && $resto <= TOLERANCIA_CASAR) { if (txt_($f['revisar']) !== '') actualizar_('FACTURAS_DOC', $f['id'], ['revisar' => '']); continue; }
+    $clave = claveContraparte_($f); $fe = txt_($f['fecha']) ?: hoyISO_();
+    $mismo = 0; $nombre = 0;
+    foreach ($libresAhora as $m) {
+      if (!$signoOk($f, $m)) continue;
+      $d = $dias($fe, txt_($m['fecha'])); if ($d < -60 || $d > 180) continue;
+      if (abs($m['_resto'] - $resto) <= TOLERANCIA_CASAR) $mismo++;
+      elseif (nombraContraparte_(txt_($m['concepto']), $clave)) $nombre++;
+    }
+    $quien = txt_($f['tipo']) === 'emitida' ? 'cobro' : 'pago';
+    if (num_($f['total']) == 0) $motivo = 'Sin importe: no se ha podido leer el total. Ponlo a mano y cásala.';
+    elseif (txt_($f['casada']) === 'parcial') $motivo = 'Casada en parte: faltan ' . number_format($resto, 2, ',', '.') . ' €' . ($nombre ? ' (hay ' . $nombre . ' movimientos de la misma contraparte)' : '');
+    elseif ($mismo > 1) $motivo = 'Hay ' . $mismo . ' movimientos con el mismo importe: elige cuál es.';
+    elseif ($mismo === 1) $motivo = 'Un movimiento con el mismo importe pero lejos en fecha o sin el nombre: confírmalo.';
+    elseif ($nombre) $motivo = 'Hay ' . $nombre . ' movimientos de la misma contraparte que no cuadran solos: puede ser un pago agrupado o parcial; cásala a mano.';
+    else $motivo = txt_($f['tipo']) === 'emitida' ? 'Cobro no encontrado en el banco: ¿pendiente de cobrar o cobrada por otra vía?' : 'Pago no encontrado en el banco: ¿tarjeta, efectivo, pendiente de pagar o pagada por otra vía?';
+    if (txt_($f['revisar']) !== $motivo) actualizar_('FACTURAS_DOC', $f['id'], ['revisar' => $motivo]);
+    $marcadas++;
+  }
+  $res['pendientes'] = $marcadas;
+  $res['movimientos_sin_factura'] = count($libres());
+  registrar_($u, 'auto_casar', 'FACTURAS_DOC', '', json_encode($res));
+  return ['ok' => true] + $res;
+}
+
+/**
+ * Movimientos del banco sin factura casada entera (desde p.desde), para buscar la factura
+ * que falta o marcarlos «no lleva factura». Se marcan los que ya tienen gasto o cobro en el CRM.
  */
 function accBancoSinFactura_(array $u, array $p): array {
   exigir_($u, 'finanzas');
+  asegurarCasados_();
   $desde = txt_($p['desde'] ?? '') ?: substr(hoyISO_(), 0, 4) . '-01-01';
   $hasta = txt_($p['hasta'] ?? '') ?: hoyISO_();
-  $casados = [];
-  foreach (leer_('FACTURAS_DOC') as $f) if (txt_($f['banco_id']) !== '') $casados[txt_($f['banco_id'])] = true;
+  $t = leer_('CASADOS');
   /* lo que no lleva factura: traspasos entre cuentas, nóminas, Seguridad Social, impuestos, préstamos */
   $sinFactura = '/traspaso|n[oó]mina|seg\.?\s*social|tgss|aeat|agencia tributaria|hacienda|impuesto|pr[eé]stamo|cuota pr[eé]stamo|comisi[oó]n mantenimiento|liquidaci[oó]n/i';
   $lista = [];
   foreach (leer_('BANCO') as $m) {
     $fe = txt_($m['fecha']);
     if (strcmp($fe, $desde) < 0 || strcmp($fe, $hasta) > 0) continue;
-    if (!empty($casados[txt_($m['id'])])) continue;
+    $resto = restoMovimiento_($m, $t);
+    if ($resto <= TOLERANCIA_CASAR) continue;
     $lista[] = ['id' => $m['id'], 'cuenta' => txt_($m['cuenta']), 'fecha' => $fe, 'concepto' => txt_($m['concepto']),
-      'importe' => num_($m['importe']), 'categoria' => txt_($m['categoria']),
+      'importe' => num_($m['importe']), 'resto' => $resto, 'parcial' => $resto < abs(num_($m['importe'])) - TOLERANCIA_CASAR,
+      'categoria' => txt_($m['categoria']),
       'con_gasto' => txt_($m['gasto_id']) !== '', 'con_cobro' => txt_($m['cobro_id']) !== '',
+      'marcado' => txt_($m['sin_factura'] ?? '') === 'si', 'nota_factura' => txt_($m['nota_factura'] ?? ''),
       'no_lleva' => (bool)preg_match($sinFactura, txt_($m['concepto']) . ' ' . txt_($m['categoria']))];
   }
   usort($lista, fn($a, $b) => strcmp($b['fecha'], $a['fecha']));
   return ['ok' => true, 'movimientos' => $lista];
+}
+
+/** Marca (o desmarca) un movimiento como «no lleva factura», con su motivo. */
+function accMarcarMovimientoSinFactura_(array $u, array $p): array {
+  exigir_($u, 'finanzas');
+  $m = buscar1_('BANCO', fn($x) => mismo_($x['id'], $p['id'] ?? ''));
+  if (!$m) return ['ok' => false, 'error' => 'Ese movimiento ya no está.'];
+  $si = !empty($p['sin_factura']);
+  $nota = trozo_(txt_($p['nota'] ?? ''), 0, 300);
+  if ($si && $nota === '') return ['ok' => false, 'error' => 'Indica por qué no lleva factura.'];
+  actualizar_('BANCO', $m['id'], ['sin_factura' => $si ? 'si' : '', 'nota_factura' => $si ? $nota : '']);
+  registrar_($u, 'movimiento_sin_factura', 'BANCO', $m['id'], ($si ? 'si · ' : 'no · ') . $nota);
+  return ['ok' => true];
+}
+
+/** Facturas pendientes de casar que pueden ir con este movimiento (para casarlo desde el banco). */
+function accFacturasParaMovimiento_(array $u, array $p): array {
+  exigir_($u, 'finanzas');
+  asegurarCasados_();
+  $m = buscar1_('BANCO', fn($x) => mismo_($x['id'], $p['id'] ?? ''));
+  if (!$m) return ['ok' => false, 'error' => 'Ese movimiento ya no está.'];
+  $t = leer_('CASADOS');
+  $resto = restoMovimiento_($m, $t);
+  $tipo = num_($m['importe']) > 0 ? 'emitida' : 'recibida';
+  $lista = [];
+  foreach (leer_('FACTURAS_DOC') as $f) {
+    if (txt_($f['tipo']) !== $tipo) continue;
+    $pend = restoFactura_($f, $t);
+    if ($pend <= TOLERANCIA_CASAR && num_($f['total']) != 0) continue;
+    $d = (int)round((strtotime(txt_($m['fecha'])) - strtotime(txt_($f['fecha']) ?: hoyISO_())) / 86400);
+    $nombra = nombraContraparte_(txt_($m['concepto']), claveContraparte_($f));
+    $exacto = abs($pend - $resto) <= TOLERANCIA_CASAR;
+    $puntos = ($exacto ? 100 : 0) + ($nombra ? 50 : 0) - abs($d) * 0.3;
+    if (!$exacto && !$nombra && abs($d) > 60) continue;
+    $lista[] = ['id' => $f['id'], 'fecha' => txt_($f['fecha']), 'quien' => $tipo === 'emitida' ? txt_($f['receptor']) : txt_($f['emisor']),
+      'numero' => txt_($f['numero']), 'total' => num_($f['total']), 'pendiente' => $pend, 'exacto' => $exacto, 'nombra' => $nombra, 'puntos' => $puntos];
+  }
+  usort($lista, fn($a, $b) => $b['puntos'] <=> $a['puntos']);
+  return ['ok' => true, 'resto' => $resto, 'facturas' => array_slice($lista, 0, 25)];
 }
 
 
@@ -386,4 +709,78 @@ function enlazarFacturaDrive_(array $f): array {
     }
   }
   return $x ? actualizar_('FACTURAS_DOC', $f['id'], ['gasto_id' => $x['id']] + (txt_($f['operacion_id']) === '' && txt_($x['operacion_id']) !== '' ? ['operacion_id' => txt_($x['operacion_id'])] : [])) : $f;
+}
+
+/**
+ * Cuadre contable del periodo (p.desde / p.hasta): banco frente a facturas, cobros y pagos
+ * pendientes, IVA por trimestre según las facturas y la lista de cosas que impiden cuadrar.
+ */
+function accCuadreContable_(array $u, array $p): array {
+  exigir_($u, 'finanzas');
+  asegurarCasados_();
+  $desde = txt_($p['desde'] ?? ''); $hasta = txt_($p['hasta'] ?? '') ?: hoyISO_();
+  $enRango = fn($fe) => ($desde === '' || strcmp($fe, $desde) >= 0) && strcmp($fe, $hasta) <= 0;
+  $t = leer_('CASADOS');
+  $ignorar = '/traspaso|n[oó]mina|seg\.?\s*social|tgss|aeat|agencia tributaria|hacienda|impuesto|pr[eé]stamo|cuota pr[eé]stamo|comisi[oó]n mantenimiento|liquidaci[oó]n/i';
+  $b = ['movimientos' => 0, 'entradas' => 0.0, 'salidas' => 0.0, 'casado' => 0.0, 'sin_casar' => 0.0, 'n_sin_casar' => 0, 'no_lleva' => 0.0, 'n_no_lleva' => 0];
+  foreach (leer_('BANCO') as $m) {
+    if (!$enRango(txt_($m['fecha']))) continue;
+    $imp = num_($m['importe']); $b['movimientos']++;
+    if ($imp > 0) $b['entradas'] += $imp; else $b['salidas'] += -$imp;
+    $resto = restoMovimiento_($m, $t);
+    $b['casado'] += abs($imp) - $resto;
+    if ($resto <= TOLERANCIA_CASAR) continue;
+    if (txt_($m['sin_factura'] ?? '') === 'si' || preg_match($ignorar, txt_($m['concepto']) . ' ' . txt_($m['categoria']))) { $b['no_lleva'] += $resto; $b['n_no_lleva']++; }
+    else { $b['sin_casar'] += $resto; $b['n_sin_casar']++; }
+  }
+  $lleva = $b['casado'] + $b['sin_casar'];
+  $b['pct_casado'] = $lleva > 0 ? (int)round($b['casado'] / $lleva * 100) : 100;
+  foreach (['entradas', 'salidas', 'casado', 'sin_casar', 'no_lleva'] as $k) $b[$k] = redondear_($b[$k], 2);
+
+  $fac = ['emitida' => ['n' => 0, 'total' => 0.0, 'casado' => 0.0, 'pendiente' => 0.0, 'n_pendiente' => 0],
+          'recibida' => ['n' => 0, 'total' => 0.0, 'casado' => 0.0, 'pendiente' => 0.0, 'n_pendiente' => 0]];
+  $iva = []; $avisos = []; $sinImporte = 0; $fechaRara = 0; $noCuadra = 0; $viejas = 0; $vistos = []; $dups = 0; $deMas = 0;
+  $docs = leer_('FACTURAS_DOC');
+  foreach ($docs as $f) {
+    $fe = txt_($f['fecha']); $tipo = txt_($f['tipo']) === 'emitida' ? 'emitida' : 'recibida';
+    if ($fe === '' || $fe < '2020-01-01' || $fe > substr(hoyISO_(), 0, 4) . '-12-31') $fechaRara++;
+    if (!$enRango($fe)) continue;
+    $tot = num_($f['total']); $resto = restoFactura_($f, $t);
+    $x = &$fac[$tipo]; $x['n']++; $x['total'] += $tot; $x['casado'] += $tot - max($resto, 0);
+    if ($tot == 0) $sinImporte++;
+    elseif ($resto > TOLERANCIA_CASAR) { $x['pendiente'] += $resto; $x['n_pendiente']++;
+      if ($tipo === 'emitida' && (strtotime(hoyISO_()) - strtotime($fe)) / 86400 > 60) $viejas++; }
+    if ($resto < -1) $deMas++;
+    unset($x);
+    if ($tot != 0 && num_($f['base']) != 0 && abs(num_($f['base']) + num_($f['iva']) - num_($f['irpf']) - $tot) > 0.05) $noCuadra++;
+    $q = substr($fe, 0, 4) . '-T' . (int)ceil((int)substr($fe, 5, 2) / 3);
+    $iva[$q] = $iva[$q] ?? ['trimestre' => $q, 'repercutido' => 0.0, 'soportado' => 0.0];
+    $iva[$q][$tipo === 'emitida' ? 'repercutido' : 'soportado'] += num_($f['iva']);
+    $k = $tipo . '|' . preg_replace('/[^a-z0-9]/', '', normal_($f['numero'])) . '|' . round(abs($tot), 2);
+    if (preg_replace('/[^a-z0-9]/', '', normal_($f['numero'])) !== '' && $tot != 0) { if (isset($vistos[$k])) $dups++; $vistos[$k] = 1; }
+  }
+  foreach ($fac as &$x) foreach (['total', 'casado', 'pendiente'] as $k) $x[$k] = redondear_($x[$k], 2);
+  unset($x);
+  ksort($iva);
+  $iva = array_values(array_map(fn($q) => $q + ['resultado' => redondear_($q['repercutido'] - $q['soportado'], 2)], $iva));
+  foreach ($iva as &$q) { $q['repercutido'] = redondear_($q['repercutido'], 2); $q['soportado'] = redondear_($q['soportado'], 2); }
+  unset($q);
+
+  /* cruces con el resto del CRM */
+  $conDoc = []; foreach ($docs as $f) { if (txt_($f['factura_id']) !== '') $conDoc['F' . $f['factura_id']] = 1; if (txt_($f['gasto_id']) !== '') $conDoc['G' . $f['gasto_id']] = 1; }
+  $emitidasSinPdf = 0; foreach (leer_('FACTURAS') as $x) if ($enRango(txt_($x['fecha_emision'])) && !isset($conDoc['F' . $x['id']]) && normal_($x['estado']) !== 'anulada') $emitidasSinPdf++;
+  $gastosSinFactura = 0; $gastosSinFacturaEur = 0.0;
+  foreach (leer_('GASTOS') as $g) if ($enRango(txt_($g['fecha'])) && !isset($conDoc['G' . $g['id']]) && num_($g['importe']) > 0) { $gastosSinFactura++; $gastosSinFacturaEur += num_($g['importe']); }
+
+  if ($b['n_sin_casar']) $avisos[] = $b['n_sin_casar'] . ' movimientos del banco sin factura (' . number_format($b['sin_casar'], 2, ',', '.') . ' €): súbela o márcalos «no lleva factura».';
+  if ($fac['recibida']['n_pendiente']) $avisos[] = $fac['recibida']['n_pendiente'] . ' facturas recibidas sin casar: mira «Qué falta» en cada una.';
+  if ($viejas) $avisos[] = $viejas . ' facturas emitidas con más de 60 días sin cobro en el banco.';
+  if ($sinImporte) $avisos[] = $sinImporte . ' facturas sin importe leído: ábrelas y pon el total.';
+  if ($noCuadra) $avisos[] = $noCuadra . ' facturas en las que base + IVA − IRPF no da el total: revisa los importes leídos.';
+  if ($fechaRara) $avisos[] = $fechaRara . ' facturas sin fecha o con una fecha imposible.';
+  if ($dups) $avisos[] = $dups . ' posibles facturas duplicadas (mismo número e importe).';
+  if ($deMas) $avisos[] = $deMas . ' facturas casadas por más de su importe: revisa los trozos.';
+  if ($emitidasSinPdf) $avisos[] = $emitidasSinPdf . ' facturas emitidas en el CRM sin su PDF en Escanear facturas.';
+  if ($gastosSinFactura) $avisos[] = $gastosSinFactura . ' gastos del CRM sin factura (' . number_format($gastosSinFacturaEur, 2, ',', '.') . ' €): falta el justificante.';
+  return ['ok' => true, 'desde' => $desde, 'hasta' => $hasta, 'banco' => $b, 'emitidas' => $fac['emitida'], 'recibidas' => $fac['recibida'], 'iva' => $iva, 'avisos' => $avisos];
 }

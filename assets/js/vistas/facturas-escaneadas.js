@@ -422,9 +422,8 @@ export async function vistaFacturasEscaneadas() {
       {clave: 'base', et: 'Base', num: true, pinta: x => eur2(x.base)},
       {clave: 'iva', et: 'IVA', num: true, pinta: x => eur2(x.iva)},
       {clave: 'total', et: 'Total', num: true, pinta: x => eur2(x.total)},
-      {clave: 'casada', et: 'Casada con', pinta: x => x.casada === 'si'
-        ? h('span', {estilo: {color: '#3f7d0b', fontWeight: '600'}}, '✓ ' + (MEDIO[x.medio_pago] || x.medio_pago))
-        : h('span', {estilo: {color: '#b45309', fontWeight: '600'}}, '● Sin casar')}
+      {clave: 'casada', et: 'Casada con', pinta: estadoCasada},
+      {clave: 'revisar', et: 'Qué falta', valor: x => x.casada === 'si' ? '' : (x.revisar || '')}
     ], soloSinCasar.v ? fs.filter(x => x.casada !== 'si') : fs, {alPulsar: abrir, csv: 'Facturas_escaneadas.csv', vacio: 'Aún no hay facturas escaneadas en estas fechas.'});
     poner(lista,
       kpis([kpi('Facturas', String(fs.length)),
@@ -432,10 +431,18 @@ export async function vistaFacturasEscaneadas() {
         kpi('Emitidas · base', eur2(s(emi, 'base')), 'IVA repercutido ' + eur2(s(emi, 'iva'))),
         kpi('Sin casar con banco, tarjeta o efectivo', String(fs.filter(x => x.casada !== 'si').length),
           eur2(s(fs.filter(x => x.casada !== 'si'), 'total')), {estado: fs.some(x => x.casada !== 'si') ? 'aviso' : null})]),
+      await tarjetaCuadre(rango),
       tarjeta('Facturas escaneadas', t, {sinRelleno: true,
-        acciones: [h('button.btn.mini', {onclick: () => { soloSinCasar.v = !soloSinCasar.v; recargar(); }}, soloSinCasar.v ? 'Ver todas' : 'Solo sin casar'),
+        acciones: [h('button.btn.mini.primario', {onclick: async ev => {
+            ev.target.disabled = true; ev.target.textContent = 'Casando…';
+            try { const r = await api.pedir('autoCasar', {}); aviso('Casadas: ' + r.exactas + ' por importe, ' + r.agrupadas + ' en transferencias agrupadas, ' + r.fraccionadas + ' pagadas en varias veces. Quedan ' + r.pendientes + ' por revisar.'); }
+            catch (e) { aviso(e.message, 'error'); }
+            recargar();
+          }}, 'Casar todo automáticamente'),
+          h('button.btn.mini', {onclick: () => { soloSinCasar.v = !soloSinCasar.v; recargar(); }}, soloSinCasar.v ? 'Ver todas' : 'Solo sin casar'),
+          h('button.btn.mini', {onclick: () => ventanaGestoria(rango)}, '📦 Para la gestoría'),
           h('button.btn.mini', {onclick: () => t.exportar && t.exportar()}, 'Exportar CSV')]}),
-      await tarjetaBancoSinFactura(rango));
+      await tarjetaBancoSinFactura(rango, recargar));
   }
 
   async function abrir(fila) {
@@ -448,66 +455,295 @@ export async function vistaFacturasEscaneadas() {
   return caja;
 }
 
-/* ---------- casar con banco, tarjeta o efectivo ---------- */
-const MEDIO = {banco: 'Banco', tarjeta: 'Tarjeta', efectivo: 'Efectivo (caja)'};
+/* ---------- casar con banco, tarjeta, efectivo u otro ---------- */
+const MEDIO = {banco: 'Banco', tarjeta: 'Tarjeta', efectivo: 'Efectivo (caja)', otro: 'Indicado a mano', varios: 'Varios'};
+const VERDE = '#3f7d0b', NARANJA = '#b45309', ROJO = '#b42318';
 
-/** Bloque de la ventana para casar la factura con su pago o cobro. */
+function estadoCasada(x) {
+  if (x.casada === 'si') return h('span', {estilo: {color: VERDE, fontWeight: '600'}}, '✓ ' + (MEDIO[x.medio_pago] || x.medio_pago || 'Casada'));
+  if (x.casada === 'parcial') return h('span', {estilo: {color: NARANJA, fontWeight: '600'}, title: x.revisar || ''}, '◐ ' + eur2(x.importe_casado) + ' de ' + eur2(x.total));
+  return h('span', {estilo: {color: NARANJA, fontWeight: '600'}, title: x.revisar || ''}, '● Sin casar');
+}
+
+/** Bloque de la ventana para casar la factura con su pago o cobro (uno o varios). */
 function bloqueCasar(f, alCambiar) {
   const caja = h('div', {estilo: {marginTop: '12px', padding: '10px 12px', border: '1px solid var(--borde, #ddd)', borderRadius: '8px'}});
   const titulo = h('b', f.tipo === 'emitida' ? 'Casar con su cobro' : 'Casar con su pago');
   const pinta = async () => {
-    if (f.casada === 'si') {
-      poner(caja, titulo, h('p', {estilo: {margin: '6px 0'}},
-        h('span', {estilo: {color: '#3f7d0b', fontWeight: '600'}}, '✓ Casada · ' + (MEDIO[f.medio_pago] || f.medio_pago)),
-        ' · ' + fechaCorta(f.fecha_pago) + (f.banco_id ? ' · movimiento ' + f.banco_id : '')),
-        h('button.btn.mini', {onclick: async () => {
-          const r = await api.pedir('descasarFacturaDoc', {id: f.id}); Object.assign(f, r.factura); aviso('Descasada.'); await alCambiar(); pinta();
-        }}, 'Descasar'));
-      return;
-    }
-    poner(caja, titulo, h('p.nota', {estilo: {margin: '4px 0'}}, cargando('Buscando el movimiento en el banco…')));
-    const r = await api.pedir('candidatosBancoFacturaDoc', {id: f.id});
-    const cand = r.candidatos || [];
-    const casar = async (medio, bancoId) => {
-      const fecha = medio === 'banco' || bancoId ? '' : (fechaPago.value || hoyISO());
-      const res = await api.pedir('casarFacturaDoc', {id: f.id, medio, banco_id: bancoId || '', fecha});
-      Object.assign(f, res.factura);
-      aviso('Casada con ' + (MEDIO[medio] || medio).toLowerCase() + '.' + (res.aviso ? ' ' + res.aviso : ''));
-      await alCambiar(); pinta();
+    poner(caja, titulo, h('p.nota', {estilo: {margin: '4px 0'}}, cargando('Buscando en el banco…')));
+    const [rc, rk] = await Promise.all([api.pedir('casadosFacturaDoc', {id: f.id}), f.casada === 'si' ? Promise.resolve({candidatos: [], pendiente: 0}) : api.pedir('candidatosBancoFacturaDoc', {id: f.id})]);
+    const casados = rc.casados || [], cand = rk.candidatos || [];
+    const pend = f.casada === 'si' ? 0 : num(rk.pendiente);
+    const recargar = async res => { if (res && res.factura) Object.assign(f, res.factura); if (res && res.aviso) aviso(res.aviso); await alCambiar(); pinta(); };
+    const casar = async (medio, bancoId, importe) => {
+      const res = await api.pedir('casarFacturaDoc', {id: f.id, medio, banco_id: bancoId || '', importe: importe || 0,
+        fecha: bancoId ? '' : (fechaPago.value || hoyISO()), nota: medio === 'otro' ? motivo.value.trim() : ''});
+      aviso('Casada' + (res.factura.casada === 'parcial' ? ' en parte' : '') + '.'); recargar(res);
     };
     const fechaPago = h('input', {type: 'date', value: f.fecha_pago || hoyISO(), estilo: {width: 'auto'}});
+    const motivo = h('input', {type: 'text', placeholder: 'Motivo (p. ej. pagada por un socio, anulada, compensada…)', estilo: {flex: '1 1 260px'}});
+    const imp = h('input', {type: 'number', step: '0.01', value: pend ? pend.toFixed(2) : '', estilo: {width: '110px'}, title: 'Importe a casar'});
+
+    const yaCasado = casados.length ? h('div',
+      h('p.nota', {estilo: {margin: '4px 0'}}, 'Casada con:'),
+      h('table.datos', h('tbody', casados.map(c => h('tr',
+        h('td', fechaCorta(c.fecha)), h('td', MEDIO[c.medio] || c.medio),
+        h('td', c.banco_id ? (c.cuenta + ' · ' + c.concepto + ' (' + eur2(c.importe_mov) + ')') : (c.notas || '—')),
+        h('td.num', c.medio === 'otro' && !num(c.importe) ? 'cerrada' : eur2(c.importe)),
+        h('td', h('button.btn.mini', {onclick: async () => recargar(await api.pedir('descasarFacturaDoc', {id: f.id, casado_id: c.id}))}, 'Quitar')))))))
+      : null;
+    if (f.casada === 'si') {
+      poner(caja, titulo, h('p', {estilo: {margin: '6px 0', color: VERDE, fontWeight: '600'}}, '✓ Casada entera'), yaCasado);
+      return;
+    }
     poner(caja, titulo,
-      cand.length ? h('div',
-        h('p.nota', {estilo: {margin: '4px 0'}}, 'Movimientos del banco que pueden ser ' + (f.tipo === 'emitida' ? 'el cobro' : 'el pago') + ' (mismo importe y fechas cercanas):'),
-        h('table.datos', h('tbody', cand.map((m, i) => h('tr',
-          h('td', fechaCorta(m.fecha)), h('td', m.cuenta), h('td', m.concepto + (m.tarjeta ? ' 💳' : '')),
-          h('td.num', eur2(m.importe)),
-          h('td', h('button.btn.mini' + (i === 0 ? '.primario' : ''), {onclick: () => casar(m.tarjeta ? 'tarjeta' : 'banco', m.id)}, 'Casar')))))))
-        : h('p.nota', {estilo: {margin: '4px 0'}}, 'No hay ningún movimiento del banco con ese importe en fechas cercanas.'),
+      f.revisar ? h('p', {estilo: {margin: '4px 0', color: NARANJA}}, '⚠ ' + f.revisar) : null,
+      yaCasado,
+      h('p.nota', {estilo: {margin: '6px 0 2px'}}, 'Falta por casar: ', h('b', eur2(pend)), '. Puedes casarla con uno o con varios movimientos (pagos parciales), y un movimiento puede pagar varias facturas.'),
+      cand.length ? h('table.datos', h('tbody', cand.map((m, i) => h('tr',
+        h('td', fechaCorta(m.fecha)), h('td', m.cuenta),
+        h('td', m.concepto + (m.tarjeta ? ' 💳' : '') + (m.nombra ? '' : '')),
+        h('td.num', eur2(m.importe)),
+        h('td.num', {title: 'Lo que queda libre del movimiento'}, m.resto < Math.abs(m.importe) - 0.05 ? 'libre ' + eur2(m.resto) : ''),
+        h('td', m.exacto ? h('span', {estilo: {color: VERDE}}, 'mismo importe') : h('span.nota', 'misma contraparte')),
+        h('td', h('button.btn.mini' + (i === 0 && m.exacto ? '.primario' : ''), {onclick: () => casar(m.tarjeta ? 'tarjeta' : 'banco', m.id, Math.min(num(imp.value) || pend, m.resto))}, 'Casar'))))))
+        : h('p.nota', {estilo: {margin: '4px 0'}}, 'No hay movimientos del banco con ese importe ni de la misma contraparte en fechas cercanas.'),
       h('div', {estilo: {display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginTop: '8px'}},
-        h('span.nota', 'Sin movimiento en el banco:'), fechaPago,
-        h('button.btn.mini', {onclick: () => casar('tarjeta')}, '💳 Pagada con tarjeta'),
-        h('button.btn.mini', {onclick: () => casar('efectivo')}, '💶 Efectivo (caja)')));
+        h('span.nota', 'Importe a casar:'), imp, h('span.nota', 'Sin movimiento en el banco:'), fechaPago,
+        h('button.btn.mini', {onclick: () => casar('tarjeta', '', num(imp.value))}, '💳 Tarjeta'),
+        h('button.btn.mini', {onclick: () => casar('efectivo', '', num(imp.value))}, '💶 Efectivo (caja)')),
+      h('div', {estilo: {display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginTop: '8px'}},
+        motivo,
+        h('button.btn.mini', {onclick: () => { if (!motivo.value.trim()) return aviso('Escribe el motivo.', 'error'); casar('otro', '', 0); }}, '✍ Indicar a mano y cerrar')));
   };
   pinta();
   return caja;
 }
 
-/** Movimientos del banco del periodo que no tienen factura casada. */
-async function tarjetaBancoSinFactura(rango) {
+/** Movimientos del banco del periodo sin factura casada entera: casar desde aquí o marcar «no lleva factura». */
+async function tarjetaBancoSinFactura(rango, alCambiar) {
   const r = await api.pedir('bancoSinFactura', {desde: rango.desde || '', hasta: rango.hasta || ''}).catch(() => ({movimientos: []}));
-  const ms = (r.movimientos || []).filter(m => !m.no_lleva);
-  const t = tabla([
-    {clave: 'fecha', et: 'Fecha', pinta: m => fechaCorta(m.fecha)},
-    {clave: 'cuenta', et: 'Cuenta'},
-    {clave: 'concepto', et: 'Concepto'},
-    {clave: 'importe', et: 'Importe', num: true, pinta: m => h('span', {estilo: {color: m.importe < 0 ? '#b42318' : '#3f7d0b'}}, eur2(m.importe))},
-    {clave: 'tipo', et: 'Falta', valor: m => m.importe < 0 ? 'Factura del proveedor' : 'Factura emitida'},
-    {clave: 'crm', et: 'En el CRM', valor: m => m.con_gasto ? 'Tiene gasto' : (m.con_cobro ? 'Tiene cobro' : '—')}
-  ], ms, {csv: 'Banco_sin_factura.csv', vacio: 'Todos los movimientos del periodo tienen su factura casada.'});
-  return tarjeta('Movimientos del banco sin factura (' + ms.length + ')', t, {sinRelleno: true,
-    subtitulo: 'Cada pago y cada cobro del banco debería tener su factura. No salen nóminas, Seguridad Social, impuestos ni traspasos.',
-    acciones: [h('button.btn.mini', {onclick: () => t.exportar && t.exportar()}, 'Exportar CSV')]});
+  const todos = r.movimientos || [];
+  const ver = {marcados: false};
+  const cuerpo = h('div');
+  const pinta = () => {
+    const ms = todos.filter(m => !m.no_lleva && (ver.marcados ? m.marcado : !m.marcado));
+    const t = tabla([
+      {clave: 'fecha', et: 'Fecha', pinta: m => fechaCorta(m.fecha)},
+      {clave: 'cuenta', et: 'Cuenta'},
+      {clave: 'concepto', et: 'Concepto'},
+      {clave: 'importe', et: 'Importe', num: true, pinta: m => h('span', {estilo: {color: m.importe < 0 ? ROJO : VERDE}}, eur2(m.importe))},
+      {clave: 'resto', et: 'Sin casar', num: true, pinta: m => m.parcial ? eur2(m.resto) : '—'},
+      {clave: 'tipo', et: 'Falta', valor: m => m.marcado ? 'No lleva · ' + m.nota_factura : (m.importe < 0 ? 'Factura del proveedor' : 'Factura emitida')},
+      {clave: 'crm', et: 'En el CRM', valor: m => m.con_gasto ? 'Tiene gasto' : (m.con_cobro ? 'Tiene cobro' : '—')}
+    ], ms, {alPulsar: m => ventanaMovimiento(m, async () => { await alCambiar(); }), csv: 'Banco_sin_factura.csv', vacio: ver.marcados ? 'No hay movimientos marcados.' : 'Todos los movimientos del periodo tienen su factura casada.'});
+    poner(cuerpo, tarjeta((ver.marcados ? 'Movimientos marcados «no lleva factura» (' : 'Movimientos del banco sin factura (') + ms.length + ')', t, {sinRelleno: true,
+      subtitulo: 'Pulsa un movimiento para casarlo con su factura o marcar que no lleva. No salen nóminas, Seguridad Social, impuestos ni traspasos.',
+      acciones: [h('button.btn.mini', {onclick: () => { ver.marcados = !ver.marcados; pinta(); }}, ver.marcados ? 'Ver sin factura' : 'Ver marcados'),
+        h('button.btn.mini', {onclick: () => t.exportar && t.exportar()}, 'Exportar CSV')]}));
+  };
+  pinta();
+  return cuerpo;
+}
+
+/** Ventana de un movimiento: casarlo con una o varias facturas o marcarlo «no lleva factura». */
+async function ventanaMovimiento(m, alCambiar) {
+  const r = await api.pedir('facturasParaMovimiento', {id: m.id});
+  const fs = r.facturas || [];
+  const marcadas = new Set(fs.filter((f, i) => i === 0 && f.exacto).map(f => f.id));
+  const suma = h('b');
+  const actualizar = () => { const s = fs.filter(f => marcadas.has(f.id)).reduce((a, f) => a + num(f.pendiente || f.total), 0); poner(suma, eur2(s) + ' de ' + eur2(r.resto)); suma.style.color = Math.abs(s - r.resto) <= 0.05 ? VERDE : NARANJA; };
+  const nota = h('input', {type: 'text', value: m.nota_factura || '', placeholder: 'Motivo (comisión del banco, devolución, traspaso, préstamo…)', estilo: {flex: '1 1 260px'}});
+  const v = ventana({titulo: fechaCorta(m.fecha) + ' · ' + m.concepto + ' · ' + eur2(m.importe), ancha: true, cuerpo: h('div',
+    h('p.nota', 'Sin casar: ', h('b', eur2(r.resto)), '. Marca la factura o las facturas que paga este movimiento (si son varias, se reparte por orden de fecha).'),
+    fs.length ? h('table.datos', h('tbody', fs.map(f => {
+      const cb = h('input', {type: 'checkbox', checked: marcadas.has(f.id), onchange: () => { cb.checked ? marcadas.add(f.id) : marcadas.delete(f.id); actualizar(); }});
+      return h('tr', h('td', cb), h('td', fechaCorta(f.fecha)), h('td', f.quien || '—'), h('td', f.numero || ''), h('td.num', eur2(f.total)),
+        h('td.num', f.pendiente < f.total - 0.05 ? 'pend. ' + eur2(f.pendiente) : ''),
+        h('td', f.exacto ? h('span', {estilo: {color: VERDE}}, 'mismo importe') : (f.nombra ? h('span.nota', 'misma contraparte') : '')));
+    }))) : h('p.nota', 'No hay facturas pendientes que encajen. Si falta la factura, súbela arriba.'),
+    h('div', {estilo: {display: 'flex', gap: '10px', alignItems: 'center', marginTop: '8px', flexWrap: 'wrap'}},
+      h('span.nota', 'Seleccionado:'), suma,
+      h('button.btn.primario', {onclick: async () => {
+        if (!marcadas.size) return aviso('Marca al menos una factura.', 'error');
+        const res = await api.pedir('casarLote', {facturas: [...marcadas], movimientos: [m.id]});
+        aviso('Casado con ' + res.facturas.length + ' factura' + (res.facturas.length > 1 ? 's' : '') + '.'); v.cerrar(); await alCambiar();
+      }}, 'Casar con lo marcado')),
+    h('hr'),
+    h('div', {estilo: {display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap'}},
+      nota,
+      m.marcado ? h('button.btn', {onclick: async () => { await api.pedir('marcarMovimientoSinFactura', {id: m.id, sin_factura: false}); aviso('Desmarcado.'); v.cerrar(); await alCambiar(); }}, 'Sí lleva factura')
+        : h('button.btn', {onclick: async () => {
+          if (!nota.value.trim()) return aviso('Escribe el motivo.', 'error');
+          await api.pedir('marcarMovimientoSinFactura', {id: m.id, sin_factura: true, nota: nota.value.trim()}); aviso('Marcado: no lleva factura.'); v.cerrar(); await alCambiar();
+        }}, 'No lleva factura')))});
+  actualizar();
+}
+
+/** Cuadre contable del periodo: banco frente a facturas, cobros y pagos pendientes, IVA y avisos. */
+async function tarjetaCuadre(rango) {
+  const r = await api.pedir('cuadreContable', {desde: rango.desde || '', hasta: rango.hasta || ''}).catch(e => ({error: e.message}));
+  if (r.error) return tarjeta('Cuadre contable', h('p.nota', r.error));
+  const b = r.banco, fe = r.emitidas, fr = r.recibidas;
+  const fila = (et, v, nota, color) => h('tr', h('td', et), h('td.num', {estilo: color ? {color, fontWeight: '600'} : {}}, v), h('td.nota', nota || ''));
+  const avisos = r.avisos || [];
+  return tarjeta('Cuadre contable', h('div', h('div', {estilo: {display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px'}},
+    h('div', h('b', 'Banco'), h('table.datos', h('tbody',
+      fila('Movimientos', String(b.movimientos), eur2(b.entradas) + ' entradas · ' + eur2(b.salidas) + ' salidas'),
+      fila('Casado con facturas', eur2(b.casado), b.pct_casado + ' % de lo que lleva factura', VERDE),
+      fila('Sin factura (deberían llevar)', eur2(b.sin_casar), b.n_sin_casar + ' movimientos', b.n_sin_casar ? NARANJA : VERDE),
+      fila('No llevan factura', eur2(b.no_lleva), b.n_no_lleva + ' (nóminas, SS, impuestos, traspasos y marcados a mano)')))),
+    h('div', h('b', 'Facturas emitidas'), h('table.datos', h('tbody',
+      fila('Facturado', eur2(fe.total), fe.n + ' facturas'),
+      fila('Cobrado (casado)', eur2(fe.casado), '', VERDE),
+      fila('Pendiente de cobro', eur2(fe.pendiente), fe.n_pendiente + ' facturas', fe.n_pendiente ? NARANJA : VERDE)))),
+    h('div', h('b', 'Facturas recibidas'), h('table.datos', h('tbody',
+      fila('Gasto facturado', eur2(fr.total), fr.n + ' facturas'),
+      fila('Pagado (casado)', eur2(fr.casado), '', VERDE),
+      fila('Pendiente de pago o de casar', eur2(fr.pendiente), fr.n_pendiente + ' facturas', fr.n_pendiente ? NARANJA : VERDE)))),
+    h('div', h('b', 'IVA por trimestre (según facturas)'), h('table.datos',
+      h('thead', h('tr', h('th', 'Trim.'), h('th.num', 'Repercutido'), h('th.num', 'Soportado'), h('th.num', 'Resultado'))),
+      h('tbody', (r.iva || []).map(q => h('tr', h('td', q.trimestre), h('td.num', eur2(q.repercutido)), h('td.num', eur2(q.soportado)),
+        h('td.num', {estilo: {fontWeight: '600', color: q.resultado > 0 ? ROJO : VERDE}}, eur2(q.resultado))))))),
+    ),
+    avisos.length ? h('div', {estilo: {marginTop: '12px'}}, h('b', 'Para cuadrar'), h('ul', {estilo: {margin: '6px 0 0', paddingLeft: '18px'}}, avisos.map(a => h('li', a)))) : null),
+    {subtitulo: 'Del ' + (r.desde ? fechaCorta(r.desde) : 'principio') + ' al ' + fechaCorta(r.hasta) + ' · IVA orientativo: lo que sale de las facturas subidas, no sustituye al 303 de la gestoría'});
+}
+
+/* ---------- paquete para la gestoría: un PDF con los libros y el cuadre + todas las facturas en un ZIP ---------- */
+const JSPDF = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+const AUTOTABLE = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js';
+const JSZIP = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+
+const e2 = n => (Math.round(num(n) * 100) / 100).toLocaleString('es-ES', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const fe = s => s ? String(s).slice(0, 10).split('-').reverse().join('/') : '';
+const limpio = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w .,()-]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+const nombrePeriodo = r => r.desde && r.hasta ? fe(r.desde) + ' – ' + fe(r.hasta) : (r.hasta ? 'hasta ' + fe(r.hasta) : 'todo');
+
+function pdfGestoria(rango, fs, cuadre, movs) {
+  const {jsPDF} = window.jspdf;
+  const doc = new jsPDF({orientation: 'landscape', unit: 'mm', format: 'a4'});
+  const NEGRO = [36, 36, 34], LIMA = [180, 250, 30];
+  const cab = (titulo) => {
+    doc.setFillColor(...NEGRO); doc.rect(0, 0, 297, 16, 'F');
+    doc.setTextColor(...LIMA); doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text('ZERO WATTIOS INGENIERÍA, S.L. · B25935073', 10, 10);
+    doc.setTextColor(255, 255, 255); doc.setFontSize(10); doc.text(titulo + ' · ' + nombrePeriodo(rango), 287, 10, {align: 'right'});
+    doc.setTextColor(...NEGRO);
+  };
+  const tabla = (head, body, foot, startY) => doc.autoTable({head: [head], body, foot: foot ? [foot] : undefined, startY: startY || 22, theme: 'grid',
+    styles: {fontSize: 7.5, cellPadding: 1.4}, headStyles: {fillColor: NEGRO, textColor: LIMA}, footStyles: {fillColor: [241, 250, 223], textColor: NEGRO, fontStyle: 'bold'},
+    margin: {top: 22, left: 10, right: 10}, didDrawPage: () => {}});
+  const fin = () => doc.lastAutoTable.finalY;
+  const emi = fs.filter(f => f.tipo === 'emitida').sort((a, b) => String(a.fecha).localeCompare(b.fecha));
+  const rec = fs.filter(f => f.tipo !== 'emitida').sort((a, b) => String(a.fecha).localeCompare(b.fecha));
+  const suma = (l, c) => l.reduce((a, f) => a + num(f[c]), 0);
+  const cobro = f => f.casada === 'si' ? fe(f.fecha_pago) + ' · ' + (MEDIO[f.medio_pago] || f.medio_pago) : (f.casada === 'parcial' ? 'Parcial ' + e2(f.importe_casado) : 'Pendiente');
+
+  /* 1. resumen */
+  cab('Resumen para la gestoría');
+  doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.text('Facturación y cuadre con el banco', 10, 28);
+  doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+  doc.text('Generado el ' + fe(hoyISO()) + ' desde el CRM. Las facturas originales van en el ZIP, en las carpetas 1_EMITIDAS y 2_RECIBIDAS, con el mismo orden que este documento.', 10, 34);
+  const b = cuadre.banco, ce = cuadre.emitidas, cr = cuadre.recibidas;
+  tabla(['Concepto', 'Importe (€)', 'Detalle'], [
+    ['Facturas emitidas', e2(ce.total), ce.n + ' facturas · cobrado ' + e2(ce.casado) + ' · pendiente ' + e2(ce.pendiente)],
+    ['Facturas recibidas', e2(cr.total), cr.n + ' facturas · pagado ' + e2(cr.casado) + ' · pendiente ' + e2(cr.pendiente)],
+    ['Banco: entradas / salidas', e2(b.entradas) + ' / ' + e2(b.salidas), b.movimientos + ' movimientos'],
+    ['Banco casado con facturas', e2(b.casado), b.pct_casado + ' % de lo que lleva factura'],
+    ['Banco sin factura', e2(b.sin_casar), b.n_sin_casar + ' movimientos (detalle al final)'],
+    ['Banco que no lleva factura', e2(b.no_lleva), b.n_no_lleva + ' (nóminas, SS, impuestos, traspasos, préstamos y marcados)']
+  ], null, 40);
+  tabla(['Trimestre', 'IVA repercutido', 'IVA soportado', 'Resultado'], (cuadre.iva || []).map(q => [q.trimestre, e2(q.repercutido), e2(q.soportado), e2(q.resultado)]),
+    ['Total', e2(suma(cuadre.iva || [], 'repercutido')), e2(suma(cuadre.iva || [], 'soportado')), e2(suma(cuadre.iva || [], 'resultado'))], fin() + 6);
+  if ((cuadre.avisos || []).length) { doc.setFont('helvetica', 'bold'); doc.text('Pendiente de revisar', 10, fin() + 8); doc.setFont('helvetica', 'normal');
+    (cuadre.avisos || []).forEach((a, i) => doc.text('· ' + a, 12, fin() + 13 + i * 4.5)); }
+
+  /* 2. libro de emitidas */
+  doc.addPage(); cab('Libro de facturas emitidas');
+  tabla(['#', 'Fecha', 'Nº factura', 'Cliente', 'NIF', 'Base', 'IVA', 'IRPF', 'Total', 'Cobro', 'Archivo'],
+    emi.map((f, i) => ['E' + String(i + 1).padStart(3, '0'), fe(f.fecha), f.numero || '', limpio(f.receptor || nombreCliente(f.cliente_id)), f.receptor_nif || '', e2(f.base), e2(f.iva), num(f.irpf) ? e2(f.irpf) : '', e2(f.total), cobro(f), f.archivo_id ? 'Sí' : 'No']),
+    ['', '', '', emi.length + ' facturas', '', e2(suma(emi, 'base')), e2(suma(emi, 'iva')), e2(suma(emi, 'irpf')), e2(suma(emi, 'total')), '', '']);
+
+  /* 3. libro de recibidas */
+  doc.addPage(); cab('Libro de facturas recibidas');
+  tabla(['#', 'Fecha', 'Nº factura', 'Proveedor', 'NIF', 'Concepto de gasto', 'Base', 'IVA', 'IRPF', 'Total', 'Pago'],
+    rec.map((f, i) => ['R' + String(i + 1).padStart(3, '0'), fe(f.fecha), f.numero || '', limpio(f.emisor), f.emisor_nif || '', f.categoria ? etiquetaCat(f.categoria) : '', e2(f.base), e2(f.iva), num(f.irpf) ? e2(f.irpf) : '', e2(f.total), cobro(f)]),
+    ['', '', '', rec.length + ' facturas', '', '', e2(suma(rec, 'base')), e2(suma(rec, 'iva')), e2(suma(rec, 'irpf')), e2(suma(rec, 'total')), '']);
+
+  /* 4. lo que falta */
+  const pend = fs.filter(f => f.casada !== 'si');
+  if (pend.length) { doc.addPage(); cab('Facturas sin casar con el banco');
+    tabla(['Fecha', 'Tipo', 'Nº', 'Emisor / cliente', 'Total', 'Casado', 'Qué falta'],
+      pend.map(f => [fe(f.fecha), f.tipo === 'emitida' ? 'Emitida' : 'Recibida', f.numero || '', limpio(f.tipo === 'emitida' ? f.receptor : f.emisor), e2(f.total), e2(f.importe_casado), f.revisar || ''])); }
+  const sin = movs.filter(m => !m.no_lleva && !m.marcado);
+  const marc = movs.filter(m => m.marcado);
+  if (sin.length || marc.length) { doc.addPage(); cab('Movimientos del banco sin factura');
+    if (sin.length) tabla(['Fecha', 'Cuenta', 'Concepto', 'Importe', 'Sin casar', 'Falta'], sin.map(m => [fe(m.fecha), m.cuenta, m.concepto, e2(m.importe), e2(m.resto), m.importe < 0 ? 'Factura del proveedor' : 'Factura emitida']));
+    if (marc.length) tabla(['Fecha', 'Cuenta', 'Concepto', 'Importe', 'No lleva factura porque…'], marc.map(m => [fe(m.fecha), m.cuenta, m.concepto, e2(m.importe), m.nota_factura]), null, sin.length ? fin() + 8 : 22); }
+
+  const n = doc.getNumberOfPages();
+  for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(7); doc.setTextColor(120); doc.text('Página ' + i + ' de ' + n, 287, 205, {align: 'right'}); }
+  return {doc, emi, rec};
+}
+
+const csvDe = (filas) => '﻿' + filas.map(r => r.map(c => { const s = String(c ?? ''); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }).join(';')).join('\r\n');
+const descargar = (blob, nombre) => { const a = h('a', {href: URL.createObjectURL(blob), download: nombre}); document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000); };
+
+/** Ventana «Paquete para la gestoría»: el PDF solo, o el ZIP con el PDF, los Excel y todas las facturas. */
+function ventanaGestoria(rango) {
+  const desde = h('input', {type: 'date', value: rango.desde || ''}), hasta = h('input', {type: 'date', value: rango.hasta || hoyISO()});
+  const estado = h('p.nota', {estilo: {minHeight: '20px'}});
+  const preparar = async () => {
+    const r = {desde: desde.value, hasta: hasta.value};
+    poner(estado, h('span.cargando'), ' Preparando…');
+    await Promise.all([script(JSPDF), script(JSZIP)]); await script(AUTOTABLE);
+    const [lf, cuadre, bs] = await Promise.all([api.pedir('facturasDoc', r), api.pedir('cuadreContable', r), api.pedir('bancoSinFactura', r)]);
+    const fs = lf.facturas || [];
+    const p = pdfGestoria(r, fs, cuadre, bs.movimientos || []);
+    return {r, fs, cuadre, ...p, nombre: 'ZeroWattios_contabilidad_' + (r.desde || 'inicio') + '_' + r.hasta};
+  };
+  const soloPdf = async () => {
+    try { const x = await preparar(); descargar(x.doc.output('blob'), x.nombre + '.pdf'); poner(estado, '✓ PDF descargado.'); }
+    catch (e) { poner(estado, h('span', {estilo: {color: ROJO}}, e.message)); }
+  };
+  const zip = async () => {
+    try {
+      const x = await preparar();
+      const z = new window.JSZip();
+      z.file('0_RESUMEN_' + x.nombre + '.pdf', x.doc.output('arraybuffer'));
+      const fila = (f, i, pre) => [pre + String(i + 1).padStart(3, '0'), f.fecha, f.numero, f.tipo === 'emitida' ? f.receptor : f.emisor, f.tipo === 'emitida' ? f.receptor_nif : f.emisor_nif,
+        f.categoria || '', e2(f.base), num(f.iva_pct), e2(f.iva), e2(f.irpf), e2(f.total), f.casada === 'si' ? 'casada' : (f.casada || 'no'), f.fecha_pago || '', MEDIO[f.medio_pago] || f.medio_pago || '', f.revisar || ''];
+      const cab = ['#', 'Fecha', 'Número', 'Cliente / proveedor', 'NIF', 'Concepto de gasto', 'Base', '% IVA', 'IVA', 'IRPF', 'Total', 'Casada', 'Fecha cobro/pago', 'Medio', 'Qué falta'];
+      z.file('1_libro_emitidas.csv', csvDe([cab, ...x.emi.map((f, i) => fila(f, i, 'E'))]));
+      z.file('2_libro_recibidas.csv', csvDe([cab, ...x.rec.map((f, i) => fila(f, i, 'R'))]));
+      const todas = [...x.emi.map((f, i) => [f, '1_EMITIDAS/E' + String(i + 1).padStart(3, '0')]), ...x.rec.map((f, i) => [f, '2_RECIBIDAS/R' + String(i + 1).padStart(3, '0')])].filter(([f]) => f.archivo_id);
+      let n = 0, fallos = [];
+      for (const [f, pre] of todas) {
+        poner(estado, h('span.cargando'), ' Bajando facturas ' + (++n) + ' de ' + todas.length + '…');
+        try {
+          const a = await api.pedir('archivoFacturaDoc', {id: f.id});
+          const ext = (a.mime || '').includes('pdf') ? 'pdf' : ((a.mime || '').includes('png') ? 'png' : 'jpg');
+          z.file(pre + ' ' + fe(f.fecha).replace(/\//g, '-') + ' ' + limpio(f.tipo === 'emitida' ? f.receptor : f.emisor) + ' ' + limpio(f.numero) + '.' + ext, a.datos, {base64: true});
+        } catch (e) { fallos.push((f.numero || f.id) + ': ' + e.message); }
+      }
+      if (fallos.length) z.file('AVISO_archivos_que_faltan.txt', fallos.join('\r\n'));
+      poner(estado, h('span.cargando'), ' Comprimiendo…');
+      const blob = await z.generateAsync({type: 'blob', compression: 'DEFLATE', compressionOptions: {level: 3}});
+      descargar(blob, x.nombre + '.zip');
+      poner(estado, '✓ ZIP descargado: resumen en PDF, libros en Excel (CSV) y ' + (todas.length - fallos.length) + ' facturas' + (fallos.length ? ' (' + fallos.length + ' no se han podido bajar)' : '') + '.');
+    } catch (e) { poner(estado, h('span', {estilo: {color: ROJO}}, e.message)); }
+  };
+  const trim = (t) => { const y = (hasta.value || hoyISO()).slice(0, 4); const m0 = (t - 1) * 3 + 1; desde.value = y + '-' + String(m0).padStart(2, '0') + '-01'; hasta.value = new Date(Date.UTC(+y, m0 + 2, 0)).toISOString().slice(0, 10); };
+  ventana({titulo: 'Paquete para la gestoría', cuerpo: h('div',
+    h('p', 'Elige el periodo y descarga. El PDF lleva el resumen, el IVA por trimestre, el libro de emitidas, el de recibidas y lo que queda sin casar. El ZIP lleva además los libros en Excel y todas las facturas originales, numeradas igual que en el PDF.'),
+    h('div', {estilo: {display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap'}},
+      h('span', 'Del'), desde, h('span', 'al'), hasta,
+      ...[1, 2, 3, 4].map(t => h('button.btn.mini', {onclick: () => trim(t)}, t + 'T')),
+      h('button.btn.mini', {onclick: () => { const y = (hasta.value || hoyISO()).slice(0, 4); desde.value = y + '-01-01'; hasta.value = y + '-12-31'; }}, 'Año')),
+    h('div', {estilo: {display: 'flex', gap: '10px', marginTop: '14px', flexWrap: 'wrap'}},
+      h('button.btn.primario', {onclick: zip}, '📦 Descargar todo (ZIP)'),
+      h('button.btn', {onclick: soloPdf}, '📄 Solo el PDF')),
+    estado)});
 }
 
 /* ---------- ventana de revisión ---------- */

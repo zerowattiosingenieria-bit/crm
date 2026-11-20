@@ -86,7 +86,9 @@ const ESQUEMA = [
   "FACTURAS" => ['id', 'numero', 'operacion_id', 'cliente_id', 'fecha_emision', 'concepto', 'base', 'iva_pct', 'iva', 'total', 'estado', 'fecha_vencimiento', 'fecha_cobro', 'url', 'emitida_por', 'notas'],
   "GASTOS" => ['id', 'operacion_id', 'categoria', 'proveedor', 'concepto', 'importe', 'iva_pct', 'fecha', 'estado_pago', 'fecha_pago', 'factura_proveedor', 'creado', 'creado_por', 'notas'],
   /* 20/11/2026: facturas escaneadas (PDF, imagen o foto) leídas enteras y contabilizadas (contabilidad.php). Solo dirección. */
-  "FACTURAS_DOC" => ['id', 'tipo', 'numero', 'fecha', 'vencimiento', 'emisor', 'emisor_nif', 'receptor', 'receptor_nif', 'concepto', 'base', 'iva_pct', 'iva', 'irpf_pct', 'irpf', 'total', 'cliente_id', 'operacion_id', 'categoria', 'gasto_id', 'factura_id', 'estado_pago', 'fecha_pago', 'archivo_id', 'archivo_nombre', 'mime', 'miniatura', 'texto', 'lineas', 'notas', 'creado', 'creado_por', 'modificado', 'modificado_por', 'medio_pago', 'banco_id', 'casada', 'fecha_casada', 'origen'],
+  "FACTURAS_DOC" => ['id', 'tipo', 'numero', 'fecha', 'vencimiento', 'emisor', 'emisor_nif', 'receptor', 'receptor_nif', 'concepto', 'base', 'iva_pct', 'iva', 'irpf_pct', 'irpf', 'total', 'cliente_id', 'operacion_id', 'categoria', 'gasto_id', 'factura_id', 'estado_pago', 'fecha_pago', 'archivo_id', 'archivo_nombre', 'mime', 'miniatura', 'texto', 'lineas', 'notas', 'creado', 'creado_por', 'modificado', 'modificado_por', 'medio_pago', 'banco_id', 'casada', 'fecha_casada', 'origen', 'importe_casado', 'revisar'],
+  /* 20/11/2026: cada trozo de casado factura ↔ movimiento (pagos parciales y transferencias que pagan varias facturas). */
+  "CASADOS" => ['id', 'factura_doc_id', 'banco_id', 'importe', 'medio', 'fecha', 'notas', 'creado', 'creado_por'],
   "SEGUIMIENTO" => ['id', 'cliente_id', 'operacion_id', 'usuario_id', 'fecha', 'canal', 'nota', 'proximo_paso', 'proxima_fecha', 'estado_resultante', 'origen', 'creado'],
   "CAPTACIONES" => ['id', 'cliente_id', 'captador_id', 'fecha', 'hora_cita', 'estado_cita', 'tecnologia', 'comercial_id', 'resultado', 'fecha_resultado', 'operacion_id', 'interes', 'notas', 'volver_llamar', 'creado', 'proyecto_creado', 'proyecto_enviado'],
   /* 02/11/2026: cada cita reagendada o cancelada (estadísticas) y el histórico de cambios de cada lead. */
@@ -100,7 +102,7 @@ const ESQUEMA = [
   "PARTES" => ['id', 'fecha', 'usuario_id', 'rol', 'visitas', 'puertas', 'fichas', 'sentadas', 'sentadas_detalle', 'ventas', 'importe_vendido', 'resumen', 'analisis', 'propuestas_aplicadas', 'estado', 'creado', 'modificado'],
   "NOMINAS" => ['id', 'usuario_id', 'periodo', 'bruto', 'dietas', 'comisiones', 'otros', 'bruto_total', 'irpf_pct', 'irpf', 'ss_pct', 'ss', 'neto', 'estado', 'fecha_pago', 'url', 'archivo_id', 'archivo_nombre', 'subida_por', 'subida_fecha', 'detalle', 'notas', 'creado'],
   "JORNADAS" => ['id', 'usuario_id', 'fecha', 'tipo', 'horas', 'dietas', 'comisiones', 'concepto', 'notas'],
-  "BANCO" => ['id', 'cuenta', 'fecha', 'concepto', 'importe', 'saldo', 'tipo', 'categoria', 'manual', 'operacion_id', 'cobro_id', 'gasto_id', 'conciliado', 'notas', 'clave', 'creado'],
+  "BANCO" => ['id', 'cuenta', 'fecha', 'concepto', 'importe', 'saldo', 'tipo', 'categoria', 'manual', 'operacion_id', 'cobro_id', 'gasto_id', 'conciliado', 'notas', 'clave', 'creado', 'sin_factura', 'nota_factura'],
   "VACACIONES" => ['id', 'usuario_id', 'anio', 'desde', 'hasta', 'dias', 'tipo', 'estado', 'nota', 'solicitada', 'resuelta_por', 'resuelta_fecha', 'respuesta'],
   "CONFIG" => ['clave', 'valor', 'descripcion'],
   "SESIONES" => ['token', 'usuario_id', 'creado', 'expira', 'agente', 'equipo', 'ultimo_uso'],
