@@ -65,6 +65,8 @@ function acciones_(): array {
     /* facturas escaneadas (contabilidad.php, 20/11/2026) */
     'facturasDoc' => 'accFacturasDoc_', 'facturaDoc' => 'accFacturaDoc_', 'archivoFacturaDoc' => 'accArchivoFacturaDoc_',
     'guardarFacturaDoc' => 'accGuardarFacturaDoc_', 'borrarFacturaDoc' => 'accBorrarFacturaDoc_',
+    'candidatosBancoFacturaDoc' => 'accCandidatosBancoFacturaDoc_', 'casarFacturaDoc' => 'accCasarFacturaDoc_',
+    'descasarFacturaDoc' => 'accDescasarFacturaDoc_', 'bancoSinFactura' => 'accBancoSinFactura_',
     'borrarGasto' => 'accBorrarGasto_',
 
     /* parte diario */

@@ -168,10 +168,146 @@ function accBorrarFacturaDoc_(array $u, array $p): array {
   exigir_($u, 'finanzas');
   $f = buscar1_('FACTURAS_DOC', fn($x) => mismo_($x['id'], $p['id'] ?? ''));
   if (!$f) return ['ok' => false, 'error' => 'Esa factura ya no está.'];
+  if (txt_($f['banco_id'] ?? '') !== '') soltarMovimiento_($f);
   if (txt_($f['gasto_id']) !== '') borrar_('GASTOS', $f['gasto_id']);
   if (txt_($f['factura_id']) !== '') borrar_('FACTURAS', $f['factura_id']);
   if (txt_($f['archivo_id']) !== '') { try { driveBorrar_(txt_($f['archivo_id'])); } catch (Throwable $e) {} }
   borrar_('FACTURAS_DOC', $f['id']);
   registrar_($u, 'borrar_factura_doc', 'FACTURAS_DOC', $f['id'], txt_($f['emisor']) . ' · ' . txt_($f['numero']));
   return ['ok' => true];
+}
+
+/* ---------- casar cada factura con su cobro o pago (20/11/2026) ----------
+   «Hay que casar cada factura de ingreso o banco contra caja, cash o
+   tarjeta» (Nando). Cada factura escaneada se casa con:
+     · un movimiento del banco (transferencia, recibo… o el cargo de la tarjeta), o
+     · tarjeta sin movimiento todavía en el banco, o
+     · efectivo (caja).
+   Y al revés: los movimientos del banco que no tienen factura casada se listan
+   para buscarla. */
+
+const MEDIOS_PAGO = ['banco', 'tarjeta', 'efectivo'];
+
+/** ¿El movimiento del banco ya está casado con alguna factura escaneada? */
+function facturaDocDeMovimiento_(string $bancoId): ?array {
+  if ($bancoId === '') return null;
+  return buscar1_('FACTURAS_DOC', fn($x) => mismo_($x['banco_id'], $bancoId));
+}
+
+/** Movimientos del banco que pueden ser el pago o el cobro de una factura. */
+function accCandidatosBancoFacturaDoc_(array $u, array $p): array {
+  exigir_($u, 'finanzas');
+  $f = buscar1_('FACTURAS_DOC', fn($x) => mismo_($x['id'], $p['id'] ?? ''));
+  if (!$f) return ['ok' => false, 'error' => 'Esa factura ya no está.'];
+  $total = abs(num_($f['total']));
+  $signo = txt_($f['tipo']) === 'emitida' ? 1 : -1;
+  $fecha = txt_($f['fecha']) ?: hoyISO_();
+  $palabras = array_values(array_filter(preg_split('/\s+/', normal_(preg_replace('/\b(s\.?l\.?u?|s\.?a\.?u?)\b\.?/i', '', txt_($f['emisor']) . ' ' . txt_($f['receptor'])))),
+    fn($w) => strlen($w) >= 4));
+  $lista = [];
+  foreach (leer_('BANCO') as $m) {
+    $imp = num_($m['importe']);
+    if ($imp * $signo <= 0) continue;
+    $dif = abs(abs($imp) - $total);
+    if ($dif > max(0.05, $total * 0.01)) continue;
+    $dias = (int)round((strtotime(txt_($m['fecha'])) - strtotime($fecha)) / 86400);
+    if ($dias < -45 || $dias > 120) continue;
+    $otra = facturaDocDeMovimiento_(txt_($m['id']));
+    if ($otra && !mismo_($otra['id'], $f['id'])) continue;
+    $conc = normal_($m['concepto']);
+    $coincide = 0; foreach ($palabras as $w) if (strpos($conc, $w) !== false) $coincide++;
+    $puntos = 100 - $dif * 20 - abs($dias) * 0.6 + $coincide * 15 + ($dias >= 0 ? 5 : 0);
+    $lista[] = ['id' => $m['id'], 'cuenta' => txt_($m['cuenta']), 'fecha' => txt_($m['fecha']), 'concepto' => txt_($m['concepto']),
+      'importe' => $imp, 'dias' => $dias, 'puntos' => round($puntos, 1), 'casado' => (bool)$otra,
+      'tarjeta' => (bool)preg_match('/tarj|card|compra\s|visa|mastercard/i', txt_($m['concepto']))];
+  }
+  usort($lista, fn($a, $b) => $b['puntos'] <=> $a['puntos']);
+  return ['ok' => true, 'candidatos' => array_slice($lista, 0, 8)];
+}
+
+/**
+ * Casa la factura con su pago o cobro. p.id, p.medio (banco | tarjeta | efectivo),
+ * p.banco_id (si es un movimiento), p.fecha (efectivo o tarjeta sin movimiento).
+ */
+function accCasarFacturaDoc_(array $u, array $p): array {
+  exigir_($u, 'finanzas');
+  $f = buscar1_('FACTURAS_DOC', fn($x) => mismo_($x['id'], $p['id'] ?? ''));
+  if (!$f) return ['ok' => false, 'error' => 'Esa factura ya no está.'];
+  $medio = normal_($p['medio'] ?? '');
+  if (!in_array($medio, MEDIOS_PAGO, true)) return ['ok' => false, 'error' => 'Elige banco, tarjeta o efectivo.'];
+  $bancoId = txt_($p['banco_id'] ?? '');
+  $fecha = txt_($p['fecha'] ?? '') ?: hoyISO_();
+  $nota = '';
+  if ($bancoId !== '') {
+    $m = buscar1_('BANCO', fn($x) => mismo_($x['id'], $bancoId));
+    if (!$m) return ['ok' => false, 'error' => 'Ese movimiento del banco ya no está.'];
+    $otra = facturaDocDeMovimiento_($bancoId);
+    if ($otra && !mismo_($otra['id'], $f['id'])) return ['ok' => false, 'error' => 'Ese movimiento ya está casado con la factura ' . $otra['id'] . '.'];
+    $signo = txt_($f['tipo']) === 'emitida' ? 1 : -1;
+    if (num_($m['importe']) * $signo <= 0) return ['ok' => false, 'error' => txt_($f['tipo']) === 'emitida' ? 'Una factura emitida se casa con un ingreso.' : 'Una factura recibida se casa con un pago.'];
+    $fecha = txt_($m['fecha']);
+    $dif = redondear_(abs(num_($m['importe'])) - abs(num_($f['total'])), 2);
+    if (abs($dif) > 0.01) $nota = 'Diferencia con el banco: ' . txt_($dif) . ' €';
+    $cambiosB = ['conciliado' => 'si', 'notas' => trim(txt_($m['notas']) . ' · Factura ' . txt_($f['id']) . ' ' . txt_($f['numero']), ' ·')];
+    if (txt_($f['gasto_id']) !== '') $cambiosB['gasto_id'] = txt_($f['gasto_id']);
+    if (txt_($f['operacion_id']) !== '' && txt_($m['operacion_id']) === '') $cambiosB['operacion_id'] = txt_($f['operacion_id']);
+    actualizar_('BANCO', $m['id'], $cambiosB);
+  }
+  /* si estaba casada con otro movimiento, se suelta */
+  if (txt_($f['banco_id']) !== '' && !mismo_($f['banco_id'], $bancoId)) soltarMovimiento_($f);
+  $r = actualizar_('FACTURAS_DOC', $f['id'], ['medio_pago' => $medio, 'banco_id' => $bancoId, 'casada' => 'si',
+    'fecha_casada' => ahora_(), 'estado_pago' => 'pagado', 'fecha_pago' => $fecha,
+    'notas' => $nota !== '' ? trim(txt_($f['notas']) . ' · ' . $nota, ' ·') : txt_($f['notas']),
+    'modificado' => ahora_(), 'modificado_por' => $u['id']]);
+  $r = contabilizarFacturaDoc_($u, $r);
+  registrar_($u, 'casar_factura_doc', 'FACTURAS_DOC', $f['id'], $medio . ($bancoId !== '' ? ' ' . $bancoId : ''));
+  return ['ok' => true, 'factura' => facturaDocLigera_($r), 'aviso' => $nota];
+}
+
+function soltarMovimiento_(array $f): void {
+  $m = buscar1_('BANCO', fn($x) => mismo_($x['id'], $f['banco_id']));
+  if (!$m) return;
+  $cambios = ['notas' => trim(str_replace('Factura ' . txt_($f['id']) . ' ' . txt_($f['numero']), '', txt_($m['notas'])), ' ·')];
+  if (txt_($f['gasto_id']) !== '' && mismo_($m['gasto_id'], $f['gasto_id'])) { $cambios['gasto_id'] = ''; $cambios['conciliado'] = 'no'; }
+  elseif (txt_($m['gasto_id']) === '' && txt_($m['cobro_id']) === '') $cambios['conciliado'] = 'no';
+  actualizar_('BANCO', $m['id'], $cambios);
+}
+
+/** Deshace el casado: la factura vuelve a pendiente y el movimiento queda libre. */
+function accDescasarFacturaDoc_(array $u, array $p): array {
+  exigir_($u, 'finanzas');
+  $f = buscar1_('FACTURAS_DOC', fn($x) => mismo_($x['id'], $p['id'] ?? ''));
+  if (!$f) return ['ok' => false, 'error' => 'Esa factura ya no está.'];
+  if (txt_($f['banco_id']) !== '') soltarMovimiento_($f);
+  $r = actualizar_('FACTURAS_DOC', $f['id'], ['medio_pago' => '', 'banco_id' => '', 'casada' => 'no', 'fecha_casada' => '',
+    'estado_pago' => 'pendiente', 'fecha_pago' => '', 'modificado' => ahora_(), 'modificado_por' => $u['id']]);
+  $r = contabilizarFacturaDoc_($u, $r);
+  registrar_($u, 'descasar_factura_doc', 'FACTURAS_DOC', $f['id'], '');
+  return ['ok' => true, 'factura' => facturaDocLigera_($r)];
+}
+
+/**
+ * Movimientos del banco sin factura escaneada casada (desde p.desde), para
+ * buscar la factura que falta. Se marcan los que ya tienen gasto o cobro en el CRM.
+ */
+function accBancoSinFactura_(array $u, array $p): array {
+  exigir_($u, 'finanzas');
+  $desde = txt_($p['desde'] ?? '') ?: substr(hoyISO_(), 0, 4) . '-01-01';
+  $hasta = txt_($p['hasta'] ?? '') ?: hoyISO_();
+  $casados = [];
+  foreach (leer_('FACTURAS_DOC') as $f) if (txt_($f['banco_id']) !== '') $casados[txt_($f['banco_id'])] = true;
+  /* lo que no lleva factura: traspasos entre cuentas, nóminas, Seguridad Social, impuestos, préstamos */
+  $sinFactura = '/traspaso|n[oó]mina|seg\.?\s*social|tgss|aeat|agencia tributaria|hacienda|impuesto|pr[eé]stamo|cuota pr[eé]stamo|comisi[oó]n mantenimiento|liquidaci[oó]n/i';
+  $lista = [];
+  foreach (leer_('BANCO') as $m) {
+    $fe = txt_($m['fecha']);
+    if (strcmp($fe, $desde) < 0 || strcmp($fe, $hasta) > 0) continue;
+    if (!empty($casados[txt_($m['id'])])) continue;
+    $lista[] = ['id' => $m['id'], 'cuenta' => txt_($m['cuenta']), 'fecha' => $fe, 'concepto' => txt_($m['concepto']),
+      'importe' => num_($m['importe']), 'categoria' => txt_($m['categoria']),
+      'con_gasto' => txt_($m['gasto_id']) !== '', 'con_cobro' => txt_($m['cobro_id']) !== '',
+      'no_lleva' => (bool)preg_match($sinFactura, txt_($m['concepto']) . ' ' . txt_($m['categoria']))];
+  }
+  usort($lista, fn($a, $b) => strcmp($b['fecha'], $a['fecha']));
+  return ['ok' => true, 'movimientos' => $lista];
 }

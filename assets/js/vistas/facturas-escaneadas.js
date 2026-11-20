@@ -365,6 +365,7 @@ export async function vistaFacturasEscaneadas() {
   const estado = h('.nota', {estilo: {minHeight: '20px', marginTop: '8px'}});
   const rango = trimestre();
   const lista = h('div', cargando('Cargando facturas…'));
+  const soloSinCasar = {v: false};
 
   const elegir = h('input', {type: 'file', accept: 'application/pdf,image/*', estilo: {display: 'none'}});
   const foto = h('input', {type: 'file', accept: 'image/*', capture: 'environment', estilo: {display: 'none'}});
@@ -379,7 +380,7 @@ export async function vistaFacturasEscaneadas() {
       const leido = await leerArchivo(archivo, avance);
       poner(estado, '');
       const datos = interpretar(leido.texto);
-      editor({datos, leido, alGuardar: recargar});
+      editor({datos, leido, alGuardar: recargar, abrir});
     } catch (e) {
       poner(estado, h('span', {estilo: {color: 'var(--rojo, #c0392b)'}}, e.message || String(e)));
     } finally { ocupado.v = false; elegir.value = ''; foto.value = ''; }
@@ -421,20 +422,25 @@ export async function vistaFacturasEscaneadas() {
       {clave: 'base', et: 'Base', num: true, pinta: x => eur2(x.base)},
       {clave: 'iva', et: 'IVA', num: true, pinta: x => eur2(x.iva)},
       {clave: 'total', et: 'Total', num: true, pinta: x => eur2(x.total)},
-      {clave: 'estado_pago', et: 'Estado', valor: x => x.estado_pago === 'pagado' ? (x.tipo === 'emitida' ? 'Cobrada' : 'Pagada') : 'Pendiente'}
-    ], fs, {alPulsar: abrir, csv: 'Facturas_escaneadas.csv', vacio: 'Aún no hay facturas escaneadas en estas fechas.'});
+      {clave: 'casada', et: 'Casada con', pinta: x => x.casada === 'si'
+        ? h('span', {estilo: {color: '#3f7d0b', fontWeight: '600'}}, '✓ ' + (MEDIO[x.medio_pago] || x.medio_pago))
+        : h('span', {estilo: {color: '#b45309', fontWeight: '600'}}, '● Sin casar')}
+    ], soloSinCasar.v ? fs.filter(x => x.casada !== 'si') : fs, {alPulsar: abrir, csv: 'Facturas_escaneadas.csv', vacio: 'Aún no hay facturas escaneadas en estas fechas.'});
     poner(lista,
       kpis([kpi('Facturas', String(fs.length)),
         kpi('Recibidas · base', eur2(s(rec, 'base')), 'IVA soportado ' + eur2(s(rec, 'iva'))),
         kpi('Emitidas · base', eur2(s(emi, 'base')), 'IVA repercutido ' + eur2(s(emi, 'iva'))),
-        kpi('Pendiente de pago', eur2(s(rec.filter(x => x.estado_pago !== 'pagado'), 'total')))]),
+        kpi('Sin casar con banco, tarjeta o efectivo', String(fs.filter(x => x.casada !== 'si').length),
+          eur2(s(fs.filter(x => x.casada !== 'si'), 'total')), {estado: fs.some(x => x.casada !== 'si') ? 'aviso' : null})]),
       tarjeta('Facturas escaneadas', t, {sinRelleno: true,
-        acciones: [h('button.btn.mini', {onclick: () => t.exportar && t.exportar()}, 'Exportar CSV')]}));
+        acciones: [h('button.btn.mini', {onclick: () => { soloSinCasar.v = !soloSinCasar.v; recargar(); }}, soloSinCasar.v ? 'Ver todas' : 'Solo sin casar'),
+          h('button.btn.mini', {onclick: () => t.exportar && t.exportar()}, 'Exportar CSV')]}),
+      await tarjetaBancoSinFactura(rango));
   }
 
   async function abrir(fila) {
     const r = await api.pedir('facturaDoc', {id: fila.id});
-    editor({datos: r.factura, guardada: r.factura, alGuardar: recargar});
+    editor({datos: r.factura, guardada: r.factura, alGuardar: recargar, abrir});
   }
 
   poner(caja, tarjeta('Subir una factura', zona, {subtitulo: 'PDF, imagen o foto · queda guardada en el Drive y contabilizada'}), f.nodo, lista);
@@ -442,8 +448,70 @@ export async function vistaFacturasEscaneadas() {
   return caja;
 }
 
+/* ---------- casar con banco, tarjeta o efectivo ---------- */
+const MEDIO = {banco: 'Banco', tarjeta: 'Tarjeta', efectivo: 'Efectivo (caja)'};
+
+/** Bloque de la ventana para casar la factura con su pago o cobro. */
+function bloqueCasar(f, alCambiar) {
+  const caja = h('div', {estilo: {marginTop: '12px', padding: '10px 12px', border: '1px solid var(--borde, #ddd)', borderRadius: '8px'}});
+  const titulo = h('b', f.tipo === 'emitida' ? 'Casar con su cobro' : 'Casar con su pago');
+  const pinta = async () => {
+    if (f.casada === 'si') {
+      poner(caja, titulo, h('p', {estilo: {margin: '6px 0'}},
+        h('span', {estilo: {color: '#3f7d0b', fontWeight: '600'}}, '✓ Casada · ' + (MEDIO[f.medio_pago] || f.medio_pago)),
+        ' · ' + fechaCorta(f.fecha_pago) + (f.banco_id ? ' · movimiento ' + f.banco_id : '')),
+        h('button.btn.mini', {onclick: async () => {
+          const r = await api.pedir('descasarFacturaDoc', {id: f.id}); Object.assign(f, r.factura); aviso('Descasada.'); await alCambiar(); pinta();
+        }}, 'Descasar'));
+      return;
+    }
+    poner(caja, titulo, h('p.nota', {estilo: {margin: '4px 0'}}, cargando('Buscando el movimiento en el banco…')));
+    const r = await api.pedir('candidatosBancoFacturaDoc', {id: f.id});
+    const cand = r.candidatos || [];
+    const casar = async (medio, bancoId) => {
+      const fecha = medio === 'banco' || bancoId ? '' : (fechaPago.value || hoyISO());
+      const res = await api.pedir('casarFacturaDoc', {id: f.id, medio, banco_id: bancoId || '', fecha});
+      Object.assign(f, res.factura);
+      aviso('Casada con ' + (MEDIO[medio] || medio).toLowerCase() + '.' + (res.aviso ? ' ' + res.aviso : ''));
+      await alCambiar(); pinta();
+    };
+    const fechaPago = h('input', {type: 'date', value: f.fecha_pago || hoyISO(), estilo: {width: 'auto'}});
+    poner(caja, titulo,
+      cand.length ? h('div',
+        h('p.nota', {estilo: {margin: '4px 0'}}, 'Movimientos del banco que pueden ser ' + (f.tipo === 'emitida' ? 'el cobro' : 'el pago') + ' (mismo importe y fechas cercanas):'),
+        h('table.datos', h('tbody', cand.map((m, i) => h('tr',
+          h('td', fechaCorta(m.fecha)), h('td', m.cuenta), h('td', m.concepto + (m.tarjeta ? ' 💳' : '')),
+          h('td.num', eur2(m.importe)),
+          h('td', h('button.btn.mini' + (i === 0 ? '.primario' : ''), {onclick: () => casar(m.tarjeta ? 'tarjeta' : 'banco', m.id)}, 'Casar')))))))
+        : h('p.nota', {estilo: {margin: '4px 0'}}, 'No hay ningún movimiento del banco con ese importe en fechas cercanas.'),
+      h('div', {estilo: {display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginTop: '8px'}},
+        h('span.nota', 'Sin movimiento en el banco:'), fechaPago,
+        h('button.btn.mini', {onclick: () => casar('tarjeta')}, '💳 Pagada con tarjeta'),
+        h('button.btn.mini', {onclick: () => casar('efectivo')}, '💶 Efectivo (caja)')));
+  };
+  pinta();
+  return caja;
+}
+
+/** Movimientos del banco del periodo que no tienen factura casada. */
+async function tarjetaBancoSinFactura(rango) {
+  const r = await api.pedir('bancoSinFactura', {desde: rango.desde || '', hasta: rango.hasta || ''}).catch(() => ({movimientos: []}));
+  const ms = (r.movimientos || []).filter(m => !m.no_lleva);
+  const t = tabla([
+    {clave: 'fecha', et: 'Fecha', pinta: m => fechaCorta(m.fecha)},
+    {clave: 'cuenta', et: 'Cuenta'},
+    {clave: 'concepto', et: 'Concepto'},
+    {clave: 'importe', et: 'Importe', num: true, pinta: m => h('span', {estilo: {color: m.importe < 0 ? '#b42318' : '#3f7d0b'}}, eur2(m.importe))},
+    {clave: 'tipo', et: 'Falta', valor: m => m.importe < 0 ? 'Factura del proveedor' : 'Factura emitida'},
+    {clave: 'crm', et: 'En el CRM', valor: m => m.con_gasto ? 'Tiene gasto' : (m.con_cobro ? 'Tiene cobro' : '—')}
+  ], ms, {csv: 'Banco_sin_factura.csv', vacio: 'Todos los movimientos del periodo tienen su factura casada.'});
+  return tarjeta('Movimientos del banco sin factura (' + ms.length + ')', t, {sinRelleno: true,
+    subtitulo: 'Cada pago y cada cobro del banco debería tener su factura. No salen nóminas, Seguridad Social, impuestos ni traspasos.',
+    acciones: [h('button.btn.mini', {onclick: () => t.exportar && t.exportar()}, 'Exportar CSV')]});
+}
+
 /* ---------- ventana de revisión ---------- */
-function editor({datos, leido, guardada, alGuardar}) {
+function editor({datos, leido, guardada, alGuardar, abrir}) {
   const clientes = (api.estado.clientes || []).map(c => [c.id, [c.direccion, c.nombre].filter(Boolean).join(' · ')])
     .sort((a, b) => a[1].localeCompare(b[1], 'es'));
   const form = formulario([
@@ -513,6 +581,7 @@ function editor({datos, leido, guardada, alGuardar}) {
     ancha: true,
     cuerpo: h('div',
       h('div', {estilo: {display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 260px', gap: '16px'}}, h('div', form.nodo, cuadre), lateral),
+      guardada ? bloqueCasar(guardada, alGuardar) : null,
       detalles),
     acciones: [borrar, h('button.btn', {onclick: () => v.cerrar()}, 'Cancelar'), btn].filter(Boolean)
   });
@@ -536,6 +605,8 @@ function editor({datos, leido, guardada, alGuardar}) {
       aviso(d.tipo === 'emitida' ? 'Factura guardada y apuntada en facturas emitidas.' : 'Factura guardada y contabilizada como gasto.');
       v.cerrar();
       await alGuardar();
+      /* recién guardada: se abre para casarla con su pago o cobro */
+      if (!guardada && r.factura && abrir) await abrir(r.factura);
     } catch (e) {
       aviso(e.message || String(e), 'error');
       btn.disabled = false; btn.textContent = guardada ? 'Guardar cambios' : 'Guardar y contabilizar';
