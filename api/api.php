@@ -68,7 +68,7 @@ function acciones_(): array {
     'candidatosBancoFacturaDoc' => 'accCandidatosBancoFacturaDoc_', 'casarFacturaDoc' => 'accCasarFacturaDoc_',
     'descasarFacturaDoc' => 'accDescasarFacturaDoc_', 'bancoSinFactura' => 'accBancoSinFactura_',
     'driveFacturas' => 'accDriveFacturas_', 'archivoDrive' => 'accArchivoDrive_',
-    'casarLote' => 'accCasarLote_', 'cuadreContable' => 'accCuadreContable_', 'casadosFacturaDoc' => 'accCasadosFacturaDoc_', 'autoCasar' => 'accAutoCasar_',
+    'casarLote' => 'accCasarLote_', 'archivoDeFactura' => 'accArchivoDeFactura_', 'cuadreContable' => 'accCuadreContable_', 'casadosFacturaDoc' => 'accCasadosFacturaDoc_', 'autoCasar' => 'accAutoCasar_',
     'marcarMovimientoSinFactura' => 'accMarcarMovimientoSinFactura_', 'marcarMovimientosSinFactura' => 'accMarcarMovimientosSinFactura_', 'facturasParaMovimiento' => 'accFacturasParaMovimiento_',
     'borrarGasto' => 'accBorrarGasto_',
 

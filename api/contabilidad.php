@@ -846,3 +846,22 @@ function accCuadreContable_(array $u, array $p): array {
   if ($gastosSinFactura) $avisos[] = $gastosSinFactura . ' gastos del CRM sin factura (' . number_format($gastosSinFacturaEur, 2, ',', '.') . ' €): falta el justificante.';
   return ['ok' => true, 'desde' => $desde, 'hasta' => $hasta, 'banco' => $b, 'emitidas' => $fac['emitida'], 'recibidas' => $fac['recibida'], 'iva' => $iva, 'avisos' => $avisos];
 }
+
+/** El PDF (o la imagen) de una factura emitida del CRM: el escaneado/importado que la enlaza o, si no, el enlace de Drive de la factura. */
+function accArchivoDeFactura_(array $u, array $p): array {
+  exigir_($u, 'finanzas');
+  $fid = txt_($p['factura_id'] ?? '');
+  $doc = buscar1_('FACTURAS_DOC', fn($x) => mismo_($x['factura_id'], $fid) && txt_($x['archivo_id']) !== '');
+  $driveId = $doc ? txt_($doc['archivo_id']) : '';
+  $nombre = $doc ? txt_($doc['archivo_nombre']) : '';
+  if ($driveId === '') {
+    $f = buscar1_('FACTURAS', fn($x) => mismo_($x['id'], $fid));
+    if ($f && preg_match('~/d/([\w-]{20,})|[?&]id=([\w-]{20,})~', txt_($f['url']), $m)) $driveId = $m[1] ?: $m[2];
+    $nombre = $f ? 'Factura ' . txt_($f['numero']) : '';
+  }
+  if ($driveId === '') return ['ok' => false, 'sin_archivo' => true, 'error' => 'Esta factura no tiene el PDF guardado. Súbelo en «Escanear facturas» y quedará enlazado.'];
+  try { $a = driveDescargar_($driveId); }
+  catch (Throwable $e) { return ['ok' => false, 'error' => 'No se ha podido abrir el archivo del Drive.']; }
+  return ['ok' => true, 'nombre' => $nombre ?: ($a['nombre'] ?? ''), 'mime' => $a['mime'] ?? 'application/pdf', 'datos' => $a['base64'] ?? '',
+    'url' => 'https://drive.google.com/file/d/' . $driveId . '/view', 'doc_id' => $doc['id'] ?? ''];
+}

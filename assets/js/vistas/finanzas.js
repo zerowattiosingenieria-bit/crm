@@ -3,7 +3,7 @@
 import {h, poner, txt, num, eur, eur2, eurCorto, miles, pct, fechaCorta, mesLargo,
         normal, suma, hoyISO, sumarDias, primerDiaMes} from '../util.js';
 import * as api from '../api.js';
-import {tarjeta, tabla, kpi, kpis, etiquetaEstado, marca, ventanaFormulario, aviso,
+import {tarjeta, tabla, kpi, kpis, etiquetaEstado, marca, ventanaFormulario, ventana, aviso,
         confirmar, filtros, cargando} from '../ui.js';
 import {lineas, barras, apiladas, anillo, SERIES} from '../graficos.js';
 import {tarjetaReserva, tarjetaFacturasProveedor, botonPaqueteGestoria, facturarCobro} from './dinero-extra.js';
@@ -167,7 +167,7 @@ export async function vistaFacturas({ir, refrescar}) {
   let datos = null;
 
   const f = filtros([
-    {id: 'texto', et: 'Buscar por número o cliente…'},
+    {id: 'texto', et: 'Buscar por número, cliente, dirección o importe…'},
     {id: 'estado', tipo: 'select', opciones: [['', 'Todas']].concat(api.opciones('estadosFactura'))},
     {tipo: 'boton', et: '+ Nueva factura', clase: 'primario', accion: () => editorFactura(null, recargar)}
   ], v => { Object.assign(est, v); pinta(); });
@@ -176,11 +176,14 @@ export async function vistaFacturas({ir, refrescar}) {
 
   function pinta() {
     if (!datos) return;
-    const q = normal(est.texto);
+    /* búsqueda por todas las palabras: número, cliente, dirección, municipio, concepto, notas o importe */
+    const toks = normal(est.texto).split(/[^a-z0-9ñ.,]+/).filter(Boolean);
     const lista = (datos.facturas || []).filter(x => {
       if (est.estado && txt(x.estado) !== est.estado) return false;
+      if (!toks.length) return true;
       const cli = api.cliente(x.cliente_id) || {};
-      return !q || [x.numero, cli.nombre, x.concepto].some(v => normal(v).includes(q));
+      const hay = normal([x.numero, cli.nombre, cli.direccion, cli.municipio, cli.localidad, x.concepto, x.notas, eur2(x.total), num(x.total).toFixed(2)].join(' '));
+      return toks.every(w => hay.includes(w));
     }).sort((a, b) => txt(b.fecha_emision).localeCompare(txt(a.fecha_emision)));
 
     const cobradas = lista.filter(x => txt(x.fecha_cobro));
@@ -189,7 +192,7 @@ export async function vistaFacturas({ir, refrescar}) {
     const t = tabla([
       {clave: 'numero', et: 'Número', pinta: x => h('b', x.numero)},
       {clave: 'fecha_emision', et: 'Emitida', pinta: x => fechaCorta(x.fecha_emision)},
-      {clave: 'cliente', et: 'Cliente', valor: x => (api.cliente(x.cliente_id) || {}).nombre || '—'},
+      {clave: 'cliente', et: 'Cliente', valor: x => { const c = api.cliente(x.cliente_id) || {}; return [c.direccion, c.nombre].filter(Boolean).join(' · ') || '—'; }},
       {clave: 'concepto', et: 'Concepto'},
       {clave: 'base', et: 'Base', num: true, pinta: x => eur2(x.base)},
       {clave: 'iva', et: 'IVA', num: true, pinta: x => eur2(x.iva)},
@@ -204,13 +207,14 @@ export async function vistaFacturas({ir, refrescar}) {
         return etiquetaEstado(v ? 'vencida' : x.estado,
           v ? 'Vencida' : api.etiquetaCatalogo('estadosFactura', x.estado));
       }},
-      {clave: 'acciones', et: '', noOrden: true, pinta: x => h('.acciones',
+      {clave: 'acciones', et: '', noOrden: true, pinta: x => h('.acciones', {onclick: e => e.stopPropagation()},
+        h('button.btn.mini', {onclick: () => verFactura(x)}, '👁 Ver'),
         h('button.btn.mini', {onclick: () => editorFactura(x, recargar)}, 'Editar'),
         !txt(x.fecha_cobro) ? h('button.btn.mini.lima', {onclick: async () => {
           await api.guardarFactura({id: x.id, fecha_cobro: hoyISO(), estado: 'cobrada'});
           aviso('Factura marcada como cobrada.'); recargar();
         }}, 'Cobrada') : null)}
-    ], lista, {csv: 'facturas_zerowattios.csv', vacio: 'No hay facturas.'});
+    ], lista, {alPulsar: verFactura, csv: 'facturas_zerowattios.csv', vacio: 'No hay facturas.'});
 
     poner(contenedor,
       kpis(
@@ -229,8 +233,31 @@ export async function vistaFacturas({ir, refrescar}) {
   return caja;
 }
 
+/** Muestra el PDF de la factura emitida (al pulsar la fila). */
+async function verFactura(x) {
+  const cuerpo = h('div', cargando('Abriendo la factura…'));
+  const v = ventana({titulo: 'Factura ' + (x.numero || ''), cuerpo, ancha: true});
+  try {
+    const r = await api.pedir('archivoDeFactura', {factura_id: x.id});
+    const bin = Uint8Array.from(atob(r.datos), c => c.charCodeAt(0));
+    const url = URL.createObjectURL(new Blob([bin], {type: r.mime || 'application/pdf'}));
+    const esImg = /^image\//.test(r.mime || '');
+    const c = api.cliente(x.cliente_id) || {};
+    poner(cuerpo,
+      h('p.nota', {estilo: {margin: '0 0 8px'}}, [c.direccion, c.nombre].filter(Boolean).join(' · '), ' · ', fechaCorta(x.fecha_emision), ' · ', h('b', eur2(x.total))),
+      esImg ? h('img', {src: url, estilo: {maxWidth: '100%', border: '1px solid var(--borde, #ddd)'}})
+        : h('iframe', {src: url, estilo: {width: '100%', height: '72vh', border: '1px solid var(--borde, #ddd)', borderRadius: '6px'}}),
+      h('.acciones', {estilo: {marginTop: '8px', display: 'flex', gap: '8px'}},
+        h('a.btn.mini', {href: url, download: (r.nombre || ('Factura ' + x.numero)).replace(/\.pdf$/i, '') + (esImg ? '.jpg' : '.pdf')}, '⬇ Descargar'),
+        r.url ? h('a.btn.mini', {href: r.url, target: '_blank', rel: 'noopener'}, 'Abrir en Drive') : null));
+  } catch (e) {
+    poner(cuerpo, h('p', e.message || String(e)), x.url ? h('a.btn.mini', {href: x.url, target: '_blank', rel: 'noopener'}, 'Abrir el enlace guardado') : null);
+  }
+  return v;
+}
+
 function editorFactura(factura, recargar) {
-  const clientes = api.estado.clientes.map(c => [c.id, c.nombre + (c.municipio ? ' · ' + c.municipio : '')]);
+  const clientes = api.estado.clientes.map(c => [c.id, [c.direccion, c.nombre].filter(Boolean).join(' · ') + (c.municipio ? ' · ' + c.municipio : '')]).sort((a, b) => a[1].localeCompare(b[1], 'es'));
   const ops = api.estado.operaciones.map(o => {
     const c = api.cliente(o.cliente_id) || {};
     return [o.id, (o.referencia || o.id) + ' · ' + (c.nombre || '')];
@@ -240,7 +267,7 @@ function editorFactura(factura, recargar) {
     campos: [
       {id: 'numero', et: 'Número', ayuda: 'Se genera solo si lo dejas vacío'},
       {id: 'fecha_emision', et: 'Fecha de emisión', tipo: 'fecha', requerido: true},
-      {id: 'cliente_id', et: 'Cliente', tipo: 'select', opciones: clientes, ancho: 2},
+      {id: 'cliente_id', et: 'Cliente · escribe nombre o dirección', tipo: 'buscar', pista: 'Escribe el nombre o la dirección…', vacio: '— sin cliente —', opciones: clientes, ancho: 2},
       {id: 'operacion_id', et: 'Instalación', tipo: 'select', opciones: ops, ancho: 2},
       {id: 'concepto', et: 'Concepto', ancho: 2},
       {id: 'base', et: 'Base imponible (€)', tipo: 'euro', requerido: true},
