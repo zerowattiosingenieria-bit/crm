@@ -535,7 +535,6 @@ function editor({datos, leido, guardada, alGuardar}) {
       if (!r || r.ok === false) throw new Error((r && r.error) || 'No se ha podido guardar.');
       aviso(d.tipo === 'emitida' ? 'Factura guardada y apuntada en facturas emitidas.' : 'Factura guardada y contabilizada como gasto.');
       v.cerrar();
-      await api.cargarDatos().catch(() => {});
       await alGuardar();
     } catch (e) {
       aviso(e.message || String(e), 'error');
