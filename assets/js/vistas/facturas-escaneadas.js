@@ -248,7 +248,7 @@ function interpretar(texto) {
   /* número de factura */
   for (let i = 0; i < lineas.length && !d.numero; i++) {
     const l = lineas[i];
-    const sn = l.match(/serie\s*\/?\s*n[uúÚ]m(?:ero)?\.?\s*[:—–-]?\s*([A-Z0-9]+(?:\s*[\/-]\s*[A-Z0-9.]+)?)/iu);
+    const sn = l.match(/serie\s*\/?\s*n[uúÚ]m(?:ero)?\.?[\s:—–-]*([A-Z0-9]+(?:\s*[\/-]\s*[A-Z0-9.]+)?)/iu);
     if (sn && /\d/.test(sn[1])) { d.numero = sn[1].replace(/\s+/g, ''); break; }
     if (/^(n[ºo°.]?\s*(de\s*)?)?factura(\s*n[ºo°.])?\s*:?$/i.test(l)) {
       const sig = lineas.slice(i + 1, i + 4).map(x => x.split(' ')[0]).find(x => /^[A-Z]{0,6}[-\/]?\d{2,}[\w\-\/.]*$/i.test(x) && !fechaDe(x));
