@@ -227,6 +227,27 @@ function accBorrarFacturaDoc_(array $u, array $p): array {
 const MEDIOS_PAGO = ['banco', 'tarjeta', 'efectivo', 'otro'];
 const TOLERANCIA_CASAR = 0.05;
 
+/* Movimientos que no llevan factura, cada uno en su concepto (20/11/2026, Nando: «que salgan por
+   separado nóminas, Seguridad Social, impuestos y traspasos, y que pueda meter estos conceptos»).
+   El concepto es la categoría del banco; si no la tiene, se deduce del texto. «otro» = marcado a mano. */
+const CONCEPTOS_SIN_FACTURA = ['nominas' => 'Nóminas', 'seguridad_social' => 'Seguridad Social', 'impuestos' => 'Impuestos',
+  'traspaso' => 'Traspasos entre cuentas', 'financiacion' => 'Préstamos y financiación', 'banco' => 'Comisiones del banco', 'otro' => 'Otros sin factura'];
+function conceptoSinFactura_(array $m): string {
+  $marca = txt_($m['sin_factura'] ?? '');
+  if ($marca === 'lleva') return '';
+  $cat = txt_($m['categoria']);
+  if ($cat !== 'otro' && isset(CONCEPTOS_SIN_FACTURA[$cat])) return $cat;
+  if ($marca === 'si') return 'otro';
+  $t = txt_($m['concepto']);
+  if (preg_match('/n[oó]mina|salario|haberes/i', $t)) return 'nominas';
+  if (preg_match('/tgss|seg\.?\s*social|cotizaci[oó]n|seguridad social/i', $t)) return 'seguridad_social';
+  if (preg_match('/aeat|agencia tributaria|hacienda|impuesto|modelo\s?\d{3}|autoliquidaci/i', $t)) return 'impuestos';
+  if (preg_match('/traspaso/i', $t)) return 'traspaso';
+  if (preg_match('/pr[eé]stamo|amortizaci[oó]n|liquidaci[oó]n intereses/i', $t)) return 'financiacion';
+  if (preg_match('/comisi[oó]n|mantenimiento cuenta/i', $t)) return 'banco';
+  return '';
+}
+
 function casadosDe_(string $campo, string $id): array {
   return array_values(array_filter(leer_('CASADOS'), fn($c) => mismo_($c[$campo], $id)));
 }
@@ -507,7 +528,7 @@ function accAutoCasar_(array $u, array $p): array {
   $ignorar = '/traspaso|n[oó]mina|seg\.?\s*social|tgss|aeat|agencia tributaria|hacienda|impuesto|pr[eé]stamo|liquidaci[oó]n/i';
   $pendientes = function () { $t = leer_('CASADOS'); return array_values(array_filter(leer_('FACTURAS_DOC'), fn($f) => num_($f['total']) != 0 && restoFactura_($f, $t) > TOLERANCIA_CASAR)); };
   $libres = function () use ($banco, $ignorar) { $t = leer_('CASADOS'); $o = [];
-    foreach ($banco as $m) { if (txt_($m['sin_factura'] ?? '') === 'si' || preg_match($ignorar, txt_($m['concepto']) . ' ' . txt_($m['categoria']))) continue;
+    foreach ($banco as $m) { if (conceptoSinFactura_($m) !== '') continue;
       $r = restoMovimiento_($m, $t); if ($r > TOLERANCIA_CASAR) $o[] = $m + ['_resto' => $r]; } return $o; };
   $dias = fn($a, $b) => (int)round((strtotime($b) - strtotime($a)) / 86400);
   $signoOk = fn($f, $m) => num_($m['importe']) * (txt_($f['tipo']) === 'emitida' ? 1 : -1) > 0;
@@ -623,11 +644,11 @@ function accBancoSinFactura_(array $u, array $p): array {
       'importe' => num_($m['importe']), 'resto' => $resto, 'parcial' => $resto < abs(num_($m['importe'])) - TOLERANCIA_CASAR,
       'categoria' => txt_($m['categoria']),
       'con_gasto' => txt_($m['gasto_id']) !== '', 'con_cobro' => txt_($m['cobro_id']) !== '',
-      'marcado' => txt_($m['sin_factura'] ?? '') === 'si', 'nota_factura' => txt_($m['nota_factura'] ?? ''),
-      'no_lleva' => (bool)preg_match($sinFactura, txt_($m['concepto']) . ' ' . txt_($m['categoria']))];
+      'marcado' => in_array(txt_($m['sin_factura'] ?? ''), ['si', 'lleva'], true), 'nota_factura' => txt_($m['nota_factura'] ?? ''),
+      'concepto_sf' => ($k = conceptoSinFactura_($m)), 'no_lleva' => $k !== ''];
   }
   usort($lista, fn($a, $b) => strcmp($b['fecha'], $a['fecha']));
-  return ['ok' => true, 'movimientos' => $lista];
+  return ['ok' => true, 'movimientos' => $lista, 'conceptos' => CONCEPTOS_SIN_FACTURA];
 }
 
 /** Marca (o desmarca) un movimiento como «no lleva factura», con su motivo. */
@@ -635,12 +656,28 @@ function accMarcarMovimientoSinFactura_(array $u, array $p): array {
   exigir_($u, 'finanzas');
   $m = buscar1_('BANCO', fn($x) => mismo_($x['id'], $p['id'] ?? ''));
   if (!$m) return ['ok' => false, 'error' => 'Ese movimiento ya no está.'];
-  $si = !empty($p['sin_factura']);
+  /* p.concepto: una clave de CONCEPTOS_SIN_FACTURA, o «lleva» (sí lleva factura). Compatibilidad: p.sin_factura true/false. */
+  $c = txt_($p['concepto'] ?? (isset($p['sin_factura']) ? (!empty($p['sin_factura']) ? 'otro' : 'lleva') : ''));
   $nota = trozo_(txt_($p['nota'] ?? ''), 0, 300);
-  if ($si && $nota === '') return ['ok' => false, 'error' => 'Indica por qué no lleva factura.'];
-  actualizar_('BANCO', $m['id'], ['sin_factura' => $si ? 'si' : '', 'nota_factura' => $si ? $nota : '']);
-  registrar_($u, 'movimiento_sin_factura', 'BANCO', $m['id'], ($si ? 'si · ' : 'no · ') . $nota);
+  if ($c !== 'lleva' && !isset(CONCEPTOS_SIN_FACTURA[$c])) return ['ok' => false, 'error' => 'Elige el concepto.'];
+  if ($c === 'otro' && $nota === '') return ['ok' => false, 'error' => 'Indica por qué no lleva factura.'];
+  $cambios = ['sin_factura' => $c === 'lleva' ? 'lleva' : 'si', 'nota_factura' => $c === 'lleva' ? '' : $nota];
+  if ($c !== 'lleva' && $c !== 'otro') $cambios['categoria'] = $c;
+  if ($c === 'lleva' && isset(CONCEPTOS_SIN_FACTURA[txt_($m['categoria'])])) $cambios['categoria'] = num_($m['importe']) > 0 ? 'otros_ingresos' : 'otros_gastos';
+  actualizar_('BANCO', $m['id'], $cambios);
+  registrar_($u, 'movimiento_sin_factura', 'BANCO', $m['id'], $c . ($nota !== '' ? ' · ' . $nota : ''));
   return ['ok' => true];
+}
+
+/** Marca varios movimientos de una vez con el mismo concepto. p.ids, p.concepto, p.nota. */
+function accMarcarMovimientosSinFactura_(array $u, array $p): array {
+  exigir_($u, 'finanzas');
+  $n = 0; $err = [];
+  foreach ((array)($p['ids'] ?? []) as $id) {
+    $r = accMarcarMovimientoSinFactura_($u, ['id' => $id, 'concepto' => $p['concepto'] ?? '', 'nota' => $p['nota'] ?? '']);
+    if ($r['ok']) $n++; else $err[] = $id . ': ' . $r['error'];
+  }
+  return ['ok' => true, 'marcados' => $n, 'errores' => $err];
 }
 
 /** Facturas pendientes de casar que pueden ir con este movimiento (para casarlo desde el banco). */
@@ -741,7 +778,7 @@ function accCuadreContable_(array $u, array $p): array {
   $enRango = fn($fe) => ($desde === '' || strcmp($fe, $desde) >= 0) && strcmp($fe, $hasta) <= 0;
   $t = leer_('CASADOS');
   $ignorar = '/traspaso|n[oó]mina|seg\.?\s*social|tgss|aeat|agencia tributaria|hacienda|impuesto|pr[eé]stamo|cuota pr[eé]stamo|comisi[oó]n mantenimiento|liquidaci[oó]n/i';
-  $b = ['movimientos' => 0, 'entradas' => 0.0, 'salidas' => 0.0, 'casado' => 0.0, 'sin_casar' => 0.0, 'n_sin_casar' => 0, 'no_lleva' => 0.0, 'n_no_lleva' => 0];
+  $b = ['movimientos' => 0, 'entradas' => 0.0, 'salidas' => 0.0, 'casado' => 0.0, 'sin_casar' => 0.0, 'n_sin_casar' => 0, 'no_lleva' => 0.0, 'n_no_lleva' => 0, 'por_concepto' => []];
   foreach (leer_('BANCO') as $m) {
     if (!$enRango(txt_($m['fecha']))) continue;
     $imp = num_($m['importe']); $b['movimientos']++;
@@ -749,12 +786,18 @@ function accCuadreContable_(array $u, array $p): array {
     $resto = restoMovimiento_($m, $t);
     $b['casado'] += abs($imp) - $resto;
     if ($resto <= TOLERANCIA_CASAR) continue;
-    if (txt_($m['sin_factura'] ?? '') === 'si' || preg_match($ignorar, txt_($m['concepto']) . ' ' . txt_($m['categoria']))) { $b['no_lleva'] += $resto; $b['n_no_lleva']++; }
+    $k = conceptoSinFactura_($m);
+    if ($k !== '') { $b['no_lleva'] += $resto; $b['n_no_lleva']++;
+      $b['por_concepto'][$k] = $b['por_concepto'][$k] ?? ['concepto' => $k, 'nombre' => CONCEPTOS_SIN_FACTURA[$k], 'n' => 0, 'entradas' => 0.0, 'salidas' => 0.0];
+      $b['por_concepto'][$k][$imp > 0 ? 'entradas' : 'salidas'] = redondear_($b['por_concepto'][$k][$imp > 0 ? 'entradas' : 'salidas'] + $resto, 2); $b['por_concepto'][$k]['n']++; }
     else { $b['sin_casar'] += $resto; $b['n_sin_casar']++; }
   }
   $lleva = $b['casado'] + $b['sin_casar'];
   $b['pct_casado'] = $lleva > 0 ? (int)round($b['casado'] / $lleva * 100) : 100;
   foreach (['entradas', 'salidas', 'casado', 'sin_casar', 'no_lleva'] as $k) $b[$k] = redondear_($b[$k], 2);
+  $orden = array_keys(CONCEPTOS_SIN_FACTURA);
+  $b['por_concepto'] = array_values($b['por_concepto']);
+  usort($b['por_concepto'], fn($x, $y) => array_search($x['concepto'], $orden) <=> array_search($y['concepto'], $orden));
 
   $fac = ['emitida' => ['n' => 0, 'total' => 0.0, 'casado' => 0.0, 'pendiente' => 0.0, 'n_pendiente' => 0],
           'recibida' => ['n' => 0, 'total' => 0.0, 'casado' => 0.0, 'pendiente' => 0.0, 'n_pendiente' => 0]];

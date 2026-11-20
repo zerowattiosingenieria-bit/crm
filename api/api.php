@@ -69,7 +69,7 @@ function acciones_(): array {
     'descasarFacturaDoc' => 'accDescasarFacturaDoc_', 'bancoSinFactura' => 'accBancoSinFactura_',
     'driveFacturas' => 'accDriveFacturas_', 'archivoDrive' => 'accArchivoDrive_',
     'casarLote' => 'accCasarLote_', 'cuadreContable' => 'accCuadreContable_', 'casadosFacturaDoc' => 'accCasadosFacturaDoc_', 'autoCasar' => 'accAutoCasar_',
-    'marcarMovimientoSinFactura' => 'accMarcarMovimientoSinFactura_', 'facturasParaMovimiento' => 'accFacturasParaMovimiento_',
+    'marcarMovimientoSinFactura' => 'accMarcarMovimientoSinFactura_', 'marcarMovimientosSinFactura' => 'accMarcarMovimientosSinFactura_', 'facturasParaMovimiento' => 'accFacturasParaMovimiento_',
     'borrarGasto' => 'accBorrarGasto_',
 
     /* parte diario */

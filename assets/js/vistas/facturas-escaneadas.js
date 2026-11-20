@@ -529,40 +529,66 @@ function bloqueCasar(f, alCambiar) {
   return caja;
 }
 
-/** Movimientos del banco del periodo sin factura casada entera: casar desde aquí o marcar «no lleva factura». */
+/** Movimientos del banco del periodo sin factura casada entera, separados por concepto:
+    los que deberían llevar factura y los que no (nóminas, Seguridad Social, impuestos, traspasos…). */
 async function tarjetaBancoSinFactura(rango, alCambiar) {
-  const r = await api.pedir('bancoSinFactura', {desde: rango.desde || '', hasta: rango.hasta || ''}).catch(() => ({movimientos: []}));
+  const r = await api.pedir('bancoSinFactura', {desde: rango.desde || '', hasta: rango.hasta || ''}).catch(() => ({movimientos: [], conceptos: {}}));
   const todos = r.movimientos || [];
-  const ver = {marcados: false};
+  const CONC = r.conceptos || {};
+  const pest = [['', 'Sin factura']].concat(Object.entries(CONC));
+  const ver = {k: ''};
+  const elegidos = new Set();
   const cuerpo = h('div');
   const pinta = () => {
-    const ms = todos.filter(m => !m.no_lleva && (ver.marcados ? m.marcado : !m.marcado));
+    const ms = todos.filter(m => (m.concepto_sf || '') === ver.k);
+    const total = ms.reduce((a, m) => a + num(m.resto) * (m.importe < 0 ? -1 : 1), 0);
+    const selConc = h('select', {estilo: {width: 'auto'}}, Object.entries(CONC).filter(([k]) => k !== ver.k).map(([k, v]) => h('option', {value: k}, v)).concat(ver.k ? [h('option', {value: 'lleva'}, 'Sí lleva factura')] : []));
+    const notaLote = h('input', {type: 'text', placeholder: 'Nota (obligatoria en «Otros»)', estilo: {width: '200px'}});
+    const cuenta = h('span.nota');
+    const refrescaCuenta = () => poner(cuenta, elegidos.size ? elegidos.size + ' seleccionados' : 'Marca la casilla de los movimientos para pasarlos de golpe');
     const t = tabla([
+      {clave: 'sel', et: '', pinta: m => { const c = h('input', {type: 'checkbox', checked: elegidos.has(m.id), estilo: {width: 'auto'},
+        onclick: e => { e.stopPropagation(); c.checked ? elegidos.add(m.id) : elegidos.delete(m.id); refrescaCuenta(); }}); return c; }},
       {clave: 'fecha', et: 'Fecha', pinta: m => fechaCorta(m.fecha)},
       {clave: 'cuenta', et: 'Cuenta'},
       {clave: 'concepto', et: 'Concepto'},
       {clave: 'importe', et: 'Importe', num: true, pinta: m => h('span', {estilo: {color: m.importe < 0 ? ROJO : VERDE}}, eur2(m.importe))},
       {clave: 'resto', et: 'Sin casar', num: true, pinta: m => m.parcial ? eur2(m.resto) : '—'},
-      {clave: 'tipo', et: 'Falta', valor: m => m.marcado ? 'No lleva · ' + m.nota_factura : (m.importe < 0 ? 'Factura del proveedor' : 'Factura emitida')},
-      {clave: 'crm', et: 'En el CRM', valor: m => m.con_gasto ? 'Tiene gasto' : (m.con_cobro ? 'Tiene cobro' : '—')}
-    ], ms, {alPulsar: m => ventanaMovimiento(m, async () => { await alCambiar(); }), csv: 'Banco_sin_factura.csv', vacio: ver.marcados ? 'No hay movimientos marcados.' : 'Todos los movimientos del periodo tienen su factura casada.'});
-    poner(cuerpo, tarjeta((ver.marcados ? 'Movimientos marcados «no lleva factura» (' : 'Movimientos del banco sin factura (') + ms.length + ')', t, {sinRelleno: true,
-      subtitulo: 'Pulsa un movimiento para casarlo con su factura o marcar que no lleva. No salen nóminas, Seguridad Social, impuestos ni traspasos.',
-      acciones: [h('button.btn.mini', {onclick: () => { ver.marcados = !ver.marcados; pinta(); }}, ver.marcados ? 'Ver sin factura' : 'Ver marcados'),
-        h('button.btn.mini', {onclick: () => t.exportar && t.exportar()}, 'Exportar CSV')]}));
+      ver.k ? {clave: 'nota_factura', et: 'Nota', valor: m => m.nota_factura || (m.marcado ? '' : 'automático')}
+        : {clave: 'tipo', et: 'Falta', valor: m => m.importe < 0 ? 'Factura del proveedor' : 'Factura emitida'},
+      ver.k ? null : {clave: 'crm', et: 'En el CRM', valor: m => m.con_gasto ? 'Tiene gasto' : (m.con_cobro ? 'Tiene cobro' : '—')}
+    ].filter(Boolean), ms, {alPulsar: m => ventanaMovimiento(m, CONC, alCambiar), csv: 'Banco_' + (ver.k || 'sin_factura') + '.csv',
+      vacio: ver.k ? 'No hay movimientos de este concepto en estas fechas.' : 'Todos los movimientos del periodo tienen su factura o su concepto.'});
+    const n = k => todos.filter(m => (m.concepto_sf || '') === k).length;
+    refrescaCuenta();
+    poner(cuerpo, tarjeta('Banco sin factura · ' + (ver.k ? CONC[ver.k] : 'deberían llevar factura') + ' (' + ms.length + ' · ' + eur2(total) + ')', h('div',
+      h('div', {estilo: {display: 'flex', gap: '6px', flexWrap: 'wrap', padding: '10px 12px'}}, pest.map(([k, v]) =>
+        h('button.btn.mini' + (ver.k === k ? '.primario' : ''), {onclick: () => { ver.k = k; elegidos.clear(); pinta(); }}, v + ' (' + n(k) + ')'))),
+      h('div', {estilo: {display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', padding: '0 12px 10px'}},
+        cuenta, h('span.nota', '→ pasar a'), selConc, notaLote,
+        h('button.btn.mini', {onclick: async () => {
+          if (!elegidos.size) return aviso('Marca primero los movimientos.', 'error');
+          if (selConc.value === 'otro' && !notaLote.value.trim()) return aviso('Escribe la nota para «Otros».', 'error');
+          const res = await api.pedir('marcarMovimientosSinFactura', {ids: [...elegidos], concepto: selConc.value, nota: notaLote.value.trim()});
+          aviso(res.marcados + ' movimientos pasados a ' + (selConc.value === 'lleva' ? '«sí lleva factura»' : CONC[selConc.value]) + '.' + (res.errores.length ? ' ' + res.errores.length + ' con error.' : ''));
+          elegidos.clear(); await alCambiar();
+        }}, 'Aplicar')),
+      t), {sinRelleno: true,
+      subtitulo: 'Pulsa un movimiento para casarlo con su factura o ponerle concepto. Con las casillas puedes pasar varios de golpe a nóminas, Seguridad Social, impuestos, traspasos…',
+      acciones: [h('button.btn.mini', {onclick: () => t.exportar && t.exportar()}, 'Exportar CSV')]}));
   };
   pinta();
   return cuerpo;
 }
 
 /** Ventana de un movimiento: casarlo con una o varias facturas o marcarlo «no lleva factura». */
-async function ventanaMovimiento(m, alCambiar) {
+async function ventanaMovimiento(m, CONC, alCambiar) {
   const r = await api.pedir('facturasParaMovimiento', {id: m.id});
   const fs = r.facturas || [];
   const marcadas = new Set(fs.filter((f, i) => i === 0 && f.exacto).map(f => f.id));
   const suma = h('b');
   const actualizar = () => { const s = fs.filter(f => marcadas.has(f.id)).reduce((a, f) => a + num(f.pendiente || f.total), 0); poner(suma, eur2(s) + ' de ' + eur2(r.resto)); suma.style.color = Math.abs(s - r.resto) <= 0.05 ? VERDE : NARANJA; };
-  const nota = h('input', {type: 'text', value: m.nota_factura || '', placeholder: 'Motivo (comisión del banco, devolución, traspaso, préstamo…)', estilo: {flex: '1 1 260px'}});
+  const nota = h('input', {type: 'text', value: m.nota_factura || '', placeholder: 'Nota (opcional; obligatoria en «Otros»: devolución, fianza…)', estilo: {flex: '1 1 260px'}});
   const v = ventana({titulo: fechaCorta(m.fecha) + ' · ' + m.concepto + ' · ' + eur2(m.importe), ancha: true, cuerpo: h('div',
     h('p.nota', 'Sin casar: ', h('b', eur2(r.resto)), '. Marca la factura o las facturas que paga este movimiento (si son varias, se reparte por orden de fecha).'),
     fs.length ? h('table.datos', h('tbody', fs.map(f => {
@@ -579,13 +605,15 @@ async function ventanaMovimiento(m, alCambiar) {
         aviso('Casado con ' + res.facturas.length + ' factura' + (res.facturas.length > 1 ? 's' : '') + '.'); v.cerrar(); await alCambiar();
       }}, 'Casar con lo marcado')),
     h('hr'),
-    h('div', {estilo: {display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap'}},
-      nota,
-      m.marcado ? h('button.btn', {onclick: async () => { await api.pedir('marcarMovimientoSinFactura', {id: m.id, sin_factura: false}); aviso('Desmarcado.'); v.cerrar(); await alCambiar(); }}, 'Sí lleva factura')
-        : h('button.btn', {onclick: async () => {
-          if (!nota.value.trim()) return aviso('Escribe el motivo.', 'error');
-          await api.pedir('marcarMovimientoSinFactura', {id: m.id, sin_factura: true, nota: nota.value.trim()}); aviso('Marcado: no lleva factura.'); v.cerrar(); await alCambiar();
-        }}, 'No lleva factura')))});
+    h('p.nota', {estilo: {margin: '4px 0'}}, m.concepto_sf ? 'Ahora: ' + (CONC[m.concepto_sf] || m.concepto_sf) + (m.marcado ? ' (puesto a mano)' : ' (automático)') + '.' : 'Si no lleva factura, ponle su concepto:'),
+    h('div', {estilo: {display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap'}},
+      Object.entries(CONC).map(([k, et]) => h('button.btn.mini' + (m.concepto_sf === k ? '.primario' : ''), {onclick: async () => {
+        if (k === 'otro' && !nota.value.trim()) return aviso('Escribe la nota para «Otros».', 'error');
+        await api.pedir('marcarMovimientoSinFactura', {id: m.id, concepto: k, nota: nota.value.trim()});
+        aviso('Pasado a ' + et + '.'); v.cerrar(); await alCambiar();
+      }}, et)),
+      m.concepto_sf ? h('button.btn.mini', {onclick: async () => { await api.pedir('marcarMovimientoSinFactura', {id: m.id, concepto: 'lleva'}); aviso('Marcado: sí lleva factura.'); v.cerrar(); await alCambiar(); }}, 'Sí lleva factura') : null),
+    h('div', {estilo: {display: 'flex', marginTop: '8px'}}, nota))});
   actualizar();
 }
 
@@ -601,7 +629,8 @@ async function tarjetaCuadre(rango) {
       fila('Movimientos', String(b.movimientos), eur2(b.entradas) + ' entradas · ' + eur2(b.salidas) + ' salidas'),
       fila('Casado con facturas', eur2(b.casado), b.pct_casado + ' % de lo que lleva factura', VERDE),
       fila('Sin factura (deberían llevar)', eur2(b.sin_casar), b.n_sin_casar + ' movimientos', b.n_sin_casar ? NARANJA : VERDE),
-      fila('No llevan factura', eur2(b.no_lleva), b.n_no_lleva + ' (nóminas, SS, impuestos, traspasos y marcados a mano)')))),
+      fila('No llevan factura', eur2(b.no_lleva), b.n_no_lleva + ' movimientos:'),
+      ...(b.por_concepto || []).map(c => fila('   · ' + c.nombre, eur2(c.entradas - c.salidas), c.n + ' mov.' + (c.entradas && c.salidas ? ' (entradas ' + eur2(c.entradas) + ', salidas ' + eur2(c.salidas) + ')' : '')))))),
     h('div', h('b', 'Facturas emitidas'), h('table.datos', h('tbody',
       fila('Facturado', eur2(fe.total), fe.n + ' facturas'),
       fila('Cobrado (casado)', eur2(fe.casado), '', VERDE),
@@ -660,7 +689,8 @@ function pdfGestoria(rango, fs, cuadre, movs) {
     ['Banco: entradas / salidas', e2(b.entradas) + ' / ' + e2(b.salidas), b.movimientos + ' movimientos'],
     ['Banco casado con facturas', e2(b.casado), b.pct_casado + ' % de lo que lleva factura'],
     ['Banco sin factura', e2(b.sin_casar), b.n_sin_casar + ' movimientos (detalle al final)'],
-    ['Banco que no lleva factura', e2(b.no_lleva), b.n_no_lleva + ' (nóminas, SS, impuestos, traspasos, préstamos y marcados)']
+    ['Banco que no lleva factura', e2(b.no_lleva), b.n_no_lleva + ' movimientos'],
+    ...(b.por_concepto || []).map(c => ['   · ' + c.nombre, e2(c.entradas - c.salidas), c.n + ' movimientos' + (c.entradas && c.salidas ? ' (entradas ' + e2(c.entradas) + ' / salidas ' + e2(c.salidas) + ')' : '')])
   ], null, 40);
   tabla(['Trimestre', 'IVA repercutido', 'IVA soportado', 'Resultado'], (cuadre.iva || []).map(q => [q.trimestre, e2(q.repercutido), e2(q.soportado), e2(q.resultado)]),
     ['Total', e2(suma(cuadre.iva || [], 'repercutido')), e2(suma(cuadre.iva || [], 'soportado')), e2(suma(cuadre.iva || [], 'resultado'))], fin() + 6);
@@ -684,11 +714,23 @@ function pdfGestoria(rango, fs, cuadre, movs) {
   if (pend.length) { doc.addPage(); cab('Facturas sin casar con el banco');
     tabla(['Fecha', 'Tipo', 'Nº', 'Emisor / cliente', 'Total', 'Casado', 'Qué falta'],
       pend.map(f => [fe(f.fecha), f.tipo === 'emitida' ? 'Emitida' : 'Recibida', f.numero || '', limpio(f.tipo === 'emitida' ? f.receptor : f.emisor), e2(f.total), e2(f.importe_casado), f.revisar || ''])); }
-  const sin = movs.filter(m => !m.no_lleva && !m.marcado);
-  const marc = movs.filter(m => m.marcado);
-  if (sin.length || marc.length) { doc.addPage(); cab('Movimientos del banco sin factura');
-    if (sin.length) tabla(['Fecha', 'Cuenta', 'Concepto', 'Importe', 'Sin casar', 'Falta'], sin.map(m => [fe(m.fecha), m.cuenta, m.concepto, e2(m.importe), e2(m.resto), m.importe < 0 ? 'Factura del proveedor' : 'Factura emitida']));
-    if (marc.length) tabla(['Fecha', 'Cuenta', 'Concepto', 'Importe', 'No lleva factura porque…'], marc.map(m => [fe(m.fecha), m.cuenta, m.concepto, e2(m.importe), m.nota_factura]), null, sin.length ? fin() + 8 : 22); }
+  const sin = movs.filter(m => !m.no_lleva);
+  if (sin.length) { doc.addPage(); cab('Movimientos del banco sin factura');
+    tabla(['Fecha', 'Cuenta', 'Concepto', 'Importe', 'Sin casar', 'Falta'], sin.map(m => [fe(m.fecha), m.cuenta, m.concepto, e2(m.importe), e2(m.resto), m.importe < 0 ? 'Factura del proveedor' : 'Factura emitida'])); }
+  /* lo que no lleva factura, cada concepto por separado con su total */
+  const conc = (cuadre.banco.por_concepto || []);
+  if (conc.length) { doc.addPage(); cab('Movimientos que no llevan factura, por concepto');
+    let y = 22;
+    for (const c of conc) {
+      const ls = movs.filter(m => m.concepto_sf === c.concepto);
+      if (!ls.length) continue;
+      if (y > 170) { doc.addPage(); cab('Movimientos que no llevan factura, por concepto'); y = 22; }
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(c.nombre + ' · ' + ls.length + ' movimientos', 10, y + 4); doc.setFont('helvetica', 'normal');
+      tabla(['Fecha', 'Cuenta', 'Concepto', 'Importe', 'Nota'], ls.map(m => [fe(m.fecha), m.cuenta, m.concepto, e2(m.importe), m.nota_factura || '']),
+        ['', '', 'Total', e2(ls.reduce((a, m) => a + num(m.resto) * (m.importe < 0 ? -1 : 1), 0)), ''], y + 6);
+      y = fin() + 8;
+    }
+  }
 
   const n = doc.getNumberOfPages();
   for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(7); doc.setTextColor(120); doc.text('Página ' + i + ' de ' + n, 287, 205, {align: 'right'}); }
@@ -709,7 +751,7 @@ function ventanaGestoria(rango) {
     const [lf, cuadre, bs] = await Promise.all([api.pedir('facturasDoc', r), api.pedir('cuadreContable', r), api.pedir('bancoSinFactura', r)]);
     const fs = lf.facturas || [];
     const p = pdfGestoria(r, fs, cuadre, bs.movimientos || []);
-    return {r, fs, cuadre, ...p, nombre: 'ZeroWattios_contabilidad_' + (r.desde || 'inicio') + '_' + r.hasta};
+    return {r, fs, cuadre, movs: bs.movimientos || [], ...p, nombre: 'ZeroWattios_contabilidad_' + (r.desde || 'inicio') + '_' + r.hasta};
   };
   const soloPdf = async () => {
     try { const x = await preparar(); descargar(x.doc.output('blob'), x.nombre + '.pdf'); poner(estado, '✓ PDF descargado.'); }
@@ -725,6 +767,8 @@ function ventanaGestoria(rango) {
       const cab = ['#', 'Fecha', 'Número', 'Cliente / proveedor', 'NIF', 'Concepto de gasto', 'Base', '% IVA', 'IVA', 'IRPF', 'Total', 'Casada', 'Fecha cobro/pago', 'Medio', 'Qué falta'];
       z.file('1_libro_emitidas.csv', csvDe([cab, ...x.emi.map((f, i) => fila(f, i, 'E'))]));
       z.file('2_libro_recibidas.csv', csvDe([cab, ...x.rec.map((f, i) => fila(f, i, 'R'))]));
+      z.file('3_banco_sin_factura_y_conceptos.csv', csvDe([['Fecha', 'Cuenta', 'Concepto del banco', 'Importe', 'Sin casar', 'Concepto', 'Nota'],
+        ...x.movs.map(m => [m.fecha, m.cuenta, m.concepto, e2(m.importe), e2(m.resto), m.concepto_sf ? ((x.cuadre.banco.por_concepto || []).find(c => c.concepto === m.concepto_sf) || {}).nombre || m.concepto_sf : 'Falta factura', m.nota_factura || ''])]));
       const todas = [...x.emi.map((f, i) => [f, '1_EMITIDAS/E' + String(i + 1).padStart(3, '0')]), ...x.rec.map((f, i) => [f, '2_RECIBIDAS/R' + String(i + 1).padStart(3, '0')])].filter(([f]) => f.archivo_id);
       let n = 0, fallos = [];
       for (const [f, pre] of todas) {
