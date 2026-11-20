@@ -624,7 +624,7 @@ const JSPDF = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.
 const AUTOTABLE = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js';
 const JSZIP = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
 
-const e2 = n => (Math.round(num(n) * 100) / 100).toLocaleString('es-ES', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const e2 = n => (Math.round(num(n) * 100) / 100).toLocaleString('es-ES', {minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always'});
 const fe = s => s ? String(s).slice(0, 10).split('-').reverse().join('/') : '';
 const limpio = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w .,()-]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
 const nombrePeriodo = r => r.desde && r.hasta ? fe(r.desde) + ' – ' + fe(r.hasta) : (r.hasta ? 'hasta ' + fe(r.hasta) : 'todo');
