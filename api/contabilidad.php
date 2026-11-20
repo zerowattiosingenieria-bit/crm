@@ -109,6 +109,18 @@ function accGuardarFacturaDoc_(array $u, array $p): array {
         && abs(num_($x['total']) - num_($f['total'] ?? 0)) < 0.01);
       if ($dup) return ['ok' => false, 'duplicada' => $dup['id'], 'error' => 'Esa factura ya está guardada (' . $dup['id'] . ', ' . txt_($dup['emisor']) . ' nº ' . txt_($dup['numero']) . ').'];
     }
+    /* Factura que ya está en el Drive (01-FACTURACION): se enlaza tal cual, sin volver a subirla. */
+    $driveId = txt_($p['archivo_drive_id'] ?? '');
+    if ($driveId !== '') {
+      $ya = buscar1_('FACTURAS_DOC', fn($x) => mismo_($x['archivo_id'], $driveId));
+      if ($ya) return ['ok' => false, 'duplicada' => $ya['id'], 'error' => 'Ese archivo del Drive ya está importado (' . $ya['id'] . ').'];
+      $f += ['origen' => 'drive', 'archivo_id' => $driveId, 'archivo_nombre' => txt_($p['nombre'] ?? ''), 'mime' => txt_($p['mime'] ?? ''),
+             'creado' => ahora_(), 'creado_por' => $u['id']];
+      $r = insertar_('FACTURAS_DOC', $f);
+      $r = contabilizarFacturaDoc_($u, $r);
+      registrar_($u, 'importar_factura_drive', 'FACTURAS_DOC', $r['id'], trozo_(txt_($r['emisor']) . ' · ' . txt_($r['numero']), 0, 160));
+      return ['ok' => true, 'factura' => facturaDocLigera_($r)];
+    }
     $datos = txt_($p['datos'] ?? '');
     if ($datos === '') return ['ok' => false, 'error' => 'No ha llegado el archivo de la factura.'];
     if (strlen($datos) > 16 * 1024 * 1024) return ['ok' => false, 'error' => 'El archivo pasa de 12 MB.'];
@@ -131,6 +143,8 @@ function accGuardarFacturaDoc_(array $u, array $p): array {
 
 /** Crea o actualiza el gasto (recibida) o la factura (emitida) que le corresponde. */
 function contabilizarFacturaDoc_(array $u, array $f): array {
+  /* Las del Drive son facturas que ya existían: solo se enlazan con lo que ya hay en el CRM, nunca se crean ni se tocan. */
+  if (txt_($f['origen'] ?? '') === 'drive') return enlazarFacturaDrive_($f);
   $concepto = txt_($f['concepto']) !== '' ? txt_($f['concepto']) : ('Factura ' . txt_($f['numero']));
   if (txt_($f['tipo']) === 'emitida') {
     $datos = ['numero' => txt_($f['numero']), 'operacion_id' => txt_($f['operacion_id']), 'cliente_id' => txt_($f['cliente_id']),
@@ -169,9 +183,10 @@ function accBorrarFacturaDoc_(array $u, array $p): array {
   $f = buscar1_('FACTURAS_DOC', fn($x) => mismo_($x['id'], $p['id'] ?? ''));
   if (!$f) return ['ok' => false, 'error' => 'Esa factura ya no está.'];
   if (txt_($f['banco_id'] ?? '') !== '') soltarMovimiento_($f);
-  if (txt_($f['gasto_id']) !== '') borrar_('GASTOS', $f['gasto_id']);
-  if (txt_($f['factura_id']) !== '') borrar_('FACTURAS', $f['factura_id']);
-  if (txt_($f['archivo_id']) !== '') { try { driveBorrar_(txt_($f['archivo_id'])); } catch (Throwable $e) {} }
+  $delDrive = txt_($f['origen'] ?? '') === 'drive';   /* del Drive: el archivo y el gasto/factura no son nuestros, se quedan */
+  if (!$delDrive && txt_($f['gasto_id']) !== '') borrar_('GASTOS', $f['gasto_id']);
+  if (!$delDrive && txt_($f['factura_id']) !== '') borrar_('FACTURAS', $f['factura_id']);
+  if (!$delDrive && txt_($f['archivo_id']) !== '') { try { driveBorrar_(txt_($f['archivo_id'])); } catch (Throwable $e) {} }
   borrar_('FACTURAS_DOC', $f['id']);
   registrar_($u, 'borrar_factura_doc', 'FACTURAS_DOC', $f['id'], txt_($f['emisor']) . ' · ' . txt_($f['numero']));
   return ['ok' => true];
@@ -310,4 +325,65 @@ function accBancoSinFactura_(array $u, array $p): array {
   }
   usort($lista, fn($a, $b) => strcmp($b['fecha'], $a['fecha']));
   return ['ok' => true, 'movimientos' => $lista];
+}
+
+
+/* ---------- importar las facturas que ya están en el Drive (20/11/2026) ---------- */
+
+/**
+ * Archivos (PDF e imágenes) de las carpetas de facturación que se le pasan:
+ * p.carpetas = [{id, tipo: emitida|recibida, nombre}]. Marca los que ya están importados.
+ */
+function accDriveFacturas_(array $u, array $p): array {
+  exigir_($u, 'finanzas');
+  $ya = [];
+  foreach (leer_('FACTURAS_DOC') as $f) if (txt_($f['archivo_id']) !== '') $ya[txt_($f['archivo_id'])] = $f['id'];
+  $lista = []; $errores = [];
+  foreach ((array)($p['carpetas'] ?? []) as $c) {
+    $id = txt_($c['id'] ?? ''); if ($id === '') continue;
+    try { $arch = driveListar_($id); } catch (Throwable $e) { $errores[] = txt_($c['nombre'] ?? $id) . ': ' . $e->getMessage(); continue; }
+    foreach ($arch as $a) {
+      $mime = txt_($a['mime'] ?? '');
+      if ($mime !== 'application/pdf' && strpos($mime, 'image/') !== 0) continue;
+      $lista[] = ['id' => txt_($a['id']), 'nombre' => txt_($a['nombre']), 'mime' => $mime, 'creado' => txt_($a['creado'] ?? ''),
+        'tipo' => txt_($c['tipo'] ?? '') === 'emitida' ? 'emitida' : 'recibida', 'carpeta' => txt_($c['nombre'] ?? ''),
+        'importada' => $ya[txt_($a['id'])] ?? ''];
+    }
+  }
+  return ['ok' => true, 'archivos' => $lista, 'errores' => $errores];
+}
+
+/** Descarga un archivo del Drive de la empresa (para leerlo en el navegador). Solo dirección. */
+function accArchivoDrive_(array $u, array $p): array {
+  exigir_($u, 'finanzas');
+  try { $a = driveDescargar_(txt_($p['id'] ?? '')); }
+  catch (Throwable $e) { return ['ok' => false, 'error' => 'No se ha podido descargar del Drive: ' . $e->getMessage()]; }
+  return ['ok' => true, 'nombre' => $a['nombre'] ?? '', 'mime' => $a['mime'] ?? '', 'datos' => $a['base64'] ?? ''];
+}
+
+/** Enlaza una factura importada del Drive con la factura emitida o el gasto que ya hay en el CRM (por número; los gastos también por proveedor + importe + fecha). */
+function enlazarFacturaDrive_(array $f): array {
+  $num = preg_replace('/[^a-z0-9]/', '', normal_($f['numero'] ?? ''));
+  if (txt_($f['tipo']) === 'emitida') {
+    if (txt_($f['factura_id']) !== '' || $num === '') return $f;
+    $x = buscar1_('FACTURAS', fn($y) => preg_replace('/[^a-z0-9]/', '', normal_($y['numero'])) === $num);
+    return $x ? actualizar_('FACTURAS_DOC', $f['id'], ['factura_id' => $x['id']] + (txt_($f['cliente_id']) === '' ? ['cliente_id' => txt_($x['cliente_id']), 'operacion_id' => txt_($x['operacion_id'])] : [])) : $f;
+  }
+  if (txt_($f['gasto_id']) !== '') return $f;
+  $usados = [];
+  foreach (leer_('FACTURAS_DOC') as $d) if (txt_($d['gasto_id']) !== '') $usados[txt_($d['gasto_id'])] = 1;
+  $gs = array_filter(leer_('GASTOS'), fn($g) => !isset($usados[txt_($g['id'])]));
+  $x = null;
+  if ($num !== '') foreach ($gs as $g) if (preg_replace('/[^a-z0-9]/', '', normal_($g['factura_proveedor'])) === $num) { $x = $g; break; }
+  if (!$x && num_($f['total']) > 0 && txt_($f['fecha']) !== '') {
+    $pal = array_filter(explode(' ', preg_replace('/[^a-z0-9 ]/', ' ', normal_($f['emisor']))), fn($w) => strlen($w) > 3);
+    foreach ($gs as $g) {
+      if (abs(num_($g['importe']) - num_($f['total'])) > 0.05) continue;
+      $dias = abs((strtotime(txt_($g['fecha'])) - strtotime(txt_($f['fecha']))) / 86400);
+      if ($dias > 20) continue;
+      $prov = normal_($g['proveedor']);
+      foreach ($pal as $w) if (strpos($prov, $w) !== false) { $x = $g; break 2; }
+    }
+  }
+  return $x ? actualizar_('FACTURAS_DOC', $f['id'], ['gasto_id' => $x['id']] + (txt_($f['operacion_id']) === '' && txt_($x['operacion_id']) !== '' ? ['operacion_id' => txt_($x['operacion_id'])] : [])) : $f;
 }

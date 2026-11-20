@@ -67,6 +67,7 @@ function acciones_(): array {
     'guardarFacturaDoc' => 'accGuardarFacturaDoc_', 'borrarFacturaDoc' => 'accBorrarFacturaDoc_',
     'candidatosBancoFacturaDoc' => 'accCandidatosBancoFacturaDoc_', 'casarFacturaDoc' => 'accCasarFacturaDoc_',
     'descasarFacturaDoc' => 'accDescasarFacturaDoc_', 'bancoSinFactura' => 'accBancoSinFactura_',
+    'driveFacturas' => 'accDriveFacturas_', 'archivoDrive' => 'accArchivoDrive_',
     'borrarGasto' => 'accBorrarGasto_',
 
     /* parte diario */

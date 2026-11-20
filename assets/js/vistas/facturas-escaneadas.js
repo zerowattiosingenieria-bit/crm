@@ -613,3 +613,5 @@ function editor({datos, leido, guardada, alGuardar, abrir}) {
     }
   });
 }
+
+export {leerArchivo, interpretar, clientePorTexto};
