@@ -85,6 +85,8 @@ const ESQUEMA = [
   "COBROS" => ['id', 'operacion_id', 'concepto', 'importe', 'fecha_prevista', 'fecha_cobro', 'estado', 'metodo', 'factura_id', 'notas', 'creado', 'creado_por'],
   "FACTURAS" => ['id', 'numero', 'operacion_id', 'cliente_id', 'fecha_emision', 'concepto', 'base', 'iva_pct', 'iva', 'total', 'estado', 'fecha_vencimiento', 'fecha_cobro', 'url', 'emitida_por', 'notas'],
   "GASTOS" => ['id', 'operacion_id', 'categoria', 'proveedor', 'concepto', 'importe', 'iva_pct', 'fecha', 'estado_pago', 'fecha_pago', 'factura_proveedor', 'creado', 'creado_por', 'notas'],
+  /* 20/11/2026: facturas escaneadas (PDF, imagen o foto) leídas enteras y contabilizadas (contabilidad.php). Solo dirección. */
+  "FACTURAS_DOC" => ['id', 'tipo', 'numero', 'fecha', 'vencimiento', 'emisor', 'emisor_nif', 'receptor', 'receptor_nif', 'concepto', 'base', 'iva_pct', 'iva', 'irpf_pct', 'irpf', 'total', 'cliente_id', 'operacion_id', 'categoria', 'gasto_id', 'factura_id', 'estado_pago', 'fecha_pago', 'archivo_id', 'archivo_nombre', 'mime', 'miniatura', 'texto', 'lineas', 'notas', 'creado', 'creado_por', 'modificado', 'modificado_por'],
   "SEGUIMIENTO" => ['id', 'cliente_id', 'operacion_id', 'usuario_id', 'fecha', 'canal', 'nota', 'proximo_paso', 'proxima_fecha', 'estado_resultante', 'origen', 'creado'],
   "CAPTACIONES" => ['id', 'cliente_id', 'captador_id', 'fecha', 'hora_cita', 'estado_cita', 'tecnologia', 'comercial_id', 'resultado', 'fecha_resultado', 'operacion_id', 'interes', 'notas', 'volver_llamar', 'creado', 'proyecto_creado', 'proyecto_enviado'],
   /* 02/11/2026: cada cita reagendada o cancelada (estadísticas) y el histórico de cambios de cada lead. */

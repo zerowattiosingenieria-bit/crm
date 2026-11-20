@@ -17,6 +17,7 @@ const INDICES = [
   'COBROS' => ['operacion_id', 'estado'],
   'FACTURAS' => ['operacion_id', 'cliente_id'],
   'GASTOS' => ['operacion_id'],
+  'FACTURAS_DOC' => ['cliente_id', 'operacion_id', 'gasto_id', 'factura_id'],
   'SEGUIMIENTO' => ['cliente_id', 'operacion_id', 'usuario_id'],
   'CAPTACIONES' => ['cliente_id', 'captador_id', 'comercial_id'],
   'CITAS_CAMBIOS' => ['captacion_id', 'cliente_id', 'captador_id'],
@@ -52,7 +53,7 @@ const INDICES = [
 /* Columnas que pueden ser largas (textos, JSON, miniaturas en base64). */
 function tipoColumna_(string $tabla, string $col): string {
   if ($col === 'id' || substr($col, -3) === '_id' || in_array($col, INDICES[$tabla] ?? [], true) || in_array($col, ['token', 'clave', 'ref', 'huella', 'pendiente', 'periodo', 'fecha', 'usuario', 'estado', 'tipo', 'numero'], true)) return 'VARCHAR(191) NOT NULL DEFAULT \'\'';
-  if (in_array($col, ['miniatura', 'detalle', 'analisis', 'resumen', 'sentadas_detalle', 'propuestas_aplicadas', 'nota', 'notas', 'otros', 'tarjeta', 'datos'], true)) return 'MEDIUMTEXT NULL';
+  if (in_array($col, ['miniatura', 'detalle', 'analisis', 'resumen', 'sentadas_detalle', 'propuestas_aplicadas', 'nota', 'notas', 'otros', 'tarjeta', 'datos', 'texto', 'lineas'], true)) return 'MEDIUMTEXT NULL';
   return 'TEXT NULL';
 }
 

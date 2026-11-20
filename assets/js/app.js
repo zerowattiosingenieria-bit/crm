@@ -20,6 +20,7 @@ import {vistaGantt, vistaCalFechas} from './vistas/gantt.js';
 import {vistaMapa} from './vistas/mapa.js';
 import {vistaDirectorio} from './vistas/directorio.js';
 import {vistaContabilidad, vistaFacturas, vistaGastos, vistaCobros} from './vistas/finanzas.js';
+import {vistaFacturasEscaneadas} from './vistas/facturas-escaneadas.js';
 import {vistaMateriales} from './vistas/materiales.js';
 import {vistaBanco} from './vistas/banco.js';
 import {vistaEquipo, vistaResumen, vistaPartes} from './vistas/equipo.js';
@@ -66,6 +67,7 @@ const VISTAS = {
   directorio:   {titulo: 'Directorio y puertas', pinta: vistaDirectorio,  permiso: 'directorio'},
   contabilidad: {titulo: 'Contabilidad',       pinta: vistaContabilidad,  permiso: 'finanzas'},
   facturas:     {titulo: 'Facturas',           pinta: vistaFacturas,      permiso: 'finanzas'},
+  escanear:     {titulo: 'Escanear facturas',  pinta: vistaFacturasEscaneadas, permiso: 'finanzas'},
   gastos:       {titulo: 'Gastos',             pinta: vistaGastos,        permiso: 'finanzas'},
   materiales:   {titulo: 'Materiales y costes', pinta: vistaMateriales,   permiso: 'finanzas'},
   banco:        {titulo: 'Banco',              pinta: vistaBanco,         permiso: 'finanzas'},
@@ -164,6 +166,7 @@ function menuDe(rol) {
     {id: 'directorio', et: 'Directorio y puertas', ico: '🗂'},
     {grupo: 'Dinero'},
     {id: 'contabilidad', et: 'Contabilidad', ico: '€'},
+    {id: 'escanear', et: 'Escanear facturas', ico: '📷'},
     {id: 'facturas', et: 'Facturas', ico: '▤'},
     {id: 'cobros', et: 'Cobros', ico: '↓'},
     {id: 'gastos', et: 'Gastos', ico: '↑'},
@@ -198,7 +201,7 @@ const K_MENU = 'zw.crm.menuSimple';
 const MENU_CORTO = {
   captador: ['hoy', 'agenda', 'captaciones', 'estadisticas', 'clientes', 'parte', 'tramites', 'avisar', 'perfil'],
   comercial: ['hoy', 'agenda', 'visitas', 'clientes', 'visor', 'cotizador', 'operaciones', 'calinstalaciones', 'calfechas', 'parte', 'avisar', 'perfil'],
-  otro: ['hoy', 'panel', 'tablero', 'incidencias', 'agenda', 'visitas', 'clientes', 'operaciones', 'calinstalaciones', 'calfechas', 'gantt', 'seguimiento', 'subcontratas', 'tramites', 'captaciones', 'estadisticas', 'cobros', 'banco', 'perfil']
+  otro: ['hoy', 'panel', 'tablero', 'incidencias', 'agenda', 'visitas', 'clientes', 'operaciones', 'calinstalaciones', 'calfechas', 'gantt', 'seguimiento', 'subcontratas', 'tramites', 'captaciones', 'estadisticas', 'cobros', 'banco', 'escanear', 'perfil']
 };
 const menuCorto = () => { try { return localStorage.getItem(K_MENU) === '1'; } catch (e) { return false; } };
 
