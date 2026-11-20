@@ -197,6 +197,17 @@ function accBanco_(array $u, array $p): array {
                                                    'movimientos' => 0];
     $porCuenta[$c]['movimientos'] += 1;
   }
+  /* Varios apuntes el mismo día: el último es el que no deja su saldo como
+     saldo de partida de otro apunte de ese día (saldo − importe). */
+  foreach ($porCuenta as $c => $info) {
+    $delDia = array_values(array_filter($todos, fn($m) => (txt_($m['cuenta']) ?: CUENTA_POR_DEFECTO) === $c
+                                                       && txt_($m['fecha']) === $info['fecha']));
+    if (count($delDia) < 2) continue;
+    $previos = array_map(fn($m) => redondear_(num_($m['saldo']) - num_($m['importe']), 2), $delDia);
+    foreach ($delDia as $m) {
+      if (!in_array(redondear_(num_($m['saldo']), 2), $previos, true)) { $porCuenta[$c]['saldo'] = num_($m['saldo']); break; }
+    }
+  }
   $cuentas = ordenar_(array_values($porCuenta), fn($a, $b) => $b['saldo'] <=> $a['saldo']);
   $saldoTotal = 0;
   foreach ($cuentas as $c) $saldoTotal += $c['saldo'];
