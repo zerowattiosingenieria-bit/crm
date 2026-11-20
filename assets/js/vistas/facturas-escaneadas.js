@@ -201,9 +201,20 @@ function interpretar(texto) {
   const d = {};
 
   /* NIF y tipo: si el primer NIF es el nuestro, la factura la hemos emitido nosotros */
-  const nifs = [...texto.toUpperCase().matchAll(RE_NIF)].map(m => m[1].replace(/[-\s.]/g, ''));
-  const otros = nifs.filter(x => x !== NUESTRO_CIF);
-  d.tipo = nifs[0] === NUESTRO_CIF && otros.length ? 'emitida' : 'recibida';
+  const mayus = texto.toUpperCase();
+  const nifs = [...mayus.matchAll(RE_NIF)].map(m => m[1].replace(/[-\s.]/g, ''));
+  const otros = [...new Set(nifs.filter(x => x !== NUESTRO_CIF))];
+  /* ¿Nuestro CIF va como emisor o como cliente? Manda la etiqueta que tenga más cerca por encima. */
+  let nuestroEsEmisor = false;
+  const pos = mayus.search(/B[-\s.]?25935073/);
+  if (pos >= 0) {
+    const antes = normal(texto.slice(Math.max(0, pos - 400), pos));
+    const ult = (re) => { let i = -1, m; const g = new RegExp(re.source, 'g'); while ((m = g.exec(antes))) i = m.index; return i; };
+    const iCli = ult(/cliente|destinatario|facturar a|datos del? cliente|entrega|receptor|comprador/);
+    const iEmi = ult(/proveedor|emisor|vendedor|razon social/);
+    nuestroEsEmisor = iEmi > iCli || (iCli < 0 && iEmi < 0 && nifs[0] === NUESTRO_CIF);
+  }
+  d.tipo = nuestroEsEmisor && otros.length ? 'emitida' : 'recibida';
   if (d.tipo === 'emitida') { d.receptor_nif = otros[0] || ''; d.emisor_nif = NUESTRO_CIF; d.emisor = 'ZERO WATTIOS INGENIERÍA, S.L.'; }
   else { d.emisor_nif = otros[0] || ''; d.receptor_nif = nifs.includes(NUESTRO_CIF) ? NUESTRO_CIF : (otros[1] || ''); }
 
@@ -211,24 +222,41 @@ function interpretar(texto) {
   if (d.tipo === 'recibida') {
     const conocidos = [...new Set((api.estado.gastos || []).map(g => txt(g.proveedor)).filter(p => p.length > 3))]
       .filter(p => n.includes(normal(p))).sort((a, b) => b.length - a.length);
-    const social = lineas.find(l => /\b(S\.?\s?L\.?\s?U?\.?|S\.?\s?A\.?\s?U?\.?|S\.?\s?COOP\.?)$/i.test(l) && !/zero\s*wattios/i.test(l) && l.length < 70);
-    d.emisor = conocidos[0] || (social || '').replace(/^(raz[oó]n social|emisor|proveedor)\s*:?\s*/i, '') ||
+    let social = '';
+    for (const l of lineas) {
+      const m = l.match(/([A-ZÁÉÍÓÚÑ0-9&'][A-ZÁÉÍÓÚÑ0-9&.,' -]{2,60}?\b(?:S\.?\s?L\.?\s?U?|S\.?\s?A\.?\s?U?|S\.?\s?COOP)\.?)(?=\s|$)/);
+      if (m && !/zero\s*wattios/i.test(m[1])) { social = m[1]; break; }
+    }
+    d.emisor = conocidos[0] || social.replace(/^(raz[oó]n social|emisor|proveedor)\s*:?\s*/i, '').trim() ||
       (lineas.find(l => /[a-z]{3}/i.test(l) && !/factura|invoice|fecha|p[aá]gina/i.test(l) && !/zero\s*wattios/i.test(l)) || '');
   } else {
     const c = clientePorTexto(texto);
-    d.receptor = c ? c.nombre : '';
+    let otra = '';
+    for (const l of lineas) {
+      const m = l.match(/([A-ZÁÉÍÓÚÑ0-9&'][A-ZÁÉÍÓÚÑ0-9&.,' -]{2,60}?\b(?:S\.?\s?L\.?\s?U?|S\.?\s?A\.?\s?U?|S\.?\s?COOP)\.?)(?=\s|$)/);
+      if (m && !/zero\s*wattios/i.test(m[1])) { otra = m[1].trim(); break; }
+    }
+    d.receptor = otra || (c ? c.nombre : '');
   }
 
   /* número de factura */
-  for (const l of lineas) {
+  for (let i = 0; i < lineas.length && !d.numero; i++) {
+    const l = lineas[i];
+    const sn = l.match(/serie\s*\/?\s*n[uú]m(?:ero)?\.?\s*:?\s*([A-Z0-9]+(?:\s*[\/-]\s*[A-Z0-9.]+)?)/i);
+    if (sn && /\d/.test(sn[1])) { d.numero = sn[1].replace(/\s+/g, ''); break; }
+    if (/^(n[ºo°.]?\s*(de\s*)?)?factura(\s*n[ºo°.])?\s*:?$/i.test(l)) {
+      const sig = lineas.slice(i + 1, i + 4).map(x => x.split(' ')[0]).find(x => /^[A-Z]{0,6}[-\/]?\d{2,}[\w\-\/.]*$/i.test(x) && !fechaDe(x));
+      if (sig) { d.numero = sig; break; }
+    }
     const m = l.match(/(?:n[ºo°.]\s*(?:de\s*)?factura|factura\s*(?:n[ºo°.]|n[uú]m(?:ero)?\.?|no\.?)?|invoice\s*(?:no\.?|number|#)?|fra\.\s*n?[ºo°]?)\s*[:#]?\s*([A-Z0-9][A-Z0-9\-\/\.]{1,24})/i);
     if (m && /\d/.test(m[1]) && !fechaDe(m[1]) && !/^(fecha|date)$/i.test(m[1])) { d.numero = m[1].replace(/[.\-\/]$/, ''); break; }
   }
 
   /* fechas */
   const conFecha = lineas.map(l => ({l, f: fechaDe(l)})).filter(x => x.f);
-  const venc = conFecha.find(x => /venc/i.test(x.l));
-  const emision = conFecha.find(x => /fecha/i.test(x.l) && !/venc/i.test(x.l)) || conFecha.find(x => x !== venc);
+  let venc = conFecha.find(x => /venc/i.test(x.l));
+  if (!venc) { const i = lineas.findIndex(l => /venc/i.test(l)); const f2 = i >= 0 && lineas[i + 1] ? fechaDe(lineas[i + 1]) : ''; if (f2) venc = {l: lineas[i + 1], f: f2}; }
+  const emision = conFecha.find(x => /fecha/i.test(x.l) && !/venc/i.test(x.l)) || conFecha.find(x => !venc || x.f !== venc.f);
   d.fecha = emision ? emision.f : '';
   d.vencimiento = venc ? venc.f : '';
 
@@ -262,6 +290,31 @@ function interpretar(texto) {
     const vals = irpf.v.filter(x => x !== d.irpf_pct && x !== d.base);
     if (vals.length) d.irpf = vals[vals.length - 1];
   }
+  /* La forma más fiable: buscar en todo el texto tres importes que cuadren
+     (base + IVA al 21/10/5/4 % [− IRPF] = total) y quedarse con el total mayor. */
+  const todos = [...new Set(lineas.flatMap(importes).filter(x => x > 0))].sort((a, b) => b - a).slice(0, 60);
+  let mejor = null;
+  for (const t of todos) {
+    for (const b of todos) {
+      if (b >= t) continue;
+      for (const pct of [21, 10, 5, 4]) {
+        const iv = todos.find(x => Math.abs(x - b * pct / 100) <= 0.02 + b * 0.0005);
+        if (iv === undefined) continue;
+        if (Math.abs(b + iv - t) <= 0.03) { mejor = {t, b, iv, pct, r: 0}; break; }
+        for (const rp of [15, 7, 19]) {
+          const rr = todos.find(x => Math.abs(x - b * rp / 100) <= 0.02 + b * 0.0005);
+          if (rr !== undefined && Math.abs(b + iv - rr - t) <= 0.03) { mejor = {t, b, iv, pct, r: rr, rp}; break; }
+        }
+        if (mejor) break;
+      }
+      if (mejor) break;
+    }
+    if (mejor) break;
+  }
+  if (mejor) {
+    d.total = mejor.t; d.base = mejor.b; d.iva = mejor.iv; d.iva_pct = mejor.pct;
+    if (mejor.r) { d.irpf = mejor.r; d.irpf_pct = mejor.rp; } else if (!d.irpf) { delete d.irpf; delete d.irpf_pct; }
+  }
   /* cuadrar lo que falte: total = base + IVA − IRPF */
   const ir = d.irpf || 0;
   if (d.base && d.total && !d.iva) d.iva = r2(d.total - d.base + ir);
@@ -276,10 +329,10 @@ function interpretar(texto) {
 
   /* líneas de detalle: texto con importe que no son los totales */
   const detalle = lineas.filter(l => importes(l).length && /[a-záéíóúñ]{4}/i.test(l) &&
-    !/total|base|i\.?v\.?a|irpf|retenci|cuota|vencim|fecha|iban|cif|nif|tel[eé]f/i.test(l));
-  d.lineas = detalle.slice(0, 40).map(l => ({descripcion: l.replace(RE_IMPORTE, '').replace(/\s*€\s*/g, ' ').replace(/\s+/g, ' ').trim(), importe: importes(l).pop()}));
-  const desc = d.lineas.map(x => x.descripcion).filter(s => s.length > 5).sort((a, b) => b.length - a.length)[0] || '';
-  d.concepto = desc ? desc.slice(0, 120) : '';
+    !/total|base|i\.?v\.?a|irpf|retenci|cuota|vencim|fecha|iban|cif|nif|tel[eé]f|cuenta|cobro|banco|transferencia|suma|impuesto|ES\d{2}\s?\d{4}/i.test(l) && !fechaDe(l));
+  d.lineas = detalle.slice(0, 40).map(l => ({descripcion: l.replace(RE_IMPORTE, '').replace(/€/g, ' ').replace(/\b\d+([.,]\d+)?\s*%/g, ' ').replace(/\b(unidades|uds?\.?)\b/gi, ' ').replace(/^\s*\d+\s+/, '').replace(/\s+/g, ' ').trim(), importe: importes(l).pop()}));
+  const descs = d.lineas.map(x => x.descripcion.replace(/\s%|%\s|%$/g, ' ').replace(/\s+/g, ' ').trim()).filter(s => s.length > 5);
+  d.concepto = descs.slice(0, 3).join(' · ').slice(0, 160);
 
   /* cliente y concepto de gasto */
   const c = clientePorTexto(texto);
