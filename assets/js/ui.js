@@ -148,6 +148,42 @@ export function tabla(columnas, filas, opciones = {}) {
  * campos: [{id, et, tipo, opciones, ancho, ayuda, requerido, min, max, paso, filas}]
  * tipo: texto | numero | euro | fecha | hora | select | area | tel | email | check
  */
+const sinAcentos = s => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+function selectorBuscable(campo, v) {
+  const ops = (campo.opciones || []).map(o => Array.isArray(o) ? o : [o, o]);
+  const etDe = val => (ops.find(o => String(o[0]) === String(val ?? '')) || [, ''])[1];
+  const entrada = h('input', {type: 'search', id: 'c_' + campo.id, autocomplete: 'off', placeholder: campo.pista || 'Escribe para buscar…', value: etDe(v)});
+  const lista = h('div', {estilo: {position: 'absolute', zIndex: '50', left: '0', right: '0', top: '100%', background: 'var(--fondo, #fff)',
+    border: '1px solid var(--borde, #ccc)', borderRadius: '6px', boxShadow: '0 6px 18px rgba(0,0,0,.12)', maxHeight: '280px', overflowY: 'auto', display: 'none'}});
+  const caja = h('div', {estilo: {position: 'relative'}}, entrada, lista);
+  let valor = v ?? '', marcado = 0, vistas = [];
+  const elegir = o => { valor = o ? o[0] : ''; entrada.value = o ? o[1] : ''; lista.style.display = 'none'; caja.dispatchEvent(new Event('change', {bubbles: true})); };
+  const pintar = () => {
+    const toks = sinAcentos(entrada.value).split(/[^a-z0-9ñ]+/).filter(Boolean);
+    vistas = (toks.length ? ops.filter(o => { const t = sinAcentos(o[1]); return toks.every(w => t.includes(w)); }) : ops).slice(0, 15);
+    marcado = 0;
+    lista.replaceChildren(...(campo.vacio !== false ? [h('div', {estilo: {padding: '7px 10px', color: 'var(--tx-3, #888)', cursor: 'pointer'}, onmousedown: e => { e.preventDefault(); elegir(null); }}, campo.vacio || '—')] : []),
+      ...vistas.map((o, i) => h('div', {estilo: {padding: '7px 10px', cursor: 'pointer', background: i === marcado ? 'var(--fondo-2, #f1fadf)' : ''},
+        onmousedown: e => { e.preventDefault(); elegir(o); }}, o[1])),
+      ...(vistas.length ? [] : [h('div', {estilo: {padding: '7px 10px', color: 'var(--tx-3, #888)'}}, 'Sin resultados')]));
+    lista.style.display = 'block';
+  };
+  entrada.addEventListener('input', pintar);
+  entrada.addEventListener('focus', () => { entrada.select(); pintar(); });
+  entrada.addEventListener('blur', () => setTimeout(() => { lista.style.display = 'none'; if (!entrada.value.trim()) valor = ''; else entrada.value = etDe(valor); }, 120));
+  entrada.addEventListener('keydown', e => {
+    if (lista.style.display === 'none') return;
+    const filas = [...lista.children].slice(campo.vacio !== false ? 1 : 0);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); marcado = Math.max(0, Math.min(vistas.length - 1, marcado + (e.key === 'ArrowDown' ? 1 : -1)));
+      filas.forEach((f, i) => { f.style.background = i === marcado ? 'var(--fondo-2, #f1fadf)' : ''; }); filas[marcado]?.scrollIntoView({block: 'nearest'}); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (vistas[marcado]) elegir(vistas[marcado]); }
+    else if (e.key === 'Escape') { lista.style.display = 'none'; }
+  });
+  /* el formulario lee y escribe control.value: se redirige al valor elegido */
+  Object.defineProperty(caja, 'value', {get: () => valor, set: x => { valor = x ?? ''; entrada.value = etDe(valor); }});
+  return caja;
+}
+
 export function formulario(campos, valores = {}) {
   const nodos = {};
   const pinta = campo => {
@@ -162,6 +198,10 @@ export function formulario(campos, valores = {}) {
             const [val, et] = Array.isArray(o) ? o : [o, o];
             return h('option', {value: val, selected: String(val) === String(v ?? '')}, et);
           })));
+    } else if (campo.tipo === 'buscar') {
+      /* desplegable con buscador: según se escribe filtra las opciones por todas las palabras
+         (p. ej. nombre o dirección de un cliente). El valor real va en control.value. */
+      control = selectorBuscable(campo, v);
     } else if (campo.tipo === 'area') {
       control = h('textarea', {id: 'c_' + campo.id, rows: campo.filas || 4,
         placeholder: campo.pista || ''}, txt(v));

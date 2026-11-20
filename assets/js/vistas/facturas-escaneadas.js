@@ -778,7 +778,7 @@ function editor({datos, leido, guardada, alGuardar, abrir}) {
     {id: 'irpf', et: 'Retención IRPF', tipo: 'euro'},
     {id: 'total', et: 'Total factura', tipo: 'euro', requerido: true},
     {separador: 'Asociar y contabilizar'},
-    {id: 'cliente_id', et: 'Cliente (opcional)', tipo: 'select', vacio: '— sin cliente —', opciones: clientes, ancho: 2},
+    {id: 'cliente_id', et: 'Cliente (opcional) · escribe nombre o dirección', tipo: 'buscar', pista: 'Escribe el nombre o la dirección del cliente…', vacio: '— sin cliente —', opciones: clientes, ancho: 2},
     {id: 'categoria', et: 'Concepto de gasto', tipo: 'select', vacio: '— sin concepto —', opciones: api.opciones('categoriasGasto')},
     {id: 'estado_pago', et: 'Estado', tipo: 'select', vacio: false, opciones: [['pendiente', 'Pendiente'], ['pagado', 'Pagada / cobrada']]},
     {id: 'fecha_pago', et: 'Fecha de pago o cobro', tipo: 'fecha'},
