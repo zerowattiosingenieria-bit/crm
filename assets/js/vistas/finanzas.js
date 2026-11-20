@@ -7,6 +7,7 @@ import {tarjeta, tabla, kpi, kpis, etiquetaEstado, marca, ventanaFormulario, ven
         confirmar, filtros, cargando} from '../ui.js';
 import {lineas, barras, apiladas, anillo, SERIES} from '../graficos.js';
 import {tarjetaReserva, tarjetaFacturasProveedor, botonPaqueteGestoria, facturarCobro} from './dinero-extra.js';
+import {subirFacturaDeGasto} from './facturas-escaneadas.js';
 
 const formatoValor = (v, f) => f === 'eur' ? eur(v) : (f === 'pct' ? pct(v)
   : (f === 'dias' ? miles(v) + ' días' : (f === 'ratio' ? String(v).replace('.', ',') : miles(v))));
@@ -474,7 +475,7 @@ export async function vistaGastos({ir}) {
           await api.guardarGasto({id: g.id, fecha_pago: hoyISO(), estado_pago: 'pagado'});
           aviso('Gasto marcado como pagado.'); recargar();
         }}, 'Pagado') : null)}
-    ], lista, {alPulsar: g => editorGasto(g, recargar), csv: 'gastos_zerowattios.csv', vacio: 'No hay gastos.'});
+    ], lista, {alPulsar: g => editorGasto(g, recargar, g._doc), csv: 'gastos_zerowattios.csv', vacio: 'No hay gastos.'});
 
     poner(contenedor,
       kpis(
@@ -506,9 +507,19 @@ export async function vistaGastos({ir}) {
   return caja;
 }
 
-function editorGasto(gasto, recargar) {
+function editorGasto(gasto, recargar, doc) {
   const ops = opcionesOp();
-  return ventanaFormulario({
+  /* la factura del gasto: verla, o subirla / hacerle foto desde aquí (queda enlazada a este gasto) */
+  let vf = null;
+  const trasSubir = async () => { if (vf) vf.ventana.cerrar(); await recargar(); };
+  const bloqueFactura = !gasto ? h('p.nota', {estilo: {marginTop: '8px'}}, 'Guarda el gasto y luego podrás subirle la factura (o súbela en Dinero › Facturas: se crea el gasto sola).')
+    : h('div', {estilo: {display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginTop: '10px', padding: '10px 12px', border: '1px dashed var(--borde, #ccc)', borderRadius: '8px'}},
+      h('b', 'Factura del proveedor:'),
+      doc ? h('button.btn.mini', {onclick: () => verDocumento('Factura ' + (doc.numero || gasto.proveedor || ''), () => api.pedir('archivoFacturaDoc', {id: doc.id}))}, '📄 Ver factura' + (doc.casada === 'si' ? ' (casada con el banco ✓)' : ''))
+        : h('span.nota', 'aún no está subida'),
+      h('button.btn.mini' + (doc ? '' : '.primario'), {onclick: () => subirFacturaDeGasto(gasto, {alGuardar: trasSubir})}, doc ? 'Subir otra' : '📎 Subir factura (PDF o imagen)'),
+      h('button.btn.mini', {onclick: () => subirFacturaDeGasto(gasto, {foto: true, alGuardar: trasSubir})}, '📷 Hacer foto'));
+  vf = ventanaFormulario({
     titulo: gasto ? 'Editar gasto' : 'Nuevo gasto',
     campos: [
       {id: 'operacion_id', et: 'Instalación · escribe dirección o nombre (vacío = gasto general)', tipo: 'buscar', pista: 'Escribe la dirección o el nombre…', vacio: 'Gasto general de la empresa', opciones: ops, ancho: 2},
@@ -525,6 +536,7 @@ function editorGasto(gasto, recargar) {
       {id: 'notas', et: 'Notas', tipo: 'area', ancho: 3}
     ],
     valores: gasto || {fecha: hoyISO(), iva_pct: 21, estado_pago: 'pendiente', categoria: 'material_fv'},
+    extra: bloqueFactura,
     alGuardar: async d => {
       if (gasto) d.id = gasto.id;
       await api.guardarGasto(d);
@@ -532,4 +544,5 @@ function editorGasto(gasto, recargar) {
       await recargar();
     }
   });
+  return vf;
 }

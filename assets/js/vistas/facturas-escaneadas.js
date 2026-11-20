@@ -801,7 +801,7 @@ function panelGestoria(rango) {
 function ventanaGestoria(rango) { ventana({titulo: 'Paquete para la gestoría', cuerpo: panelGestoria(rango)}); }
 
 /* ---------- ventana de revisión ---------- */
-function editor({datos, leido, guardada, alGuardar, abrir}) {
+function editor({datos, leido, guardada, alGuardar, abrir, fijos}) {
   const clientes = (api.estado.clientes || []).map(c => [c.id, [c.direccion, c.nombre].filter(Boolean).join(' · ')])
     .sort((a, b) => a[1].localeCompare(b[1], 'es'));
   const form = formulario([
@@ -882,6 +882,7 @@ function editor({datos, leido, guardada, alGuardar, abrir}) {
     const d = form.leer();
     if (guardada) d.id = guardada.id;
     if (leido) { d.texto = leido.texto; d.miniatura = leido.miniatura; d.lineas = datos.lineas || []; }
+    if (fijos) Object.assign(d, fijos);
     btn.disabled = true; poner(btn, h('span.cargando'), ' Guardando');
     const enviar = forzar => api.pedir('guardarFacturaDoc', Object.assign({factura: d, forzar: forzar ? 1 : 0},
       leido && !guardada ? leido.subir : {})).catch(e => { if (e.datos && e.datos.duplicada) return e.datos; throw e; });
@@ -904,4 +905,29 @@ function editor({datos, leido, guardada, alGuardar, abrir}) {
   });
 }
 
-export {leerArchivo, interpretar, clientePorTexto, tarjetaCuadre, tarjetaBancoSinFactura, panelGestoria};
+/** Subir (o fotografiar) la factura de un gasto que ya existe: se lee, se revisa y queda enlazada a ese gasto. */
+function subirFacturaDeGasto(gasto, {foto = false, alGuardar} = {}) {
+  const inp = h('input', {type: 'file', accept: foto ? 'image/*' : 'application/pdf,image/*', estilo: {display: 'none'}});
+  if (foto) inp.setAttribute('capture', 'environment');
+  document.body.appendChild(inp);
+  inp.addEventListener('change', async () => {
+    const a = inp.files[0]; inp.remove();
+    if (!a) return;
+    if (a.size > 15 * 1024 * 1024) return aviso('El archivo pasa de 15 MB.', 'error');
+    aviso('Leyendo la factura…');
+    try {
+      const leido = await leerArchivo(a, () => {});
+      const d = interpretar(leido.texto);
+      d.tipo = 'recibida';
+      if (!d.emisor) d.emisor = gasto.proveedor || '';
+      if (gasto.operacion_id) { d.operacion_id = gasto.operacion_id; const op = api.operacion(gasto.operacion_id); if (op) d.cliente_id = op.cliente_id; }
+      if (gasto.categoria) d.categoria = gasto.categoria;
+      if (!num(d.total) && num(gasto.importe)) d.total = num(gasto.importe);
+      if (!d.numero && gasto.factura_proveedor) d.numero = gasto.factura_proveedor;
+      editor({datos: d, leido, alGuardar: alGuardar || (async () => {}), fijos: {gasto_id: gasto.id, operacion_id: gasto.operacion_id || d.operacion_id || ''}});
+    } catch (e) { aviso(e.message || String(e), 'error'); }
+  });
+  inp.click();
+}
+
+export {leerArchivo, interpretar, clientePorTexto, tarjetaCuadre, tarjetaBancoSinFactura, panelGestoria, subirFacturaDeGasto};

@@ -92,6 +92,11 @@ function accGuardarFacturaDoc_(array $u, array $p): array {
              'concepto', 'base', 'iva_pct', 'iva', 'irpf_pct', 'irpf', 'total', 'cliente_id', 'operacion_id',
              'categoria', 'estado_pago', 'fecha_pago', 'texto', 'lineas', 'notas', 'miniatura'];
   $f = [];
+  /* factura subida desde la ficha de un gasto que ya existe: se enlaza a ese gasto sin crear otro */
+  $d0 = $p['factura'] ?? [];
+  if (txt_($d0['gasto_id'] ?? '') !== '' && txt_($d0['id'] ?? '') === '' && buscar1_('GASTOS', fn($g) => mismo_($g['id'], $d0['gasto_id']))) {
+    $f['gasto_id'] = txt_($d0['gasto_id']); $f['origen'] = 'adjunto';
+  }
   foreach ($campos as $c) if (array_key_exists($c, $d)) $f[$c] = is_array($d[$c]) ? json_encode($d[$c], JSON_UNESCAPED_UNICODE) : $d[$c];
 
   /* comprobaciones */
@@ -162,6 +167,12 @@ function accGuardarFacturaDoc_(array $u, array $p): array {
 function contabilizarFacturaDoc_(array $u, array $f): array {
   /* Las del Drive son facturas que ya existían: solo se enlazan con lo que ya hay en el CRM, nunca se crean ni se tocan. */
   if (txt_($f['origen'] ?? '') === 'drive') return enlazarFacturaDrive_($f);
+  /* adjuntada a un gasto que ya existía: solo se apunta el nº de factura en el gasto si no lo tenía */
+  if (txt_($f['origen'] ?? '') === 'adjunto') {
+    $g = txt_($f['gasto_id']) !== '' ? buscar1_('GASTOS', fn($x) => mismo_($x['id'], $f['gasto_id'])) : null;
+    if ($g && txt_($g['factura_proveedor']) === '' && txt_($f['numero']) !== '') actualizar_('GASTOS', $g['id'], ['factura_proveedor' => txt_($f['numero'])]);
+    return $f;
+  }
   $concepto = txt_($f['concepto']) !== '' ? txt_($f['concepto']) : ('Factura ' . txt_($f['numero']));
   if (txt_($f['tipo']) === 'emitida') {
     $datos = ['numero' => txt_($f['numero']), 'operacion_id' => txt_($f['operacion_id']), 'cliente_id' => txt_($f['cliente_id']),
@@ -201,7 +212,8 @@ function accBorrarFacturaDoc_(array $u, array $p): array {
   if (!$f) return ['ok' => false, 'error' => 'Esa factura ya no está.'];
   soltarCasados_(txt_($f['id']));
   $delDrive = txt_($f['origen'] ?? '') === 'drive';   /* del Drive: el archivo y el gasto/factura no son nuestros, se quedan */
-  if (!$delDrive && txt_($f['gasto_id']) !== '') borrar_('GASTOS', $f['gasto_id']);
+  $adjunto = txt_($f['origen'] ?? '') === 'adjunto';   /* adjuntada a un gasto que ya existía: el gasto se queda */
+  if (!$delDrive && !$adjunto && txt_($f['gasto_id']) !== '') borrar_('GASTOS', $f['gasto_id']);
   if (!$delDrive && txt_($f['factura_id']) !== '') borrar_('FACTURAS', $f['factura_id']);
   if (!$delDrive && txt_($f['archivo_id']) !== '') { try { driveBorrar_(txt_($f['archivo_id'])); } catch (Throwable $e) {} }
   borrar_('FACTURAS_DOC', $f['id']);
