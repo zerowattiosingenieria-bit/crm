@@ -34,6 +34,23 @@ function facturaDocLigera_(array $f): array {
 function accFacturasDoc_(array $u, array $p): array {
   exigir_($u, 'finanzas');
   $desde = txt_($p['desde'] ?? ''); $hasta = txt_($p['hasta'] ?? '');
+  /* búsqueda: en todas las fechas, por número, emisor, cliente, NIF, concepto, archivo, importe o cualquier texto de la factura */
+  $q = trim(txt_($p['q'] ?? ''));
+  if ($q !== '') {
+    $importeQ = preg_match('/^\d{1,3}(\.\d{3})*(,\d{1,2})?$|^\d+([.,]\d{1,2})?$/', $q) ? num_(strpos($q, ',') !== false ? str_replace(['.', ','], ['', '.'], $q) : $q) : null;
+    $toks = array_filter(explode(' ', preg_replace('/[^a-z0-9ñ ]/u', ' ', normal_($q))));
+    $clientes = []; foreach (leer_('CLIENTES') as $c) $clientes[txt_($c['id'])] = txt_($c['nombre']) . ' ' . txt_($c['direccion']);
+    $lista = array_values(array_filter(leer_('FACTURAS_DOC'), function ($f) use ($toks, $importeQ, $clientes) {
+      if ($importeQ !== null && $importeQ > 0) foreach (['total', 'base'] as $c) if (abs(num_($f[$c]) - $importeQ) < 0.011) return true;
+      $hay = ' ' . preg_replace('/[^a-z0-9ñ ]/u', ' ', normal_(implode(' ', [$f['id'], $f['numero'], $f['emisor'], $f['emisor_nif'], $f['receptor'], $f['receptor_nif'],
+        $f['concepto'], $f['archivo_nombre'], $f['notas'], $f['revisar'], $clientes[txt_($f['cliente_id'])] ?? '', $f['texto']]))) . ' ';
+      $hayJunto = str_replace(' ', '', $hay);
+      foreach ($toks as $t) if (strpos($hay, $t) === false && strpos($hayJunto, $t) === false) return false;
+      return (bool)$toks;
+    }));
+    $lista = ordenar_($lista, fn($a, $b) => comparar_(txt_($b['fecha']), txt_($a['fecha'])));
+    return ['ok' => true, 'facturas' => array_map('facturaDocLigera_', array_slice($lista, 0, 200)), 'busqueda' => $q];
+  }
   $lista = array_values(array_filter(leer_('FACTURAS_DOC'), function ($f) use ($desde, $hasta) {
     $fe = txt_($f['fecha']);
     if ($desde !== '' && strcmp($fe, $desde) < 0) return false;

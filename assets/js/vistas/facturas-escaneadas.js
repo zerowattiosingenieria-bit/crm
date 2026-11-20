@@ -366,6 +366,15 @@ export async function vistaFacturasEscaneadas() {
   const rango = trimestre();
   const lista = h('div', cargando('Cargando facturas…'));
   const soloSinCasar = {v: false};
+  /* buscador: en todas las fechas, por número, proveedor, cliente, NIF, importe o cualquier palabra de la factura */
+  const busca = {q: ''};
+  const caja_q = h('input', {type: 'search', placeholder: 'Buscar factura: nº, proveedor, cliente, dirección, NIF, importe (1.234,56) o cualquier palabra…',
+    estilo: {flex: '1 1 320px', fontSize: '15px', padding: '9px 12px'}});
+  let tq = null;
+  caja_q.addEventListener('input', () => { clearTimeout(tq); tq = setTimeout(() => { busca.q = caja_q.value.trim(); recargar(); }, 350); });
+  const buscador = h('div', {estilo: {display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', margin: '12px 0'}},
+    h('span', {estilo: {fontSize: '18px'}}, '🔍'), caja_q,
+    h('button.btn.mini', {onclick: () => { caja_q.value = ''; busca.q = ''; recargar(); }}, 'Limpiar'));
 
   const elegir = h('input', {type: 'file', accept: 'application/pdf,image/*', estilo: {display: 'none'}});
   const foto = h('input', {type: 'file', accept: 'image/*', capture: 'environment', estilo: {display: 'none'}});
@@ -408,7 +417,7 @@ export async function vistaFacturasEscaneadas() {
 
   async function recargar() {
     poner(lista, cargando('Cargando facturas…'));
-    const r = await api.pedir('facturasDoc', {desde: rango.desde || '', hasta: rango.hasta || ''});
+    const r = await api.pedir('facturasDoc', busca.q ? {q: busca.q} : {desde: rango.desde || '', hasta: rango.hasta || ''});
     const fs = r.facturas || [];
     const rec = fs.filter(x => x.tipo !== 'emitida'), emi = fs.filter(x => x.tipo === 'emitida');
     const s = (l, c) => l.reduce((a, x) => a + num(x[c]), 0);
@@ -431,8 +440,8 @@ export async function vistaFacturasEscaneadas() {
         kpi('Emitidas · base', eur2(s(emi, 'base')), 'IVA repercutido ' + eur2(s(emi, 'iva'))),
         kpi('Sin casar con banco, tarjeta o efectivo', String(fs.filter(x => x.casada !== 'si').length),
           eur2(s(fs.filter(x => x.casada !== 'si'), 'total')), {estado: fs.some(x => x.casada !== 'si') ? 'aviso' : null})]),
-      await tarjetaCuadre(rango),
-      tarjeta('Facturas escaneadas', t, {sinRelleno: true,
+      busca.q ? null : await tarjetaCuadre(rango),
+      tarjeta(busca.q ? 'Resultado de buscar «' + busca.q + '» en todas las fechas (' + fs.length + ')' : 'Facturas escaneadas', t, {sinRelleno: true,
         acciones: [h('button.btn.mini.primario', {onclick: async ev => {
             ev.target.disabled = true; ev.target.textContent = 'Casando…';
             try { const r = await api.pedir('autoCasar', {}); aviso('Casadas: ' + r.exactas + ' por importe, ' + r.agrupadas + ' en transferencias agrupadas, ' + r.fraccionadas + ' pagadas en varias veces. Quedan ' + r.pendientes + ' por revisar.'); }
@@ -442,7 +451,7 @@ export async function vistaFacturasEscaneadas() {
           h('button.btn.mini', {onclick: () => { soloSinCasar.v = !soloSinCasar.v; recargar(); }}, soloSinCasar.v ? 'Ver todas' : 'Solo sin casar'),
           h('button.btn.mini', {onclick: () => ventanaGestoria(rango)}, '📦 Para la gestoría'),
           h('button.btn.mini', {onclick: () => t.exportar && t.exportar()}, 'Exportar CSV')]}),
-      await tarjetaBancoSinFactura(rango, recargar));
+      busca.q ? null : await tarjetaBancoSinFactura(rango, recargar));
   }
 
   async function abrir(fila) {
@@ -450,7 +459,7 @@ export async function vistaFacturasEscaneadas() {
     editor({datos: r.factura, guardada: r.factura, alGuardar: recargar, abrir});
   }
 
-  poner(caja, tarjeta('Subir una factura', zona, {subtitulo: 'PDF, imagen o foto · queda guardada en el Drive y contabilizada'}), f.nodo, lista);
+  poner(caja, tarjeta('Subir una factura', zona, {subtitulo: 'PDF, imagen o foto · queda guardada en el Drive y contabilizada'}), buscador, f.nodo, lista);
   await recargar();
   return caja;
 }
