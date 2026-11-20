@@ -360,7 +360,7 @@ function trimestre() {
   return {desde: `${a}-${String(q * 3 + 1).padStart(2, '0')}-01`, hasta: hoy};
 }
 
-export async function vistaFacturasEscaneadas() {
+export async function vistaFacturasEscaneadas({enHub = false} = {}) {
   const caja = h('div');
   const estado = h('.nota', {estilo: {minHeight: '20px', marginTop: '8px'}});
   const rango = trimestre();
@@ -440,7 +440,7 @@ export async function vistaFacturasEscaneadas() {
         kpi('Emitidas · base', eur2(s(emi, 'base')), 'IVA repercutido ' + eur2(s(emi, 'iva'))),
         kpi('Sin casar con banco, tarjeta o efectivo', String(fs.filter(x => x.casada !== 'si').length),
           eur2(s(fs.filter(x => x.casada !== 'si'), 'total')), {estado: fs.some(x => x.casada !== 'si') ? 'aviso' : null})]),
-      busca.q ? null : await tarjetaCuadre(rango),
+      busca.q || enHub ? null : await tarjetaCuadre(rango),
       tarjeta(busca.q ? 'Resultado de buscar «' + busca.q + '» en todas las fechas (' + fs.length + ')' : 'Facturas escaneadas', t, {sinRelleno: true,
         acciones: [h('button.btn.mini.primario', {onclick: async ev => {
             ev.target.disabled = true; ev.target.textContent = 'Casando…';
@@ -451,7 +451,7 @@ export async function vistaFacturasEscaneadas() {
           h('button.btn.mini', {onclick: () => { soloSinCasar.v = !soloSinCasar.v; recargar(); }}, soloSinCasar.v ? 'Ver todas' : 'Solo sin casar'),
           h('button.btn.mini', {onclick: () => ventanaGestoria(rango)}, '📦 Para la gestoría'),
           h('button.btn.mini', {onclick: () => t.exportar && t.exportar()}, 'Exportar CSV')]}),
-      busca.q ? null : await tarjetaBancoSinFactura(rango, recargar));
+      busca.q || enHub ? null : await tarjetaBancoSinFactura(rango, recargar));
   }
 
   async function abrir(fila) {
@@ -741,7 +741,7 @@ const csvDe = (filas) => '﻿' + filas.map(r => r.map(c => { const s = String(c 
 const descargar = (blob, nombre) => { const a = h('a', {href: URL.createObjectURL(blob), download: nombre}); document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000); };
 
 /** Ventana «Paquete para la gestoría»: el PDF solo, o el ZIP con el PDF, los Excel y todas las facturas. */
-function ventanaGestoria(rango) {
+function panelGestoria(rango) {
   const desde = h('input', {type: 'date', value: rango.desde || ''}), hasta = h('input', {type: 'date', value: rango.hasta || hoyISO()});
   const estado = h('p.nota', {estilo: {minHeight: '20px'}});
   const preparar = async () => {
@@ -787,7 +787,7 @@ function ventanaGestoria(rango) {
     } catch (e) { poner(estado, h('span', {estilo: {color: ROJO}}, e.message)); }
   };
   const trim = (t) => { const y = (hasta.value || hoyISO()).slice(0, 4); const m0 = (t - 1) * 3 + 1; desde.value = y + '-' + String(m0).padStart(2, '0') + '-01'; hasta.value = new Date(Date.UTC(+y, m0 + 2, 0)).toISOString().slice(0, 10); };
-  ventana({titulo: 'Paquete para la gestoría', cuerpo: h('div',
+  return h('div',
     h('p', 'Elige el periodo y descarga. El PDF lleva el resumen, el IVA por trimestre, el libro de emitidas, el de recibidas y lo que queda sin casar. El ZIP lleva además los libros en Excel y todas las facturas originales, numeradas igual que en el PDF.'),
     h('div', {estilo: {display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap'}},
       h('span', 'Del'), desde, h('span', 'al'), hasta,
@@ -796,8 +796,9 @@ function ventanaGestoria(rango) {
     h('div', {estilo: {display: 'flex', gap: '10px', marginTop: '14px', flexWrap: 'wrap'}},
       h('button.btn.primario', {onclick: zip}, '📦 Descargar todo (ZIP)'),
       h('button.btn', {onclick: soloPdf}, '📄 Solo el PDF')),
-    estado)});
+    estado);
 }
+function ventanaGestoria(rango) { ventana({titulo: 'Paquete para la gestoría', cuerpo: panelGestoria(rango)}); }
 
 /* ---------- ventana de revisión ---------- */
 function editor({datos, leido, guardada, alGuardar, abrir}) {
@@ -903,4 +904,4 @@ function editor({datos, leido, guardada, alGuardar, abrir}) {
   });
 }
 
-export {leerArchivo, interpretar, clientePorTexto};
+export {leerArchivo, interpretar, clientePorTexto, tarjetaCuadre, tarjetaBancoSinFactura, panelGestoria};

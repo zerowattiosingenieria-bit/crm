@@ -21,6 +21,7 @@ import {vistaMapa} from './vistas/mapa.js';
 import {vistaDirectorio} from './vistas/directorio.js';
 import {vistaContabilidad, vistaFacturas, vistaGastos, vistaCobros} from './vistas/finanzas.js';
 import {vistaFacturasEscaneadas} from './vistas/facturas-escaneadas.js';
+import {vistaDinero} from './vistas/dinero.js';
 import {vistaMateriales} from './vistas/materiales.js';
 import {vistaBanco} from './vistas/banco.js';
 import {vistaEquipo, vistaResumen, vistaPartes} from './vistas/equipo.js';
@@ -65,13 +66,16 @@ const VISTAS = {
   avisar:       {titulo: 'Avisar de una incidencia', pinta: vistaAvisarIncidencia},
   mapa:         {titulo: 'Mapa de clientes',   pinta: vistaMapa,          permiso: 'direccion'},
   directorio:   {titulo: 'Directorio y puertas', pinta: vistaDirectorio,  permiso: 'directorio'},
-  contabilidad: {titulo: 'Contabilidad',       pinta: vistaContabilidad,  permiso: 'finanzas'},
-  facturas:     {titulo: 'Facturas',           pinta: vistaFacturas,      permiso: 'finanzas'},
-  escanear:     {titulo: 'Escanear facturas',  pinta: vistaFacturasEscaneadas, permiso: 'finanzas'},
-  gastos:       {titulo: 'Gastos',             pinta: vistaGastos,        permiso: 'finanzas'},
+  /* 20/11/2026: todo el dinero en una sola pantalla con pestañas (vistas/dinero.js). Las rutas
+     antiguas siguen funcionando y abren su pestaña. Solo dirección (permiso «finanzas»). */
+  dinero:       {titulo: 'Dinero',             pinta: c => vistaDinero(c), permiso: 'finanzas'},
+  contabilidad: {titulo: 'Dinero',             pinta: c => vistaDinero({...c, id: 'resumen'}),  permiso: 'finanzas'},
+  facturas:     {titulo: 'Dinero',             pinta: c => vistaDinero({...c, id: 'facturas'}), permiso: 'finanzas'},
+  escanear:     {titulo: 'Dinero',             pinta: c => vistaDinero({...c, id: 'facturas'}), permiso: 'finanzas'},
+  gastos:       {titulo: 'Dinero',             pinta: c => vistaDinero({...c, id: 'pagos'}),    permiso: 'finanzas'},
   materiales:   {titulo: 'Materiales y costes', pinta: vistaMateriales,   permiso: 'finanzas'},
-  banco:        {titulo: 'Banco',              pinta: vistaBanco,         permiso: 'finanzas'},
-  cobros:       {titulo: 'Cobros',             pinta: vistaCobros,        permiso: 'finanzas'},
+  banco:        {titulo: 'Dinero',             pinta: c => vistaDinero({...c, id: 'banco'}),    permiso: 'finanzas'},
+  cobros:       {titulo: 'Dinero',             pinta: c => vistaDinero({...c, id: 'cobros'}),   permiso: 'finanzas'},
   equipo:       {titulo: 'Equipo',             pinta: vistaEquipo,        permiso: 'partesAjenos'},
   partes:       {titulo: 'Partes diarios',     pinta: vistaPartes,        permiso: 'partesAjenos'},
   resumen:      {titulo: 'Resumen',            pinta: vistaResumen},
@@ -165,13 +169,8 @@ function menuDe(rol) {
     {id: 'mapa', et: 'Mapa', ico: '◎'},
     {id: 'directorio', et: 'Directorio y puertas', ico: '🗂'},
     {grupo: 'Dinero'},
-    {id: 'contabilidad', et: 'Contabilidad', ico: '€'},
-    {id: 'escanear', et: 'Escanear facturas', ico: '📷'},
-    {id: 'facturas', et: 'Facturas', ico: '▤'},
-    {id: 'cobros', et: 'Cobros', ico: '↓'},
-    {id: 'gastos', et: 'Gastos', ico: '↑'},
+    {id: 'dinero', et: 'Dinero', ico: '€'},
     {id: 'materiales', et: 'Materiales y costes', ico: '⚙'},
-    {id: 'banco', et: 'Banco', ico: '▮'},
     {grupo: 'Equipo'},
     {id: 'equipo', et: 'Equipo', ico: '◍'},
     {id: 'partes', et: 'Partes diarios', ico: '✓'},
@@ -201,7 +200,7 @@ const K_MENU = 'zw.crm.menuSimple';
 const MENU_CORTO = {
   captador: ['hoy', 'agenda', 'captaciones', 'estadisticas', 'clientes', 'parte', 'tramites', 'avisar', 'perfil'],
   comercial: ['hoy', 'agenda', 'visitas', 'clientes', 'visor', 'cotizador', 'operaciones', 'calinstalaciones', 'calfechas', 'parte', 'avisar', 'perfil'],
-  otro: ['hoy', 'panel', 'tablero', 'incidencias', 'agenda', 'visitas', 'clientes', 'operaciones', 'calinstalaciones', 'calfechas', 'gantt', 'seguimiento', 'subcontratas', 'tramites', 'captaciones', 'estadisticas', 'cobros', 'banco', 'escanear', 'perfil']
+  otro: ['hoy', 'panel', 'tablero', 'incidencias', 'agenda', 'visitas', 'clientes', 'operaciones', 'calinstalaciones', 'calfechas', 'gantt', 'seguimiento', 'subcontratas', 'tramites', 'captaciones', 'estadisticas', 'dinero', 'perfil']
 };
 const menuCorto = () => { try { return localStorage.getItem(K_MENU) === '1'; } catch (e) { return false; } };
 
@@ -225,7 +224,7 @@ function pintaMenu() {
     else if (def && def.permiso === 'cotizador') { if (!veCotizador()) return null; }
     else if (def && def.permiso === 'tramites') { if (!veTramites()) return null; }
     else if (def && def.permiso && def.permiso !== 'direccion' && !api.puede(def.permiso)) return null;
-    return h('a.nav' + (vista === x.id ? '.activo' : ''),
+    return h('a.nav' + (vista === x.id || (x.id === 'dinero' && (VISTAS[vista] || {}).titulo === 'Dinero') ? '.activo' : ''),
       {onclick: () => { ir(x.id); $('#lateral').classList.remove('abierto'); }},
       h('span.ico', x.ico), x.et);
   }).filter(Boolean), cambiar);

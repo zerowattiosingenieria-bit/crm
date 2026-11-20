@@ -23,7 +23,15 @@ function tareasCron_(): array {
     ['aviso_puertas',   [1], '08:00', fn() => avisoPuertasSemana('')],
     ['record_1330',     [1, 2, 3, 4, 5, 6, 7], '13:30', fn() => recordatoriosCRM()],
     ['record_1930',     [1, 2, 3, 4, 5, 6, 7], '19:30', fn() => recordatoriosCRM()],
+    /* 20/11/2026: casado automático de facturas con el banco, todos los días (tras la sincronización de la tarde y por la mañana) */
+    ['casar_0710',      [1, 2, 3, 4, 5, 6, 7], '07:10', fn() => autoCasarCron_()],
+    ['casar_2140',      [1, 2, 3, 4, 5, 6, 7], '21:40', fn() => autoCasarCron_()],
   ];
+}
+
+/** Casado automático diario (contabilidad.php) con un usuario de sistema con permiso de dirección. */
+function autoCasarCron_(): array {
+  return accAutoCasar_(['id' => 'U-000001', 'rol' => 'superadmin', 'nombre' => 'Tarea diaria'], []);
 }
 
 /** La copia de los viernes: el JSON de siempre y además el volcado SQL. */

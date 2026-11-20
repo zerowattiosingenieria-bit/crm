@@ -58,8 +58,8 @@ export function confirmar(texto, {titulo = '¿Seguro?', botón = 'Sí, continuar
 }
 
 /* ---------- indicadores ---------- */
-export function kpi(etiqueta, valor, pie, {destacado, estado, icono} = {}) {
-  return h('.kpi' + (destacado ? '.destacado' : ''),
+export function kpi(etiqueta, valor, pie, {destacado, estado, icono, alPulsar} = {}) {
+  return h('.kpi' + (destacado ? '.destacado' : ''), alPulsar ? {onclick: alPulsar, estilo: {cursor: 'pointer'}, title: 'Ver detalle'} : null,
     h('.et', icono ? h('span', icono) : null, etiqueta),
     h('.val', {estilo: estado ? {color: `var(--${estado})`} : null}, valor),
     pie ? h('.pie', pie) : null);

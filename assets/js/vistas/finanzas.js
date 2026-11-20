@@ -42,7 +42,7 @@ export async function vistaContabilidad({ir}) {
    contabilidad siempre sincronízate con BankTrack, es donde Rubén suele subir
    todo, y también en el Drive (dentro de FACTURACIÓN)». Lo escribe la tarea
    diaria de sincronización; aquí se ve cuándo fue y qué no cuadra. */
-function tarjetaSync(s) {
+export function tarjetaSync(s) {
   const fila = (nombre, x) => h('li', h('b', nombre + ': '), x ? txt(x) : h('span.nota', 'sin datos'));
   if (!s || !s.fecha) return tarjeta('Sincronización con BankTrack y Drive',
     h('p.nota', 'Aún no se ha sincronizado. Se hace cada día laborable con los movimientos de BankTrack y las facturas de Drive › 01-FACTURACION.'));
@@ -293,12 +293,12 @@ function editorFactura(factura, recargar) {
 export async function vistaCobros({ir}) {
   const caja = h('div');
   const contenedor = h('div', cargando());
-  const est = {estado: '', texto: ''};
+  const est = {estado: 'pendiente', texto: ''};
   let datos = null;
 
   const f = filtros([
-    {id: 'texto', et: 'Buscar por cliente o instalación…'},
-    {id: 'estado', tipo: 'select', opciones: [['', 'Todos'], ['pendiente', 'Pendientes'],
+    {id: 'texto', et: 'Buscar por cliente, dirección o importe…'},
+    {id: 'estado', tipo: 'select', valor: 'pendiente', opciones: [['pendiente', 'Pendientes'], ['', 'Todos'],
       ['vencido', 'Vencidos'], ['cobrado', 'Cobrados']]},
     {tipo: 'boton', et: '+ Nuevo cobro', clase: 'primario', accion: () => editorCobro(null, recargar)}
   ], v => { Object.assign(est, v); pinta(); });
@@ -307,19 +307,20 @@ export async function vistaCobros({ir}) {
 
   function pinta() {
     if (!datos) return;
-    const q = normal(est.texto);
+    const toks = palabras(est.texto);
     const hoy = hoyISO();
+    const facPorId = Object.fromEntries((datos.facturas || []).map(x => [x.id, x]));
     const lista = (datos.cobros || []).map(c => {
       const op = api.operacion(c.operacion_id) || {};
       const cli = api.cliente(op.cliente_id) || {};
       const vencido = !txt(c.fecha_cobro) && txt(c.fecha_prevista) && txt(c.fecha_prevista) < hoy;
-      return Object.assign({}, c, {_cliente: cli.nombre || '—', _ref: op.referencia || c.operacion_id,
-        _cliente_id: op.cliente_id, _vencido: vencido});
+      return Object.assign({}, c, {_cliente: [cli.direccion, cli.nombre].filter(Boolean).join(' · ') || '—', _ref: op.referencia || c.operacion_id,
+        _cliente_id: op.cliente_id, _vencido: vencido, _factura: facPorId[c.factura_id] || null});
     }).filter(c => {
       if (est.estado === 'cobrado' && !txt(c.fecha_cobro)) return false;
       if (est.estado === 'pendiente' && txt(c.fecha_cobro)) return false;
       if (est.estado === 'vencido' && !c._vencido) return false;
-      return !q || [c._cliente, c._ref].some(v => normal(v).includes(q));
+      return casa(toks, c._cliente, c._ref, api.etiquetaCatalogo('conceptosCobro', c.concepto), eur2(c.importe), num(c.importe).toFixed(2));
     }).sort((a, b) => txt(a.fecha_prevista).localeCompare(txt(b.fecha_prevista)));
 
     const pendientes = lista.filter(c => !txt(c.fecha_cobro));
@@ -329,20 +330,21 @@ export async function vistaCobros({ir}) {
       {clave: 'fecha_prevista', et: 'Previsto', pinta: c => h('span',
         {estilo: c._vencido ? {color: 'var(--mal)', fontWeight: '600'} : null}, fechaCorta(c.fecha_prevista))},
       {clave: '_cliente', et: 'Cliente'},
-      {clave: '_ref', et: 'Instalación'},
       {clave: 'concepto', et: 'Concepto', valor: c => api.etiquetaCatalogo('conceptosCobro', c.concepto)},
+      {clave: '_factura', et: 'Factura', valor: c => c._factura ? c._factura.numero : '', pinta: c => c._factura
+        ? h('a', {onclick: e => { e.stopPropagation(); verDocumento('Factura ' + c._factura.numero, () => api.pedir('archivoDeFactura', {factura_id: c._factura.id})); }, estilo: {cursor: 'pointer'}}, '📄 ' + c._factura.numero)
+        : h('span.nota', 'sin factura')},
       {clave: 'importe', et: 'Importe', num: true, pinta: c => h('b', eur2(c.importe))},
       {clave: 'fecha_cobro', et: 'Cobrado', pinta: c => txt(c.fecha_cobro) ? fechaCorta(c.fecha_cobro) : '—'},
       {clave: 'estado', et: 'Estado', pinta: c => etiquetaEstado(c._vencido ? 'vencido' : c.estado,
         c._vencido ? 'Vencido' : api.etiquetaCatalogo('estadosCobro', c.estado))},
-      {clave: 'acciones', et: '', noOrden: true, pinta: c => h('.acciones',
-        h('button.btn.mini', {onclick: () => editorCobro(c, recargar)}, 'Editar'),
+      {clave: 'acciones', et: '', noOrden: true, pinta: c => h('.acciones', {onclick: e => e.stopPropagation()},
         !txt(c.fecha_cobro) ? h('button.btn.mini.lima', {onclick: async () => {
           await api.guardarCobro({id: c.id, fecha_cobro: hoyISO(), estado: 'cobrado'});
           aviso('Cobro registrado.'); recargar();
         }}, 'Cobrado') : null,
         !txt(c.factura_id) ? h('button.btn.mini', {onclick: () => facturarCobro(c, datos.facturas, recargar)}, 'Facturar') : null)}
-    ], lista, {csv: 'cobros_zerowattios.csv', vacio: 'No hay cobros.'});
+    ], lista, {alPulsar: c => editorCobro(c, recargar), csv: 'cobros_zerowattios.csv', vacio: 'No hay cobros.'});
 
     poner(contenedor,
       kpis(
@@ -363,14 +365,11 @@ export async function vistaCobros({ir}) {
 }
 
 function editorCobro(cobro, recargar) {
-  const ops = api.estado.operaciones.map(o => {
-    const c = api.cliente(o.cliente_id) || {};
-    return [o.id, (o.referencia || o.id) + ' · ' + (c.nombre || '')];
-  });
+  const ops = opcionesOp();
   return ventanaFormulario({
     titulo: cobro ? 'Editar cobro' : 'Nuevo cobro',
     campos: [
-      {id: 'operacion_id', et: 'Instalación', tipo: 'select', opciones: ops, ancho: 2, requerido: true},
+      {id: 'operacion_id', et: 'Instalación · escribe dirección o nombre', tipo: 'buscar', pista: 'Escribe la dirección o el nombre…', vacio: false, opciones: ops, ancho: 2, requerido: true},
       {id: 'concepto', et: 'Concepto', tipo: 'select', opciones: api.opciones('conceptosCobro'), vacio: false},
       {id: 'importe', et: 'Importe (€)', tipo: 'euro', requerido: true},
       {id: 'fecha_prevista', et: 'Fecha prevista', tipo: 'fecha', requerido: true},
@@ -390,35 +389,65 @@ function editorCobro(cobro, recargar) {
   });
 }
 
+/* Nombre de una instalación para listas y buscadores: dirección · nombre del cliente. */
+const etqOp = o => { const c = api.cliente(o.cliente_id) || {}; return [c.direccion, c.nombre].filter(Boolean).join(' · ') + (o.referencia ? ' (' + o.referencia + ')' : ''); };
+const opcionesOp = () => api.estado.operaciones.map(o => [o.id, etqOp(o)]).sort((a, b) => a[1].localeCompare(b[1], 'es'));
+const palabras = q => normal(q).split(/[^a-z0-9ñ.,]+/).filter(Boolean);
+const casa = (toks, ...campos) => { if (!toks.length) return true; const t = normal(campos.join(' ')); return toks.every(w => t.includes(w)); };
+
+/** Ver un PDF o imagen que viene del servidor como base64 ({datos, mime, nombre, url}). */
+export async function verDocumento(titulo, pedir, cabecera) {
+  const cuerpo = h('div', cargando('Abriendo…'));
+  ventana({titulo, cuerpo, ancha: true});
+  try {
+    const r = await pedir();
+    const bin = Uint8Array.from(atob(r.datos), c => c.charCodeAt(0));
+    const url = URL.createObjectURL(new Blob([bin], {type: r.mime || 'application/pdf'}));
+    const esImg = /^image\//.test(r.mime || '');
+    poner(cuerpo, cabecera ? h('p.nota', {estilo: {margin: '0 0 8px'}}, cabecera) : null,
+      esImg ? h('img', {src: url, estilo: {maxWidth: '100%', border: '1px solid var(--borde, #ddd)'}})
+        : h('iframe', {src: url, estilo: {width: '100%', height: '72vh', border: '1px solid var(--borde, #ddd)', borderRadius: '6px'}}),
+      h('.acciones', {estilo: {marginTop: '8px', display: 'flex', gap: '8px'}},
+        h('a.btn.mini', {href: url, download: (r.nombre || titulo).replace(/\.(pdf|jpe?g|png)$/i, '') + (esImg ? '.jpg' : '.pdf')}, '⬇ Descargar'),
+        r.url ? h('a.btn.mini', {href: r.url, target: '_blank', rel: 'noopener'}, 'Abrir en Drive') : null));
+  } catch (e) { poner(cuerpo, h('p', e.message || String(e))); }
+}
+
 /* ================= gastos ================= */
 export async function vistaGastos({ir}) {
   const caja = h('div');
   const contenedor = h('div', cargando());
   const est = {texto: '', categoria: '', pago: ''};
   let datos = null;
+  let docs = {};
 
   const f = filtros([
-    {id: 'texto', et: 'Buscar por proveedor, concepto o instalación…'},
+    {id: 'texto', et: 'Buscar por proveedor, concepto, dirección o importe…'},
     {id: 'categoria', tipo: 'select', opciones: [['', 'Todas las categorías']].concat(api.opciones('categoriasGasto'))},
     {id: 'pago', tipo: 'select', opciones: [['', 'Pagados y pendientes'], ['pendiente', 'Solo pendientes'],
       ['pagado', 'Solo pagados'], ['estimado', 'Solo estimados']]},
     {tipo: 'boton', et: '+ Nuevo gasto', clase: 'primario', accion: () => editorGasto(null, recargar)}
   ], v => { Object.assign(est, v); pinta(); });
 
-  async function recargar() { datos = await api.pedir('finanzas', {}); pinta(); }
+  async function recargar() {
+    const [d, fd] = await Promise.all([api.pedir('finanzas', {}), api.pedir('facturasDoc', {}).catch(() => ({facturas: []}))]);
+    datos = d; docs = {};
+    (fd.facturas || []).forEach(x => { if (x.gasto_id && x.archivo_id) docs[x.gasto_id] = x; });
+    pinta();
+  }
 
   function pinta() {
     if (!datos) return;
-    const q = normal(est.texto);
+    const toks = palabras(est.texto);
     const lista = (datos.gastos || []).map(g => {
       const op = api.operacion(g.operacion_id) || {};
       const cli = api.cliente(op.cliente_id) || {};
-      return Object.assign({}, g, {_ref: op.referencia || (txt(g.operacion_id) ? g.operacion_id : 'General'),
-        _cliente: cli.nombre || ''});
+      return Object.assign({}, g, {_ref: txt(g.operacion_id) ? [cli.direccion, cli.nombre].filter(Boolean).join(' · ') || op.referencia || g.operacion_id : 'General de la empresa',
+        _cliente: '', _doc: docs[g.id] || null});
     }).filter(g => {
       if (est.categoria && txt(g.categoria) !== est.categoria) return false;
       if (est.pago && normal(g.estado_pago) !== est.pago) return false;
-      return !q || [g.proveedor, g.concepto, g._ref, g._cliente].some(v => normal(v).includes(q));
+      return casa(toks, g.proveedor, g.concepto, g._ref, g.factura_proveedor, eur2(g.importe), num(g.importe).toFixed(2));
     }).sort((a, b) => txt(b.fecha).localeCompare(txt(a.fecha)));
 
     const pendientes = lista.filter(g => !['pagado', 'estimado'].includes(normal(g.estado_pago)));
@@ -434,16 +463,18 @@ export async function vistaGastos({ir}) {
       {clave: '_ref', et: 'Instalación', pinta: g => h('div', h('span', g._ref),
         g._cliente ? h('div.nota', g._cliente) : null)},
       {clave: 'importe', et: 'Importe', num: true, pinta: g => h('b', eur2(g.importe))},
+      {clave: '_doc', et: 'Factura', valor: g => g._doc ? 'sí' : '', pinta: g => g._doc
+        ? h('a', {onclick: e => { e.stopPropagation(); verDocumento('Factura ' + (g._doc.numero || g.proveedor || ''), () => api.pedir('archivoFacturaDoc', {id: g._doc.id})); }, estilo: {cursor: 'pointer'}}, '📄 ' + (g._doc.casada === 'si' ? '✓' : ''))
+        : h('span.nota', g.factura_proveedor ? g.factura_proveedor : 'falta')},
       {clave: 'estado_pago', et: 'Pago', pinta: g => etiquetaEstado(normal(g.estado_pago),
         normal(g.estado_pago) === 'pagado' ? 'Pagado' : (normal(g.estado_pago) === 'estimado' ? 'Estimado' : 'Pendiente'))},
       {clave: 'fecha_pago', et: 'Pagado el', pinta: g => txt(g.fecha_pago) ? fechaCorta(g.fecha_pago) : '—'},
-      {clave: 'acciones', et: '', noOrden: true, pinta: g => h('.acciones',
-        h('button.btn.mini', {onclick: () => editorGasto(g, recargar)}, 'Editar'),
+      {clave: 'acciones', et: '', noOrden: true, pinta: g => h('.acciones', {onclick: e => e.stopPropagation()},
         !['pagado', 'estimado'].includes(normal(g.estado_pago)) ? h('button.btn.mini.lima', {onclick: async () => {
           await api.guardarGasto({id: g.id, fecha_pago: hoyISO(), estado_pago: 'pagado'});
           aviso('Gasto marcado como pagado.'); recargar();
         }}, 'Pagado') : null)}
-    ], lista, {csv: 'gastos_zerowattios.csv', vacio: 'No hay gastos.'});
+    ], lista, {alPulsar: g => editorGasto(g, recargar), csv: 'gastos_zerowattios.csv', vacio: 'No hay gastos.'});
 
     poner(contenedor,
       kpis(
@@ -476,14 +507,11 @@ export async function vistaGastos({ir}) {
 }
 
 function editorGasto(gasto, recargar) {
-  const ops = [['', 'Gasto general de la empresa']].concat(api.estado.operaciones.map(o => {
-    const c = api.cliente(o.cliente_id) || {};
-    return [o.id, (o.referencia || o.id) + ' · ' + (c.nombre || '')];
-  }));
+  const ops = opcionesOp();
   return ventanaFormulario({
     titulo: gasto ? 'Editar gasto' : 'Nuevo gasto',
     campos: [
-      {id: 'operacion_id', et: 'Instalación', tipo: 'select', opciones: ops, vacio: false, ancho: 2},
+      {id: 'operacion_id', et: 'Instalación · escribe dirección o nombre (vacío = gasto general)', tipo: 'buscar', pista: 'Escribe la dirección o el nombre…', vacio: 'Gasto general de la empresa', opciones: ops, ancho: 2},
       {id: 'categoria', et: 'Categoría', tipo: 'select', opciones: api.opciones('categoriasGasto'), vacio: false},
       {id: 'proveedor', et: 'Proveedor'},
       {id: 'concepto', et: 'Concepto', ancho: 2},
