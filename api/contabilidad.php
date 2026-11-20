@@ -319,7 +319,7 @@ function accCandidatosBancoFacturaDoc_(array $u, array $p): array {
     $resto = restoMovimiento_($m, $todos);
     if ($resto <= TOLERANCIA_CASAR) continue;
     $dias = (int)round((strtotime(txt_($m['fecha'])) - strtotime($fecha)) / 86400);
-    if ($dias < -60 || $dias > 180) continue;
+    if ($dias < -120 || $dias > 180) continue;
     $nombra = nombraContraparte_(txt_($m['concepto']), $clave);
     $dif = abs($resto - $pend);
     $exacto = $dif <= max(TOLERANCIA_CASAR, $pend * 0.01);
@@ -519,8 +519,10 @@ function accAutoCasar_(array $u, array $p): array {
     $pend = restoFactura_($f, $t); $clave = claveContraparte_($f); $fe = txt_($f['fecha']) ?: hoyISO_();
     foreach ($ms as $m) {
       if (!$signoOk($f, $m) || abs($m['_resto'] - $pend) > TOLERANCIA_CASAR) continue;
-      $d = $dias($fe, txt_($m['fecha'])); if ($d < -20 || $d > 120) continue;
+      $d = $dias($fe, txt_($m['fecha']));
       $nom = nombraContraparte_(txt_($m['concepto']), $clave);
+      /* los proveedores cobran a veces por adelantado («PAGO OFERTA…»): con el nombre, el pago puede ir hasta 100 días antes */
+      if ($d > 120 || $d < ($nom ? -100 : -20)) continue;
       $pares[] = ['f' => $f, 'm' => $m, 'peso' => ($nom ? 0 : 1000) + ($d < 0 ? 3 * -$d + 10 : $d)];
     }
   }
@@ -540,7 +542,7 @@ function accAutoCasar_(array $u, array $p): array {
     $cand = [];
     foreach ($fs as $f) {
       if (!$signoOk($f, $m) || txt_($f['casada']) === 'si') continue;
-      $d = $dias(txt_($f['fecha']) ?: hoyISO_(), txt_($m['fecha'])); if ($d < -10 || $d > 150) continue;
+      $d = $dias(txt_($f['fecha']) ?: hoyISO_(), txt_($m['fecha'])); if ($d < -100 || $d > 150) continue;
       if (!nombraContraparte_(txt_($m['concepto']), claveContraparte_($f))) continue;
       $cand[] = [$f['id'], restoFactura_($f, $t)];
     }
@@ -559,7 +561,7 @@ function accAutoCasar_(array $u, array $p): array {
     $cand = []; $porId = [];
     foreach ($libres() as $m) {
       if (!$signoOk($f, $m)) continue;
-      $d = $dias($fe, txt_($m['fecha'])); if ($d < -90 || $d > 180) continue;
+      $d = $dias($fe, txt_($m['fecha'])); if ($d < -120 || $d > 180) continue;
       if (!nombraContraparte_(txt_($m['concepto']), $clave)) continue;
       $cand[] = [$m['id'], $m['_resto']]; $porId[$m['id']] = $m;
     }
