@@ -605,6 +605,12 @@ function accAutoCasar_(array $u, array $p): array {
     $res['fraccionadas']++;
   }
 
+  /* facturas del Drive aún sin su gasto o su factura del CRM: se vuelven a intentar enlazar */
+  foreach (leer_('FACTURAS_DOC') as $f) {
+    if (txt_($f['origen'] ?? '') !== 'drive') continue;
+    if ((txt_($f['tipo']) === 'emitida' && txt_($f['factura_id']) === '') || (txt_($f['tipo']) !== 'emitida' && txt_($f['gasto_id']) === '')) enlazarFacturaDrive_($f);
+  }
+
   /* motivo de lo que queda */
   $t = leer_('CASADOS'); $libresAhora = $libres(); $marcadas = 0;
   foreach (leer_('FACTURAS_DOC') as $f) {
@@ -769,7 +775,9 @@ function enlazarFacturaDrive_(array $f): array {
   if (!$x && num_($f['total']) > 0 && txt_($f['fecha']) !== '') {
     $pal = array_filter(explode(' ', preg_replace('/[^a-z0-9 ]/', ' ', normal_($f['emisor']))), fn($w) => strlen($w) > 3);
     foreach ($gs as $g) {
-      if (abs(num_($g['importe']) - num_($f['total'])) > 0.05) continue;
+      /* el gasto puede estar apuntado con el total o con la base (y su IVA aparte) */
+      $gi = num_($g['importe']); $gIva = $gi * (1 + (txt_($g['iva_pct']) === '' ? 21 : num_($g['iva_pct'])) / 100);
+      if (abs($gi - num_($f['total'])) > 0.05 && abs($gIva - num_($f['total'])) > 0.06 && !(num_($f['base']) > 0 && abs($gi - num_($f['base'])) <= 0.05)) continue;
       $dias = abs((strtotime(txt_($g['fecha'])) - strtotime(txt_($f['fecha']))) / 86400);
       if ($dias > 20) continue;
       $prov = normal_($g['proveedor']);
