@@ -551,7 +551,6 @@
 
     finDeObraCliente(main);
     ayudasCliente(main);
-    financiacionCliente(main);
 
     main.appendChild(h('.tarjeta', h('h2', '¿Necesitas algo?'), h('p.nota', {estilo: {marginTop: 0}}, 'Escríbenos desde aquí y te respondemos en el plazo indicado.'),
       h('button.btn.lima.ancho', {onclick: () => ir('ayuda')}, ico('chat'), 'Abrir una consulta')));
@@ -611,43 +610,16 @@
         f.meses ? h('div', h('span', 'Plazo'), h('b', Math.round(f.meses / 12) + ' años')) : null, f.financiera ? h('div', h('span', 'Con'), h('b', f.financiera)) : null),
       h('p.nota', {estilo: {margin: 0}}, f.texto)))));
   }
+  /* Reseña en Google y «recomiéndanos»: solo cuando su captador, su comercial o dirección
+     lo activan desde su ficha (21/11/2026: sin conformidad firmada en la app). */
   function finDeObraCliente(main) {
     const f = D.fin;
     if (!f || !f.activo) return;
-    const caja = h('.tarjeta', h('h2', '¡Tu instalación está lista!'));
-    if (f.conformidad) caja.append(h('p', {estilo: {marginTop: 0}}, '✅ Firmaste la conformidad el ' + fecha(f.conformidad.fecha) + '. ¡Gracias!'));
-    else if (!previa) caja.append(h('p.nota', {estilo: {marginTop: 0}}, 'Revisa que todo está a tu gusto y firma la conformidad de fin de obra.'),
-      h('button.btn.lima.ancho', {onclick: firmarConformidad}, ico('firma'), 'Firmar la conformidad'));
-    caja.append(h('div', {estilo: {display: 'grid', gap: '8px', marginTop: '12px'}},
-      h('a.btn.borde.ancho', {href: f.resenas, target: '_blank', rel: 'noopener'}, '⭐ Déjanos tu opinión en Google'),
-      previa ? null : h('button.btn.borde.ancho', {onclick: recomendar}, ico('usuario'), 'Recomiéndanos a un vecino o amigo')));
-    main.appendChild(caja);
-  }
-  function firmarConformidad() {
-    const c = document.createElement('canvas'); c.width = 600; c.height = 220;
-    Object.assign(c.style, {width: '100%', height: '160px', background: '#fff', border: '1px solid #d8dbd0', borderRadius: '12px', touchAction: 'none'});
-    const x = c.getContext('2d'); x.lineWidth = 3; x.lineCap = 'round'; x.strokeStyle = '#111';
-    let pinta = false, hay = false;
-    const pos = e => { const r = c.getBoundingClientRect(); return [(e.clientX - r.left) * c.width / r.width, (e.clientY - r.top) * c.height / r.height]; };
-    c.addEventListener('pointerdown', e => { pinta = true; hay = true; x.beginPath(); x.moveTo(...pos(e)); c.setPointerCapture(e.pointerId); });
-    c.addEventListener('pointermove', e => { if (!pinta) return; x.lineTo(...pos(e)); x.stroke(); });
-    c.addEventListener('pointerup', () => { pinta = false; });
-    let val = 5;
-    const estrellas = h('div', {estilo: {fontSize: '30px', display: 'flex', gap: '4px'}});
-    const pintaE = () => { estrellas.innerHTML = ''; for (let i = 1; i <= 5; i++) estrellas.appendChild(h('button', {type: 'button', estilo: {background: 'none', border: 0, fontSize: '30px', cursor: 'pointer', opacity: i <= val ? 1 : 0.25}, onclick: () => { val = i; pintaE(); }}, '★')); };
-    pintaE();
-    const com = h('textarea', {placeholder: 'Algo que quieras contarnos (opcional)'});
-    const cerrar = hoja('Conformidad de fin de obra', h('.form',
-      h('p.nota', {estilo: {margin: 0}}, 'Con tu firma confirmas que la instalación se ha terminado y que funciona correctamente.'),
-      h('label.campo', h('span', '¿Qué nota nos pones?'), estrellas), h('label.campo', h('span', 'Comentario'), com),
-      h('label.campo', h('span', 'Firma con el dedo'), c), h('button.btn.borde.chico', {type: 'button', onclick: () => { x.clearRect(0, 0, c.width, c.height); hay = false; }}, 'Borrar firma'),
-      h('button.btn.lima.ancho', {onclick: async () => {
-        if (!hay) return toast('Falta tu firma', 'error');
-        const fin = cargandoGrande('Guardando…');
-        try { const r = await pedir('portalConformidad', {firma: c.toDataURL('image/png').split(',')[1], valoracion: val, comentario: com.value}); fin();
-          if (!r.ok) return toast(r.error, 'error'); cerrar(); toast('¡Gracias! Conformidad firmada', 'ok'); await refrescar(); pintar(); }
-        catch (e) { fin(); toast(e.message, 'error'); }
-      }}, ico('firma'), 'Firmar')));
+    main.appendChild(h('.tarjeta', h('h2', '¿Qué tal con Zero Wattios?'),
+      h('p.nota', {estilo: {marginTop: 0}}, 'Si estás contento con tu instalación, nos ayuda muchísimo que lo cuentes.'),
+      h('div', {estilo: {display: 'grid', gap: '8px'}},
+        h('a.btn.lima.ancho', {href: f.resenas, target: '_blank', rel: 'noopener'}, '⭐ Déjanos tu opinión en Google'),
+        previa ? null : h('button.btn.borde.ancho', {onclick: recomendar}, ico('usuario'), 'Recomiéndanos a un vecino o amigo'))));
   }
   function recomendar() {
     const n = h('input', {autocomplete: 'off'}), t = h('input', {type: 'tel'}), d = h('input'), m = h('input'), no = h('textarea', {placeholder: 'Ej.: le interesa la aerotermia'});

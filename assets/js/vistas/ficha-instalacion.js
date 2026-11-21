@@ -171,8 +171,8 @@ export function tarjetaInstalacion(c, ops, {abrir} = {}) {
 
 /* ---------- su app de cliente (21/11/2026) ----------
    Si tiene acceso, cuándo entró, preparar la bienvenida (la aprueban Nando o Rubén antes de
-   que salga) y, solo dirección, activar la parte de fin de obra (conformidad, reseña y
-   recomendar a un vecino). */
+   que salga) y activar en su app la reseña de Google y «recomiéndanos» (dirección, su
+   comercial o su captador). */
 function bloqueApp(c) {
   const caja = h('div', {estilo: {marginTop: '14px'}});
   const pinta = () => api.pedir('estadoAppCliente', {cliente_id: c.id}).then(r => {
@@ -182,15 +182,15 @@ function bloqueApp(c) {
       : r.bienvenida === 'aprobado' ? '⏳ Bienvenida aprobada por WhatsApp: falta marcarla enviada'
       : r.bienvenida === 'enviado' ? '✉️ Bienvenida enviada · aún no ha creado su clave'
       : r.firmado ? 'Todavía no tiene acceso a su app' : 'Tendrá su app cuando firme el proyecto';
-    const fin = r.conformidad ? '✍️ Conformidad firmada ' + fechaCorta(r.conformidad.fecha) + (r.conformidad.valoracion ? ' · ' + '★'.repeat(r.conformidad.valoracion) : '') : '';
+    const fin = r.fin_activo ? '⭐ Ve en su app la reseña de Google y «recomiéndanos»' : '';
     poner(caja, h('h4', {estilo: {margin: '0 0 8px'}}, '📱 Su app de cliente'),
       fila('📱', estado, fin),
       h('div', {estilo: {display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '6px'}},
         r.firmado && !(cu && cu.activa) && !['pendiente', 'aprobado'].includes(r.bienvenida) ? h('button.btn.mini', {onclick: () => api.pedir('prepararAccesoCliente', {cliente_id: c.id})
           .then(x => { aviso(x.aviso || 'Preparado', 'ok'); pinta(); }).catch(avisoError)}, 'Preparar acceso a su app') : null,
-        api.esDireccion() && r.firmado ? h('button.btn.mini' + (r.fin_activo ? '' : '.primario'), {title: 'Solo dirección. Al activarlo, el cliente ve en su app la conformidad de fin de obra, la reseña en Google y «recomienda a un vecino».',
-          onclick: () => api.pedir('activarFinApp', {cliente_id: c.id, activo: !r.fin_activo}).then(() => { aviso(r.fin_activo ? 'Fin de obra quitado de su app' : 'Fin de obra activado en su app', 'ok'); pinta(); }).catch(avisoError)},
-          r.fin_activo ? '✅ Fin de obra activo en su app · quitar' : '🏁 Activar fin de obra en su app') : null));
+        r.firmado ? h('button.btn.mini' + (r.fin_activo ? '' : '.primario'), {title: 'Dirección, su comercial o su captador. Al activarlo, el cliente ve en su app el botón para dejar su opinión en Google y «recomiéndanos a un vecino».',
+          onclick: () => api.pedir('activarFinApp', {cliente_id: c.id, activo: !r.fin_activo}).then(() => { aviso(r.fin_activo ? 'Reseña de Google quitada de su app' : 'Reseña de Google activada en su app', 'ok'); pinta(); }).catch(avisoError)},
+          r.fin_activo ? '✅ Reseña de Google activa en su app · quitar' : '⭐ Activar reseña de Google en su app') : null));
   }).catch(() => {});
   pinta();
   return caja;

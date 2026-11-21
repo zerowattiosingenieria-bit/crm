@@ -235,7 +235,7 @@ function portalExtrasCliente_(array $c, array $ops): array {
   /* 7. fin de obra: solo cuando dirección lo activa */
   $finOk = normal_(prop_('PFIN_' . $cid) ?? '') === 'si';
   $conf = deJson_(prop_('PCONF_' . $cid) ?? '', null);
-  return ['monitor' => $mon, 'necesitamos' => $nec, 'ayudas' => $ayudas, 'financiacion' => $fin,
+  return ['monitor' => $mon, 'necesitamos' => $nec, 'ayudas' => $ayudas, 'financiacion' => [],  /* quitada de la app (21/11/2026, Nando) */
     'fin' => $finOk ? ['activo' => true, 'conformidad' => is_array($conf) ? $conf : null, 'resenas' => txt_(config_()['google_resenas_url'] ?? '') ?: 'https://www.google.com/search?q=Zero+Wattios+Ingenieria+opiniones'] : null];
 }
 
@@ -316,10 +316,12 @@ function portalRecomendar_(array $c, array $p): array {
   return ['ok' => true];
 }
 
-/** CRM, dirección: activar la parte de fin de obra (conformidad, reseña, recomendar) para un cliente. */
+/** CRM: activar en su app la reseña de Google y «recomiéndanos». Lo puede hacer dirección,
+    su comercial o su captador (quien vea al cliente), desde su ficha. */
 function accPortalActivarFin_(array $u, array $p): array {
-  if ((permisos_($u)['alcance'] ?? '') !== 'todo') return ['ok' => false, 'error' => 'Solo dirección.'];
-  $cid = txt_($p['cliente_id'] ?? '');
+  $v = clienteVisible_($u, $p['cliente_id'] ?? '');
+  if (isset($v['error'])) return ['ok' => false, 'error' => $v['error']];
+  $cid = txt_($v['cliente']['id']);
   setProp_('PFIN_' . $cid, !empty($p['activo']) ? 'si' : 'no');
   registrar_($u, 'portal_fin_' . (!empty($p['activo']) ? 'activar' : 'quitar'), 'CLIENTES', $cid, '');
   return ['ok' => true, 'activo' => !empty($p['activo'])];

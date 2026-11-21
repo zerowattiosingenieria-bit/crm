@@ -67,7 +67,7 @@ const PORTAL_FASES = [
 ];
 /* Las acciones que cambian algo: en «Ver como» (vista previa del superadmin) no se dejan. */
 const PORTAL_ESCRIBEN = ['portalVisitaHecha', 'portalLlegada', 'portalFase', 'portalAviso', 'portalTerminar', 'portalNota', 'portalSubir',
-                         'portalTicket', 'portalMensaje', 'portalCambiarClave', 'portalSubirCliente', 'portalAceptarFecha', 'portalConformidad',
+                         'portalTicket', 'portalMensaje', 'portalCambiarClave', 'portalSubirCliente', 'portalAceptarFecha',
                          'portalRecomendar', 'portalSubirFactura', 'portalMaterial', 'portalSubirDocContrata'];
 /* Las direcciones que se dan (redirigen a crm.zerowattios.com/clientes/ y /contratas/). */
 const PORTAL_WEB = ['cliente' => 'https://clientes.zerowattios.com/', 'contrata' => 'https://contratas.zerowattios.com/'];
@@ -87,7 +87,7 @@ function atenderPortal_(array $p, string $accion): array {
     'portalTerminar' => 'portalTerminar_', 'portalNota' => 'portalNota_', 'portalSubir' => 'portalSubir_',
     'portalDescargar' => 'portalDescargar_', 'portalTicket' => 'portalTicket_', 'portalMensaje' => 'portalMensaje_',
     'portalCambiarClave' => 'portalCambiarClave_', 'portalVisitaHecha' => 'portalVisitaHecha_',
-    'portalSubirCliente' => 'portalSubirCliente_', 'portalAceptarFecha' => 'portalAceptarFecha_', 'portalConformidad' => 'portalConformidad_',
+    'portalSubirCliente' => 'portalSubirCliente_', 'portalAceptarFecha' => 'portalAceptarFecha_',
     'portalRecomendar' => 'portalRecomendar_', 'portalSubirFactura' => 'portalSubirFactura_', 'portalMaterial' => 'portalMaterial_',
     'portalDocsContrata' => 'portalDocsContrata_', 'portalSubirDocContrata' => 'portalSubirDocContrata_'
   ];
