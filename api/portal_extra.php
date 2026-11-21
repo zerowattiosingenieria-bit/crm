@@ -79,8 +79,8 @@ function mensajeBienvenida_(array $cli, string $quien = 'sistema'): ?array {
 
 /**
  * Aprueba un mensaje. p.id, p.canal (email|whatsapp), p.cuerpo (editado), p.asunto.
- * Correo: se envía ya. WhatsApp: queda aprobado y se devuelve el enlace para que quien
- * aprueba lo mande desde su WhatsApp (luego se marca enviado).
+ * Nada se envía solo: correo → queda aprobado y se devuelve el texto para copiarlo y mandarlo
+ * desde su correo; WhatsApp → se devuelve el enlace con el texto. Luego se marca enviado.
  */
 function accAprobarMensaje_(array $u, array $p): array {
   exigirAprobador_($u);
@@ -101,13 +101,10 @@ function accAprobarMensaje_(array $u, array $p): array {
   if ($canal === 'email') {
     $to = normal_(txt_($m['destino']) !== '' && strpos(txt_($m['destino']), '@') ? $m['destino'] : ($cli['email'] ?? ($cta['email'] ?? '')));
     if (!filter_var($to, FILTER_VALIDATE_EMAIL)) return ['ok' => false, 'error' => 'No hay un correo válido para enviarlo. Usa WhatsApp.'];
-    $web = PORTAL_WEB[txt_($m['destino_tipo']) === 'contrata' ? 'contrata' : 'cliente'];
-    $html = '<p style="margin:0 0 12px">' . nl2br(htmlspecialchars($cuerpo)) . '</p>';
-    $ok = correo_(['to' => $to, 'subject' => $asunto, 'htmlBody' => portalHtml_($asunto, $html, 'Entrar', $web), 'name' => 'Zero Wattios']);
-    if (!$ok) return ['ok' => false, 'error' => 'No se ha podido enviar el correo.'];
-    actualizar_('MENSAJES', $m['id'], $cambios + ['estado' => 'enviado', 'enviado' => ahora_(), 'destino' => $to]);
-    registrar_($u, 'mensaje_aprobado', 'MENSAJES', $m['id'], 'correo → ' . $to);
-    return ['ok' => true, 'enviado' => true];
+    /* 21/11/2026, Nando: los correos no salen solos. Se aprueba, se copia el texto y lo manda él desde su correo. */
+    actualizar_('MENSAJES', $m['id'], $cambios + ['estado' => 'aprobado', 'destino' => $to]);
+    registrar_($u, 'mensaje_aprobado', 'MENSAJES', $m['id'], 'correo (para copiar) → ' . $to);
+    return ['ok' => true, 'email' => ['para' => $to, 'asunto' => $asunto, 'cuerpo' => $cuerpo]];
   }
   $tel = preg_replace('/\D/', '', txt_($m['telefono']) ?: (txt_($m['destino']) ?: ($cli['telefono'] ?? ($cta['telefono'] ?? ''))));
   if (strlen($tel) === 9) $tel = '34' . $tel;
