@@ -877,3 +877,26 @@ function accArchivoDeFactura_(array $u, array $p): array {
   return ['ok' => true, 'nombre' => $nombre ?: ($a['nombre'] ?? ''), 'mime' => $a['mime'] ?? 'application/pdf', 'datos' => $a['base64'] ?? '',
     'url' => 'https://drive.google.com/file/d/' . $driveId . '/view', 'doc_id' => $doc['id'] ?? ''];
 }
+
+/**
+ * El dinero de un cliente (21/11/2026, solo dirección): sus facturas emitidas y recibidas
+ * (con su PDF y si están casadas con el banco), los gastos de sus instalaciones, el plan de
+ * cobros, y lo que el CRM estima cuando aún no hay facturas.
+ */
+function accDineroCliente_(array $u, array $p): array {
+  exigir_($u, 'finanzas');
+  asegurarCasados_();
+  $cid = txt_($p['cliente_id'] ?? '');
+  $ops = filtrar_('OPERACIONES', fn($o) => mismo_($o['cliente_id'], $cid));
+  $opIds = array_map(fn($o) => txt_($o['id']), $ops);
+  $deEl = fn($x) => mismo_($x['cliente_id'] ?? '', $cid) || in_array(txt_($x['operacion_id'] ?? ''), $opIds, true);
+  $t = leer_('CASADOS');
+  $docs = array_values(array_map(fn($f) => facturaDocLigera_($f) + ['pendiente' => restoFactura_($f, $t)], array_filter(leer_('FACTURAS_DOC'), $deEl)));
+  $conDoc = [];
+  foreach ($docs as $d) { if (txt_($d['factura_id'] ?? '') !== '') $conDoc['F' . $d['factura_id']] = $d['id']; if (txt_($d['gasto_id'] ?? '') !== '') $conDoc['G' . $d['gasto_id']] = $d['id']; }
+  $facturas = array_values(array_map(fn($f) => array_diff_key($f, ['_fila' => 1]) + ['doc_id' => $conDoc['F' . $f['id']] ?? ''], array_filter(leer_('FACTURAS'), $deEl)));
+  $gastos = array_values(array_map(fn($g) => array_diff_key($g, ['_fila' => 1]) + ['doc_id' => $conDoc['G' . $g['id']] ?? ''], array_filter(leer_('GASTOS'), fn($g) => in_array(txt_($g['operacion_id']), $opIds, true))));
+  $cobros = array_values(array_map(fn($c) => array_diff_key($c, ['_fila' => 1]), array_filter(leer_('COBROS'), fn($c) => in_array(txt_($c['operacion_id']), $opIds, true))));
+  usort($docs, fn($a, $b) => strcmp(txt_($b['fecha']), txt_($a['fecha'])));
+  return ['ok' => true, 'documentos' => $docs, 'facturas' => $facturas, 'gastos' => $gastos, 'cobros' => $cobros];
+}

@@ -166,3 +166,56 @@ function ventanaManuales(archivos, fichas) {
     archivos.length ? h('div', {estilo: {marginTop: '10px'}}, h('h4', 'De la obra'), archivos.map(a => fila('📄', a.nombre, fechaCorta(a.subido),
       h('button.btn.mini', {onclick: () => verArchivo(a)}, 'Ver')))) : null)});
 }
+
+/* ---------- el dinero del cliente: SOLO DIRECCIÓN (21/11/2026) ----------
+   Facturas emitidas y recibidas de este cliente (con su PDF y si están casadas con el
+   banco), gastos de sus instalaciones, plan de cobros y, mientras no haya facturas, lo
+   que estima el CRM (coste de materiales del catálogo y margen). Importes IVA incluido. */
+export function panelDineroCliente(c, ops) {
+  const caja = h('div', h('p.nota', 'Cargando el dinero del cliente…'));
+  Promise.all([api.pedir('dineroCliente', {cliente_id: c.id}), import('../materiales.js')]).then(([r, M]) => {
+    const docs = r.documentos || [], fact = r.facturas || [], gastos = r.gastos || [], cobros = r.cobros || [];
+    const S = (xs, k) => xs.reduce((a, x) => a + num(x[k]), 0);
+    const emit = docs.filter(d => d.tipo === 'emitida'), recib = docs.filter(d => d.tipo !== 'emitida');
+    const venta = S(ops.filter(o => normal(o.estado) !== 'cancelada'), 'total');
+    const facturado = fact.length ? S(fact, 'total') : S(emit, 'total');
+    const cobrado = S(cobros.filter(x => txt(x.fecha_cobro)), 'importe') || S(emit.filter(d => d.casada === 'si'), 'total');
+    const gReal = gastos.filter(g => normal(g.estado_pago) !== 'estimado'), gEst = gastos.filter(g => normal(g.estado_pago) === 'estimado');
+    /* Los gastos apuntados a mano llevan la base y su IVA; los de factura escaneada, ya el total. */
+    const conIva = g => /Factura escaneada/i.test(txt(g.notas)) ? num(g.importe) : num(g.importe) * (1 + (txt(g.iva_pct) === '' ? 21 : num(g.iva_pct)) / 100);
+    const costeReal = gReal.reduce((a, g) => a + conIva(g), 0);
+    /* estimado con el catálogo de costes (sin IVA en el catálogo → se pasa a IVA incluido) */
+    const cat = M.catalogoCostes(api.estado.config);
+    const est = ops.filter(o => normal(o.estado) !== 'cancelada').map(o => ({o, m: M.materialesDe(o, cat), me: M.margenEstimado(o, cat)})).filter(x => x.m.lineas.length);
+    const costeEst = est.reduce((a, x) => a + x.m.total, 0) || gEst.reduce((a, g) => a + conIva(g), 0);
+    const coste = costeReal || costeEst;
+    const margen = venta - coste;
+    const verDoc = d => verArchivo({nombre: (d.numero || d.emisor || 'Factura'), mime: d.mime}, () => api.pedir('archivoFacturaDoc', {id: d.id}));
+    const casada = d => d.casada === 'si' ? h('span', {estilo: {color: '#3f7d0b', fontWeight: '600'}}, '✓ casada') : (d.casada === 'parcial' ? h('span', {estilo: {color: '#b45309'}}, '◐ parcial') : h('span', {estilo: {color: '#b45309'}}, '● sin casar'));
+    const tablaDocs = (xs, quien) => xs.length ? h('table.datos', h('thead', h('tr', h('th', 'Fecha'), h('th', 'Nº'), h('th', quien), h('th.num', 'Total'), h('th', 'Banco'), h('th', ''))),
+      h('tbody', xs.map(d => h('tr', h('td', fechaCorta(d.fecha)), h('td', d.numero || '—'), h('td', (d.tipo === 'emitida' ? d.receptor : d.emisor) || '—'), h('td.num', eur2(d.total)), h('td', casada(d)),
+        h('td', d.archivo_id ? h('button.btn.mini', {onclick: () => verDoc(d)}, '📄 Ver') : null))))) : h('p.nota', 'No hay facturas.');
+    poner(caja, h('div',
+      h('p', {estilo: {margin: '0 0 10px', padding: '8px 12px', background: 'var(--fondo-lima, #f1fadf)', borderRadius: '8px'}}, '🔒 Solo lo ve la dirección. Importes IVA incluido.'),
+      h('.kpis', [
+        ['Venta', eur(venta), ops.length + ' instalación' + (ops.length === 1 ? '' : 'es')],
+        ['Facturado', eur(facturado), (fact.length || emit.length) + ' facturas'],
+        ['Cobrado', eur(cobrado), venta ? Math.round(cobrado * 100 / venta) + ' % de la venta' : ''],
+        [costeReal ? 'Coste real' : 'Coste estimado', eur(coste), costeReal ? gReal.length + ' gastos con factura' + (costeEst ? ' · estimado ' + eur(costeEst) : '') : 'catálogo de costes del CRM'],
+        [costeReal ? 'Margen real' : 'Margen estimado', eur(margen), venta ? Math.round(margen * 100 / venta) + ' %' : '']
+      ].map(([et, v, pie], i) => h('.kpi', h('.et', et), h('.val', {estilo: i === 4 ? {color: margen / (venta || 1) < 0.35 ? 'var(--mal)' : 'var(--bien)'} : {}}, v), h('.pie', pie)))),
+      tarjeta('Facturas emitidas al cliente (' + emit.length + ')', tablaDocs(emit, 'Cliente'), {sinRelleno: true}),
+      tarjeta('Facturas de proveedores de esta obra (' + recib.length + ')', tablaDocs(recib, 'Proveedor'), {sinRelleno: true}),
+      tarjeta('Gastos de la instalación (' + gastos.length + ')', gastos.length ? h('table.datos', h('thead', h('tr', h('th', 'Fecha'), h('th', 'Proveedor'), h('th', 'Concepto'), h('th.num', 'Importe (IVA incl.)'), h('th', 'Estado'), h('th', 'Factura'))),
+        h('tbody', gastos.map(g => h('tr', h('td', fechaCorta(g.fecha)), h('td', g.proveedor || '—'), h('td', g.concepto || ''), h('td.num', eur2(conIva(g))), h('td', g.estado_pago || ''),
+          h('td', g.doc_id ? h('button.btn.mini', {onclick: () => verArchivo({nombre: g.proveedor || 'Factura'}, () => api.pedir('archivoFacturaDoc', {id: g.doc_id}))}, '📄 Ver') : h('span.nota', g.factura_proveedor || 'falta')))))) : h('p.nota', 'Sin gastos apuntados.'), {sinRelleno: true}),
+      cobros.length ? tarjeta('Plan de cobros (' + cobros.length + ')', h('table.datos', h('thead', h('tr', h('th', 'Concepto'), h('th.num', 'Importe'), h('th', 'Previsto'), h('th', 'Cobrado'))),
+        h('tbody', cobros.map(x => h('tr', h('td', api.etiquetaCatalogo('conceptosCobro', x.concepto)), h('td.num', eur2(x.importe)), h('td', fechaCorta(x.fecha_prevista)),
+          h('td', txt(x.fecha_cobro) ? fechaCorta(x.fecha_cobro) : (txt(x.fecha_prevista) && x.fecha_prevista < hoyISO() ? h('span', {estilo: {color: 'var(--mal)'}}, 'vencido') : '—'))))))) : null,
+      est.length ? tarjeta('Estimado por el CRM (materiales y montaje)', h('div', est.map(({o, m, me}) => h('div', {estilo: {marginBottom: '10px'}},
+        h('b', api.etiquetaCatalogo('tiposOperacion', o.tipo) + ' · coste estimado ' + eur(m.total) + (me ? ' · margen ' + Math.round(me.pct * 100) + ' %' : '')),
+        m.faltan.length ? h('div.nota', 'Faltan precios de: ' + m.faltan.join(', ')) : null,
+        h('details', h('summary.nota', 'Ver piezas (' + m.lineas.length + ')'), h('ul', {estilo: {margin: '4px 0', paddingLeft: '18px'}}, m.lineas.map(l => h('li.nota', l.cantidad + ' ' + l.unidad + ' · ' + l.concepto + ' · ' + eur2(l.importe * (1 + l.iva_pct / 100)))))))))) : null));
+  }).catch(e => poner(caja, h('p.nota', e.message || 'No se ha podido cargar.')));
+  return caja;
+}

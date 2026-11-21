@@ -1,6 +1,6 @@
 /* vistas/clientes.js — listado de clientes y ficha completa. */
 
-import {tarjetaInstalacion} from './ficha-instalacion.js';
+import {tarjetaInstalacion, panelDineroCliente} from './ficha-instalacion.js';
 import {veVisor} from './visor3d.js';
 import {veCotizador} from './cotizador.js';
 import {h, poner, txt, num, eur, eur2, miles, pct, fechaCorta, fechaLarga, haceDias,
@@ -445,7 +445,9 @@ export async function vistaCliente({id, ir, refrescar}) {
       import('./visor3d.js').then(m => m.vistaVisor3d({id: c.id, embebido: true})).then(n => poner(caja, n))
         .catch(e => poner(caja, h('p.nota', 'No se ha podido abrir la simulación: ' + e.message))); return caja; }],
     ['instalaciones', 'Instalaciones (' + ops.length + ')', () => panelOperaciones(c, ops, refrescar, acc.instalacion)],
-    veSubcontratas() && ['instaladores', 'Instaladores', () => panelInstaladores(c, ir)]
+    veSubcontratas() && ['instaladores', 'Instaladores', () => panelInstaladores(c, ir)],
+    /* Solo dirección: facturas, gastos, cobros y estimado de este cliente (21/11/2026). */
+    api.puede('finanzas') && ['dinero', '🔒 Dinero', () => panelDineroCliente(c, ops)]
   ].filter(Boolean);
   tabs.forEach(([clave, nombre, pinta], i) => {
     const b = h('button', {onclick: () => {
