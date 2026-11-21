@@ -42,8 +42,12 @@ export async function vistaTramites({ir, id}) {
   async function cargar() {
     try { datos = await api.tramites(); } catch (e) { return poner(caja, h('p.nota', 'No se han podido cargar: ' + e.message)); }
     if (!datos || !datos.ok) return poner(caja, h('p.nota', (datos && datos.error) || 'No se han podido cargar.'));
+    /* Abierto desde la ficha de un cliente (#tramites/TR-…): su pestaña y su expediente. */
+    const desdeFicha = /^TR-/i.test(String(id || '')) ? (datos.tramites || datos.lista || []).find(t => t.id === id) : null;
+    if (desdeFicha) est.tipo = desdeFicha.tipo;
     if (!(datos.tipos || []).includes(est.tipo)) est.tipo = (datos.tipos || ['cae'])[0];
     pinta();
+    if (desdeFicha) ventanaTramite(desdeFicha);
   }
 
   const opcionesClientes = () => (api.estado.clientes || []).slice()
@@ -57,7 +61,7 @@ export async function vistaTramites({ir, id}) {
       {id: 'poblacion', et: 'Población'},
       {id: 'nombre', et: 'Titular', ancho: 2},
       {id: 'numero', et: 'Nº (Excel)'},
-      {id: 'cliente_id', et: 'Cliente del CRM', tipo: 'select', opciones: opcionesClientes(), vacio: 'Buscar por la dirección', ancho: 3},
+      {id: 'cliente_id', et: 'Cliente del CRM · escribe dirección o nombre', tipo: 'buscar', opciones: opcionesClientes(), vacio: 'Buscar por la dirección', ancho: 3},
       {id: 'producto', et: tipo === 'cae' ? 'Producto (aerotermia)' : 'Uso', ancho: 3},
       {id: 'estado', et: 'Estado', tipo: 'select', opciones: datos.estados[tipo].map(e => [e, ESTADO[e][0]]), vacio: false},
       ...(tipo === 'wixer' ? [{id: 'progreso', et: 'Progreso %', tipo: 'numero'}] : []),

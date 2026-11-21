@@ -147,8 +147,11 @@ export function tarjetaInstalacion(c, ops, {abrir} = {}) {
           num(ob.progreso) ? Math.round(num(ob.progreso)) + ' %' : ''].filter(Boolean).join(' · '), num(ob.progreso) ? barra(ob.progreso) : null))
         : (o && txt(o.fecha_prevista_instalacion) ? fila('📅', 'Instalación prevista', fechaCorta(o.fecha_prevista_instalacion)) : fila('📅', 'Instalación', 'Sin fecha todavía')),
       prox.map(v => fila('🚐', 'Visita del instalador · ' + fechaCorta(v.fecha) + (v.hora ? ' ' + v.hora : ''), [v.tipo, v.instalador].filter(Boolean).join(' · '))),
-      tram.map(x => fila('♻️', (normal(x.tipo) === 'cae' ? 'CAE' : 'Cambio de compañía (WIXER)') + ' · ' + (x.estado || 'pendiente'), x.producto || '', num(x.progreso) ? barra(x.progreso) : null)),
+      tram.map(x => fila(x.tipo === 'cae' ? '♻️' : '🔌', (x.tipo === 'cae' ? 'CAE' + (x.numero ? ' nº ' + x.numero : '') : 'Cambio de compañía (WIXER)') + ' · ' + (x.estado_nombre || x.estado || 'pendiente'),
+        [x.producto, x.detalle, x.documentos ? 'documentos ' + x.documentos : ''].filter(Boolean).join(' · '),
+        h('div', num(x.progreso) ? barra(x.progreso) : null, x.puede_abrir ? h('button.btn.mini', {estilo: {marginTop: '4px'}, onclick: () => { location.hash = '#tramites/' + encodeURIComponent(x.id); }}, 'Abrir expediente') : null))),
       inc.length ? inc.map(x => fila('⚠️', x.titulo, 'Incidencia abierta · ' + fechaCorta(x.fecha))) : null,
+      !tram.length && o ? fila('♻️', 'CAE y cambio de compañía', 'Sin expediente abierto todavía') : null,
       !obras.length && !prox.length && !tram.length && !inc.length && !(o && txt(o.fecha_prevista_instalacion)) ? h('p.nota', 'Sin obra, trámites ni incidencias todavía.') : null));
   }).catch(e => poner(der, h('p.nota', e.message || 'No se ha podido cargar la obra.')));
   return t;

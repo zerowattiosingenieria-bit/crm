@@ -18,6 +18,7 @@ import {tarjeta, kpi, kpis, cargando} from '../ui.js';
 import {vistaFacturasEscaneadas, tarjetaCuadre, tarjetaBancoSinFactura, panelGestoria} from './facturas-escaneadas.js';
 import {vistaContabilidad, vistaFacturas, vistaCobros, vistaGastos, tarjetaSync} from './finanzas.js';
 import {vistaBanco} from './banco.js';
+import {periodoGuardado, rangoPeriodo, selectorPeriodo} from '../periodo.js';
 
 export const PESTANAS_DINERO = [
   ['resumen', '★ Resumen'],
@@ -36,11 +37,13 @@ export async function vistaDinero(ctx) {
     PESTANAS_DINERO.map(([k, et]) => h('button.btn' + (k === pest ? '.primario' : ''), {onclick: () => ir(k)}, et)));
   const cuerpo = h('div', cargando());
   const caja = h('div', barra, cuerpo);
-  const anio = hoyISO().slice(0, 4);
-  const rangoAnio = {desde: anio + '-01-01', hasta: hoyISO()};
+  /* 21/11/2026: el periodo de las cifras se elige (1T–4T, mes 16→15, año natural o todo). */
+  const rg = rangoPeriodo(periodoGuardado());
+  const rangoAnio = {desde: rg.desde || '2000-01-01', hasta: rg.hasta};
+  if (pest === 'resumen' || pest === 'banco') caja.insertBefore(selectorPeriodo(() => ctx.refrescar ? ctx.refrescar() : ir(pest)), cuerpo);
 
   let contenido;
-  if (pest === 'resumen') contenido = await resumen(ir, rangoAnio, ctx);
+  if (pest === 'resumen') contenido = await resumen(ir, rangoAnio, ctx, rg);
   else if (pest === 'facturas') contenido = await facturas(ctx);
   else if (pest === 'cobros') contenido = await vistaCobros(ctx);
   else if (pest === 'pagos') contenido = await vistaGastos(ctx);
@@ -52,7 +55,7 @@ export async function vistaDinero(ctx) {
 }
 
 /* ---------- Resumen: qué hay que hacer y cómo vamos ---------- */
-async function resumen(ir, rango, ctx) {
+async function resumen(ir, rango, ctx, rg) {
   const [cuadre, banco, fin, sync] = await Promise.all([
     api.pedir('cuadreContable', rango).catch(() => null),
     api.pedir('banco', {}).catch(() => null),
@@ -90,7 +93,7 @@ async function resumen(ir, rango, ctx) {
       ? h('ul', {estilo: {listStyle: 'none', margin: 0, padding: 0}}, tareas.map(([t, n, k]) => h('li', {estilo: {display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--borde, #eee)'}},
         h('div', h('b', t), n ? h('div.nota', n) : null), ir_(k))))
       : h('p', '✓ Todo cuadrado: no hay nada pendiente.'),
-      {subtitulo: 'Desde el 1 de enero · se actualiza solo cada día (banco de BankTrack, facturas del Drive y casado automático)'}),
+      {subtitulo: rg.etiqueta + ' · se actualiza solo cada día (banco de BankTrack, facturas del Drive y casado automático)'}),
     cuadre ? await tarjetaCuadre(rango) : null,
     sync && sync.sync ? tarjetaSync(sync.sync) : null,
     h('details', {estilo: {marginTop: '14px'}, ontoggle: async e => {

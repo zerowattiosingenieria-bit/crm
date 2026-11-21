@@ -9,12 +9,15 @@ import {abrirArchivo} from './proyecto.js';
 import {bloqueLeadsCaptador, tarjetaLeadsDireccion} from './leads.js';
 import {avisoError} from '../ui.js';
 import {catalogoCostes, margenesBajos} from '../materiales.js';
+import {periodoGuardado, rangoPeriodo, enRango, selectorPeriodo} from '../periodo.js';
 
-export async function vistaPanel({ir}) {
+export async function vistaPanel({ir, refrescar}) {
   const u = api.estado.usuario;
   const esDir = api.esDireccion();
+  /* 21/11/2026: dirección elige de qué periodo ve las cifras (1T–4T, mes 16→15, año o todo). */
+  const rg = rangoPeriodo(periodoGuardado());
   const peticiones = [api.pedir('resumen'), api.pedir('alertas')];
-  if (esDir) peticiones.push(api.pedir('analitica'), api.pedir('finanzas'));
+  if (esDir) peticiones.push(api.pedir('analitica', {desde: rg.desde || '2020-01-01', hasta: rg.hasta}), api.pedir('finanzas'));
   const [res, al, an, fin] = await Promise.all(peticiones);
   const r = res.resumen;
 
@@ -51,7 +54,8 @@ export async function vistaPanel({ir}) {
       ? 'Así va la empresa hoy, ' + fechaCorta(hoyISO()) + '.'
       : 'Esto es lo que tienes entre manos ahora mismo.'));
 
-  return esDir ? panelDireccion({cabecera, r, al, an, fin, listos, esperando, solicitados, enviados, cif, ir})
+  if (esDir) cabecera.appendChild(selectorPeriodo(() => refrescar ? refrescar() : location.reload()));
+  return esDir ? panelDireccion({cabecera, r, al, an, fin, listos, esperando, solicitados, enviados, cif, ir, rg})
                : (u.rol === 'captador' ? panelCaptador({cabecera, r, al, ir, enviados: enviadosCapt})
                                        : panelComercial({cabecera, r, al, listos, esperando, solicitados, ir}));
 }
@@ -156,11 +160,10 @@ export const citaSinConfirmar = c => normal(c.estado_cita) !== 'confirmada' &&
    propuestas y financiaciones vivas; el ticket, por cliente y no por
    instalación, que un cliente con FV y aerotermia en dos fichas es una
    sola venta. */
-function cifrasDelAnio(fin) {
-  const anio = hoyISO().slice(0, 4);
-  const ops = (fin.operaciones || []).filter(o => txt(o.fecha).slice(0, 4) === anio);
+function cifrasDelAnio(fin, rg) {
+  const ops = (fin.operaciones || []).filter(o => enRango(o.fecha, rg));
   const facturacion = suma(ops, 'ingreso');
-  const cobros = (api.estado.cobros || []).filter(c => txt(c.fecha_cobro).slice(0, 4) === anio);
+  const cobros = (api.estado.cobros || []).filter(c => enRango(c.fecha_cobro, rg));
   const cobrado = cobros.length ? suma(cobros, 'importe') : num((fin.resumen || {}).cobrado);
   const clientes = new Set(ops.map(o => String(o.cliente_id))).size;
   const vivas = api.estado.operaciones.filter(o =>
@@ -178,9 +181,9 @@ const CAT_DIRECTOS = ['proveedor', 'montaje'];
 const CAT_ESTRUCTURA = ['nominas', 'seguridad_social', 'servicios', 'seguros', 'banco', 'financiacion',
   'transporte', 'dietas', 'telefonia', 'ropa_epi', 'marketing', 'administracion', 'otros_gastos'];
 
-export function cuentasDelBanco(movimientos, anio) {
+export function cuentasDelBanco(movimientos, rg) {
   const delAnio = (movimientos || []).filter(m =>
-    txt(m.fecha).slice(0, 4) === anio && normal(m.categoria) !== 'traspaso');
+    (typeof rg === 'string' ? txt(m.fecha).slice(0, 4) === rg : enRango(m.fecha, rg)) && normal(m.categoria) !== 'traspaso');
   const salidas = cats => delAnio.filter(m => num(m.importe) < 0 && cats.includes(txt(m.categoria)))
     .reduce((a, m) => a + Math.abs(num(m.importe)), 0);
   const cobrado = delAnio.filter(m => num(m.importe) > 0 && txt(m.categoria) === 'cobro_cliente')
@@ -192,21 +195,20 @@ export function cuentasDelBanco(movimientos, anio) {
           margen_pct: cobrado ? margen / cobrado * 100 : 0, neto: margen - estructura};
 }
 
-async function rellenarConBanco(t) {
+async function rellenarConBanco(t, rg) {
   const pon = (tarjeta, valor, pie, estado) => {
     const v = tarjeta.querySelector('.val'), p = tarjeta.querySelector('.pie');
     if (v) { v.textContent = valor; v.style.color = estado ? `var(--${estado})` : ''; }
     if (p) p.textContent = pie;
   };
-  const anio = hoyISO().slice(0, 4);
   let b = null;
   try {
-    const d = await api.pedir('banco', {desde: anio + '-01-01', hasta: hoyISO()});
-    b = cuentasDelBanco(d.movimientos, anio);
+    const d = await api.pedir('banco', {desde: rg.desde, hasta: rg.hasta});
+    b = cuentasDelBanco(d.movimientos, rg);
   } catch (e) { b = null; }
   if (!b || !b.movimientos) {
-    pon(t.margen, '—', 'sin movimientos del banco este año');
-    pon(t.neto, '—', 'sin movimientos del banco este año');
+    pon(t.margen, '—', 'sin movimientos del banco en el periodo');
+    pon(t.neto, '—', 'sin movimientos del banco en el periodo');
     return;
   }
   pon(t.margen, b.cobrado ? pct(Math.round(b.margen_pct)) : '—',
@@ -217,9 +219,10 @@ async function rellenarConBanco(t) {
 }
 
 /* ================= dirección ================= */
-function panelDireccion({cabecera, r, al, an, fin, listos, esperando, solicitados, enviados, cif, ir}) {
+function panelDireccion({cabecera, r, al, an, fin, listos, esperando, solicitados, enviados, cif, ir, rg}) {
   const f = fin.resumen;
-  const ev = fin.evolucion.slice(-8);
+  const evR = fin.evolucion.filter(m => enRango(m.mes + '-28', {desde: (rg.desde || '').slice(0, 7) + (rg.desde ? '-01' : ''), hasta: rg.hasta.slice(0, 7) + '-31'}));
+  const ev = (evR.length ? evR : fin.evolucion).slice(rg.desde ? -14 : -24);
   const nota = fin.nota;
 
   const tarjetaSalud = h('.tarjeta', h('.cuerpo',
@@ -235,12 +238,12 @@ function panelDireccion({cabecera, r, al, an, fin, listos, esperando, solicitado
     .sort((a, b) => txt(a.fecha_prevista_instalacion).localeCompare(txt(b.fecha_prevista_instalacion)))
     .slice(0, 8);
 
-  const cifrasAnio = cifrasDelAnio(fin);
+  const cifrasAnio = cifrasDelAnio(fin, rg);
   const tarjetasBanco = {
     margen: kpi('Margen bruto', '…', 'cobrado en banco − material y montaje'),
     neto: kpi('Beneficio neto', '…', 'tras estructura (banco)')
   };
-  rellenarConBanco(tarjetasBanco);
+  rellenarConBanco(tarjetasBanco, rg);
 
   const misVentas = r.objetivo_periodo && (r.objetivo_periodo.detalle || []).length
     ? tarjeta('Tu objetivo del periodo', tablaVentasPeriodo(r.objetivo_periodo, ir, {titulo: 'Tus comisiones'}),
@@ -248,7 +251,7 @@ function panelDireccion({cabecera, r, al, an, fin, listos, esperando, solicitado
 
   return h('div', cabecera,
     kpis(
-      kpi('Facturación del año', eurCorto(cifrasAnio.facturacion),
+      kpi('Facturación · ' + rg.corta, eurCorto(cifrasAnio.facturacion),
         cifrasAnio.instalaciones + ' instalaciones · cobrado ' + eurCorto(cifrasAnio.cobrado),
         {destacado: true}),
       tarjetasBanco.margen,
@@ -260,7 +263,7 @@ function panelDireccion({cabecera, r, al, an, fin, listos, esperando, solicitado
       kpi('Ticket medio', eurCorto(cifrasAnio.ticket), 'por cliente')
     ),
     h('p.nota', {estilo: {marginTop: '-6px'}},
-      'Importes con IVA incluido. Margen y beneficio salen de los movimientos del banco de este año.'),
+      'Importes con IVA incluido. Facturación, cobrado, margen, beneficio, embudo y mezcla de producto son del periodo elegido (' + rg.etiqueta + '); pendiente de cobro y cartera son de hoy.'),
 
     tarjetaCentroDeMando(cif, ir),
 
@@ -297,7 +300,7 @@ function panelDireccion({cabecera, r, al, an, fin, listos, esperando, solicitado
     ),
 
     h('.doble',
-      tarjeta('Embudo comercial del año',
+      tarjeta('Embudo comercial · ' + rg.corta,
         h('div', embudo(an.embudo),
           h('p.nota', {estilo: {marginTop: '12px', marginBottom: 0}},
             'Puertas y sentadas salen de los partes diarios: si el equipo no los envía, esos dos peldaños quedan cortos.')),

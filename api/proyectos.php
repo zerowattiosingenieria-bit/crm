@@ -626,8 +626,29 @@ function accInstalacionCliente_(array $u, array $p): array {
   };
   $porGrupo = ['fotos' => [], 'proyectos' => [], 'manuales' => [], 'documentos' => []];
   foreach ($archivos as $a) $porGrupo[$grupo($a)][] = $a;
-  $tramites = array_map(fn($t) => ['tipo' => txt_($t['tipo']), 'estado' => txt_($t['estado']), 'progreso' => num_($t['progreso']), 'producto' => txt_($t['producto'])],
-    filtrar_('TRAMITES', fn($t) => mismo_($t['cliente_id'], $cli['id'])));
+  /* CAE (Novawatt) y cambio de compañía (WIXER): son parte del cliente (Nando, 21/11/2026).
+     Se cogen por cliente o, si el expediente no está enlazado, por la misma calle y número. */
+  $claveDir = fn($d) => preg_replace('/\b(c|calle|av|avda|avenida|de|del|la|las|los|el|pza|plaza|paseo|camino|urb)\b/', ' ', preg_replace('/[^a-z0-9 ]/', ' ', normal_(preg_replace('/,.*$/', '', txt_($d)))));
+  $miDir = trim(preg_replace('/\s+/', ' ', $claveDir($cli['direccion'])));
+  $nombresEstado = ['documentacion' => 'Recogiendo documentación', 'completo' => 'Documentación completa', 'presentado' => 'Presentado a Novawatt',
+    'cobrado' => 'Terminado', 'cancelado' => 'Cancelado', 'pendiente' => 'Pendiente de solicitar', 'solicitado' => 'Solicitado',
+    'pte_facturar' => 'Hecho · pendiente de facturar', 'finalizado' => 'Terminado'];
+  $tramites = [];
+  foreach (leer_('TRAMITES') as $t) {
+    $suyo = mismo_($t['cliente_id'], $cli['id']);
+    if (!$suyo && txt_($t['cliente_id']) === '' && $miDir !== '' && trim(preg_replace('/\s+/', ' ', $claveDir($t['direccion']))) === $miDir) $suyo = true;
+    if (!$suyo) continue;
+    $d = json_decode(txt_($t['datos']), true) ?: [];
+    $ch = json_decode(txt_($t['checklist']), true) ?: [];
+    $hechos = is_array($ch) ? count(array_filter($ch)) : 0;
+    $tipo = normal_($t['tipo']) === 'wixer' ? 'wixer' : 'cae';
+    $tramites[] = ['id' => txt_($t['id']), 'tipo' => $tipo, 'numero' => txt_($t['numero']), 'estado' => txt_($t['estado']),
+      'estado_nombre' => $nombresEstado[normal_($t['estado'])] ?? txt_($t['estado']), 'progreso' => num_($t['progreso']), 'producto' => txt_($t['producto']),
+      'documentos' => $tipo === 'cae' ? $hechos . ' de ' . count(DOCS_CAE) : '',
+      'detalle' => $tipo === 'wixer' ? trim(txt_($d['compania_actual'] ?? '') . (txt_($d['compania_nueva'] ?? '') !== '' ? ' → ' . txt_($d['compania_nueva']) : '') . (txt_($d['tarifa'] ?? '') !== '' ? ' · ' . txt_($d['tarifa']) : ''))
+        : (txt_($d['fecha_financiacion'] ?? '') !== '' ? 'Financiación ' . txt_($d['fecha_financiacion']) : ''),
+      'puede_abrir' => function_exists('tiposVisiblesTra_') && in_array($tipo, tiposVisiblesTra_($u), true)];
+  }
   $incid = array_map(fn($i) => ['titulo' => txt_($i['titulo']), 'estado' => txt_($i['estado']), 'fecha' => txt_($i['fecha'])],
     filtrar_('INCIDENCIAS', fn($i) => mismo_($i['cliente_id'], $cli['id']) && !in_array(normal_($i['estado']), ['resuelta', 'cerrada'], true)));
   /* manuales de los equipos que lleva (fichas técnicas de la empresa) */
