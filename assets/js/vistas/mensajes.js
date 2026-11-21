@@ -64,6 +64,8 @@ function fila(m, recargar) {
             else if (r.email) { await copiar(r.email.cuerpo, 'Texto'); aviso('Texto copiado. Pégalo en tu correo para ' + r.email.para + ' y, cuando lo mandes, márcalo como enviado.', 'ok'); }
             recargar();
           }),
-          h('button.btn.mini', {title: 'Copia el texto tal y como está, sin aprobarlo ni enviarlo', onclick: () => copiar(cuerpo.value, 'Texto')}, '📋 Copiar texto')],
+          h('button.btn.mini', {title: 'Copia el texto tal y como está, sin aprobarlo ni enviarlo', onclick: () => copiar(cuerpo.value, 'Texto')}, '📋 Copiar texto'),
+          /* Puesto pero desactivado (21/11/2026, Nando): de momento ningún correo sale desde el CRM. */
+          h('button.btn.mini', {disabled: true, title: 'Desactivado de momento: copia el texto y mándalo desde tu correo', estilo: {opacity: 0.5, cursor: 'not-allowed'}}, '✉️ Enviar por correo (desactivado)')],
       boton('Descartar', '', async () => { await api.pedir('marcarMensaje', {id: m.id, estado: 'descartado'}); aviso('Descartado', 'ok'); recargar(); })));
 }
