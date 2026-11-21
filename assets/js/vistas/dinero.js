@@ -18,7 +18,8 @@ import {tarjeta, kpi, kpis, cargando} from '../ui.js';
 import {vistaFacturasEscaneadas, tarjetaCuadre, tarjetaBancoSinFactura, panelGestoria} from './facturas-escaneadas.js';
 import {vistaContabilidad, vistaFacturas, vistaCobros, vistaGastos, tarjetaSync} from './finanzas.js';
 import {vistaBanco} from './banco.js';
-import {periodoGuardado, rangoPeriodo, selectorPeriodo} from '../periodo.js';
+import {periodoGuardado, rangoPeriodo, selectorPeriodo, enRango} from '../periodo.js';
+import {catalogoCostes, margenEstimado} from '../materiales.js';
 
 export const PESTANAS_DINERO = [
   ['resumen', '★ Resumen'],
@@ -94,6 +95,7 @@ async function resumen(ir, rango, ctx, rg) {
         h('div', h('b', t), n ? h('div.nota', n) : null), ir_(k))))
       : h('p', '✓ Todo cuadrado: no hay nada pendiente.'),
       {subtitulo: rg.etiqueta + ' · se actualiza solo cada día (banco de BankTrack, facturas del Drive y casado automático)'}),
+    tarjetaRentabilidad(rg),
     cuadre ? await tarjetaCuadre(rango) : null,
     sync && sync.sync ? tarjetaSync(sync.sync) : null,
     h('details', {estilo: {marginTop: '14px'}, ontoggle: async e => {
@@ -116,4 +118,44 @@ async function facturas(ctx) {
   };
   await pinta('todas');
   return h('div', botones, sub);
+}
+
+
+/* ---------- rentabilidad por comercial y por captador (21/11/2026, solo dirección) ----------
+   Del periodo elegido: ventas firmadas, importe IVA incluido, ticket medio, margen (real si la
+   instalación ya tiene gastos apuntados, estimado con el catálogo de costes si no) y tasa de
+   cierre (ventas / sentadas). */
+const GANADA = ['firmada', 'financiacion', 'tramite', 'material', 'instalacion', 'instalada', 'legalizada', 'cerrada'];
+function tarjetaRentabilidad(rg) {
+  const E = api.estado, cat = catalogoCostes(E.config);
+  const conIva = g => /Factura escaneada/i.test(txt(g.notas)) ? num(g.importe) : num(g.importe) * (1 + (txt(g.iva_pct) === '' ? 21 : num(g.iva_pct)) / 100);
+  const gastosOp = {};
+  (E.gastos || []).filter(g => txt(g.operacion_id) && txt(g.estado_pago).toLowerCase() !== 'estimado').forEach(g => { gastosOp[g.operacion_id] = (gastosOp[g.operacion_id] || 0) + conIva(g); });
+  const ventas = (E.operaciones || []).filter(o => GANADA.includes(txt(o.estado).toLowerCase()) && enRango(o.fecha_firma || o.fecha_contrato || o.creado, rg));
+  const coste = o => { if (gastosOp[o.id]) return {v: gastosOp[o.id], real: true}; const m = margenEstimado(o, cat); return m ? {v: (num(o.total) || 0) * (1 - m.pct), real: false} : null; };
+  const filas = [];
+  (E.usuarios || []).filter(u => ['comercial', 'captador', 'admin', 'superadmin'].includes(u.rol) && txt(u.activo).toLowerCase() !== 'no').forEach(u => {
+    const esCap = u.rol === 'captador';
+    const suyas = ventas.filter(o => String(esCap ? o.captador_id || (api.cliente(o.cliente_id) || {}).captador_id : o.comercial_id) === String(u.id));
+    const caps = (E.captaciones || []).filter(c => String(esCap ? c.captador_id : c.comercial_id) === String(u.id) && enRango(c.fecha, rg));
+    const sentadas = caps.filter(c => ['sentada', 'venta', 'potencial'].includes(txt(c.resultado).toLowerCase())).length;
+    if (!suyas.length && !caps.length) return;
+    const venta = suyas.reduce((a, o) => a + num(o.total), 0);
+    const cs = suyas.map(coste).filter(Boolean);
+    const costeT = cs.reduce((a, c) => a + c.v, 0), ventaConCoste = suyas.filter(o => coste(o)).reduce((a, o) => a + num(o.total), 0);
+    filas.push({u, esCap, n: suyas.length, venta, ticket: suyas.length ? venta / suyas.length : 0,
+      margen: ventaConCoste ? (ventaConCoste - costeT) / ventaConCoste : null, reales: cs.filter(c => c.real).length,
+      fichas: caps.length, sentadas, cierre: sentadas ? suyas.length / sentadas : null});
+  });
+  filas.sort((a, b) => b.venta - a.venta);
+  const pctTxt = x => x === null ? '—' : Math.round(x * 100) + ' %';
+  return tarjeta('Rentabilidad por persona · ' + rg.corta, filas.length ? h('table.datos',
+    h('thead', h('tr', h('th', 'Persona'), h('th.num', 'Fichas / citas'), h('th.num', 'Sentadas'), h('th.num', 'Ventas'), h('th.num', 'Importe'), h('th.num', 'Ticket medio'), h('th.num', 'Margen'), h('th.num', 'Cierre'))),
+    h('tbody', filas.map(f => h('tr',
+      h('td', h('b', f.u.nombre), h('div.nota', f.esCap ? 'captador' : (f.u.rol === 'comercial' ? 'comercial' : 'dirección'))),
+      h('td.num', String(f.fichas)), h('td.num', String(f.sentadas)), h('td.num', h('b', String(f.n))), h('td.num', eur2(f.venta)), h('td.num', f.n ? eur2(f.ticket) : '—'),
+      h('td.num', {estilo: {color: f.margen !== null && f.margen < 0.35 ? 'var(--mal)' : ''}, title: f.reales + ' de ' + f.n + ' con gastos reales; el resto estimado'}, pctTxt(f.margen) + (f.n && f.reales < f.n ? '*' : '')),
+      h('td.num', pctTxt(f.cierre))))))
+    : h('p.nota', 'No hay ventas ni citas en este periodo.'),
+    {subtitulo: 'Importes IVA incluido · margen real si la obra ya tiene gastos, estimado (*) si no · cierre = ventas / sentadas'});
 }

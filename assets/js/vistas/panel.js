@@ -11,15 +11,17 @@ import {avisoError} from '../ui.js';
 import {catalogoCostes, margenesBajos} from '../materiales.js';
 import {periodoGuardado, rangoPeriodo, enRango, selectorPeriodo} from '../periodo.js';
 
-export async function vistaPanel({ir, refrescar}) {
+export async function vistaPanel({ir, refrescar, enInicio}) {
   const u = api.estado.usuario;
   const esDir = api.esDireccion();
   /* 21/11/2026: dirección elige de qué periodo ve las cifras (1T–4T, mes 16→15, año o todo). */
   const rg = rangoPeriodo(periodoGuardado());
-  const peticiones = [api.pedir('resumen'), api.pedir('alertas')];
+  /* Comerciales y captadores también eligen el periodo (sus objetivos siguen el 16→15 del periodo elegido). */
+  const peticiones = [esDir ? api.pedir('resumen') : api.pedir('resumen', {desde: rg.desde || '2020-01-01', hasta: rg.hasta}), api.pedir('alertas')];
   if (esDir) peticiones.push(api.pedir('analitica', {desde: rg.desde || '2020-01-01', hasta: rg.hasta}), api.pedir('finanzas'));
   const [res, al, an, fin] = await Promise.all(peticiones);
   const r = res.resumen;
+  if (enInicio) al.enInicio = true;
 
   /* Las cifras buenas de la casa las lleva el Centro de Mando. Si el
      servidor todavía no las tiene, el panel sigue pintándose igual. */
@@ -54,7 +56,7 @@ export async function vistaPanel({ir, refrescar}) {
       ? 'Así va la empresa hoy, ' + fechaCorta(hoyISO()) + '.'
       : 'Esto es lo que tienes entre manos ahora mismo.'));
 
-  if (esDir) cabecera.appendChild(selectorPeriodo(() => refrescar ? refrescar() : location.reload()));
+  cabecera.appendChild(selectorPeriodo(() => refrescar ? refrescar() : location.reload()));
   return esDir ? panelDireccion({cabecera, r, al, an, fin, listos, esperando, solicitados, enviados, cif, ir, rg})
                : (u.rol === 'captador' ? panelCaptador({cabecera, r, al, ir, enviados: enviadosCapt})
                                        : panelComercial({cabecera, r, al, listos, esperando, solicitados, ir}));
@@ -292,9 +294,9 @@ function panelDireccion({cabecera, r, al, an, fin, listos, esperando, solicitado
           ], formato: 'eur', area: false
         }) : h('.vacio', 'Todavía no hay meses cerrados.')),
       h('div', tarjetaSalud,
-        tarjeta('Avisos', al.alertas.length
-          ? h('ul.lista-avisos', al.alertas.slice(0, 7).map(a =>
-              h('li', h('span.nivel.' + a.nivel), h('span', a.texto))))
+        al.enInicio ? null : tarjeta('Avisos', al.alertas.length
+          ? h('ul.lista-avisos', al.alertas.slice(0, 15).map(a =>
+              h('li', a.cliente_id ? {onclick: () => ir('cliente/' + a.cliente_id), estilo: {cursor: 'pointer'}, title: 'Abrir la ficha'} : null, h('span.nivel.' + a.nivel), h('span', a.texto))))
           : h('.vacio', 'Sin avisos. Todo al día.'),
           {acciones: [h('button.btn.mini', {onclick: () => ir('cobros')}, 'Ver cobros')]}))
     ),
@@ -394,8 +396,8 @@ function panelComercial({cabecera, r, al, listos, esperando, solicitados, ir}) {
         {subtitulo: 'Más de 15 días sin una llamada o visita'})
     ),
 
-    al.alertas.length ? tarjeta('Avisos', h('ul.lista-avisos', al.alertas.map(a =>
-      h('li', h('span.nivel.' + a.nivel), h('span', a.texto))))) : null
+    al.alertas.length && !al.enInicio ? tarjeta('Avisos', h('ul.lista-avisos', al.alertas.map(a =>
+      h('li', a.cliente_id ? {onclick: () => ir('cliente/' + a.cliente_id), estilo: {cursor: 'pointer'}} : null, h('span.nivel.' + a.nivel), h('span', a.texto))))) : null
   );
 }
 
@@ -454,8 +456,8 @@ function panelCaptador({cabecera, r, al, ir, enviados}) {
           : h('.vacio', 'Todavía no has subido ninguna ficha.');
       })(), {sinRelleno: true}),
 
-    al.alertas.length ? tarjeta('Avisos', h('ul.lista-avisos', al.alertas.map(a =>
-      h('li', h('span.nivel.' + a.nivel), h('span', a.texto))))) : null
+    al.alertas.length && !al.enInicio ? tarjeta('Avisos', h('ul.lista-avisos', al.alertas.map(a =>
+      h('li', a.cliente_id ? {onclick: () => ir('cliente/' + a.cliente_id), estilo: {cursor: 'pointer'}} : null, h('span.nivel.' + a.nivel), h('span', a.texto))))) : null
   );
 }
 

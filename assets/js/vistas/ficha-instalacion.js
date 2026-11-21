@@ -104,6 +104,16 @@ export function tarjetaInstalacion(c, ops, {abrir} = {}) {
   const o = operacionPrincipal(ops);
   const der = h('div', h('p.nota', 'Cargando la obra y la documentación…'));
   const docs = h('div');
+  /* avisos de seguimiento de este cliente (firmado sin fecha, sin legalizar, CAE parado, sin llamada…) */
+  const avisos = h('div');
+  api.pedir('alertas', {cliente_id: c.id}).then(r => {
+    const L = (r.alertas || []).filter(a => a.tipo !== 'parte_pendiente');
+    if (!L.length) return;
+    poner(avisos, h('div', {estilo: {display: 'flex', flexDirection: 'column', gap: '6px', margin: '0 0 12px'}},
+      L.map(a => h('div', {estilo: {padding: '8px 12px', borderRadius: '8px', fontWeight: '600', fontSize: '13.5px',
+        background: a.nivel === 'alto' ? '#FDECEA' : '#FFF4E0', color: a.nivel === 'alto' ? '#B42318' : '#9A5B00'}},
+        (a.nivel === 'alto' ? '🔴 ' : '🟠 ') + String(a.texto).replace(/^[^:]*:\s*/, '')))));
+  }).catch(() => {});
   const pago = o ? h('div', {estilo: {display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', margin: '10px 0 2px'}},
     h('span.marca', {estilo: {fontWeight: '700'}}, api.etiquetaCatalogo('estadosOperacion', o.estado)),
     num(o.total) ? h('span.marca', eur(o.total) + ' IVA incl.') : null,
@@ -113,6 +123,7 @@ export function tarjetaInstalacion(c, ops, {abrir} = {}) {
     ops.filter(x => normal(x.estado) !== 'cancelada').length > 1 ? h('span.nota', '· ' + ops.length + ' instalaciones (ver pestaña Instalaciones)') : null) : null;
 
   const t = tarjeta(o ? 'La instalación · ' + api.etiquetaCatalogo('tiposOperacion', o.tipo) : 'En qué punto está', h('div',
+    avisos,
     pasos(c, o),
     pago,
     o ? h('div', {estilo: {display: 'grid', gridTemplateColumns: 'minmax(0, 3fr) minmax(0, 2fr)', gap: '18px', marginTop: '12px'}, class: 'doble-instalacion'},
@@ -130,9 +141,10 @@ export function tarjetaInstalacion(c, ops, {abrir} = {}) {
       h('div', {estilo: {display: 'flex', gap: '8px', flexWrap: 'wrap'}},
         pdf ? h('button.btn.primario', {onclick: () => verArchivo(pdf)}, '📄 Último proyecto · ' + fechaCorta(pdf.subido))
           : h('span.marca', r.proyecto && r.proyecto.estado ? '📐 Proyecto ' + ({borrador: 'en preparación', pedido: 'pedido al ingeniero', entregado: 'hecho', enviado: 'enviado al cliente'}[r.proyecto.estado] || r.proyecto.estado) + (txt(r.proyecto.faltan) ? ' · falta ' + r.proyecto.faltan : '') : '📐 Sin proyecto todavía'),
-        h('button.btn', {onclick: () => abrir && abrir('proyecto')}, '📷 Fotos (' + fotos.length + ')'),
+        h('button.btn', {onclick: () => ventanaFotos(fotos, abrir)}, '📷 Fotos (' + fotos.length + ')'),
         h('button.btn', {onclick: () => abrir && abrir('proyecto')}, '📁 Documentos (' + ((A.documentos || []).length + (A.proyectos || []).length) + ')'),
-        h('button.btn', {onclick: () => ventanaManuales(A.manuales || [], r.fichas || [])}, '📘 Manuales (' + ((A.manuales || []).length + (r.fichas || []).length) + ')')),
+        h('button.btn', {onclick: () => ventanaManuales(A.manuales || [], r.fichas || [])}, '📘 Manuales (' + ((A.manuales || []).length + (r.fichas || []).length) + ')'),
+        h('button.btn', {onclick: () => ventanaEnviar(c, A, r.fichas || [])}, '📤 Enviar al cliente')),
       fotos.filter(f => f.miniatura).length ? h('div', {estilo: {display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '10px'}},
         fotos.filter(f => f.miniatura).slice(0, 8).map(f => h('img', {src: f.miniatura, alt: txt(f.nombre), title: txt(f.nombre) + ' · ' + fechaCorta(f.subido), loading: 'lazy',
           onclick: () => verArchivo(f), estilo: {width: '72px', height: '72px', objectFit: 'cover', borderRadius: '8px', cursor: 'pointer', border: '1px solid var(--borde, #ddd)'}})),
@@ -218,4 +230,78 @@ export function panelDineroCliente(c, ops) {
         h('details', h('summary.nota', 'Ver piezas (' + m.lineas.length + ')'), h('ul', {estilo: {margin: '4px 0', paddingLeft: '18px'}}, m.lineas.map(l => h('li.nota', l.cantidad + ' ' + l.unidad + ' · ' + l.concepto + ' · ' + eur2(l.importe * (1 + l.iva_pct / 100)))))))))) : null));
   }).catch(e => poner(caja, h('p.nota', e.message || 'No se ha podido cargar.')));
   return caja;
+}
+
+
+/* ---------- fotos por fases de la obra (21/11/2026) ----------
+   Antes (lo que había), durante (cada fase que sube el instalador) y el resultado, para
+   enseñar trabajos reales y que el ingeniero y el comercial vean la casa. */
+const FASE_FOTO = {foto_antes: '1 · Antes de la obra', foto: '1 · Antes de la obra'};
+function ventanaFotos(fotos, abrir) {
+  const grupos = {};
+  fotos.forEach(f => {
+    const k = FASE_FOTO[f.clase] || (f.clase === 'obra_foto' ? '2 · Obra' + (txt(f.notas) ? ' · ' + f.notas : '') : '3 · Otras');
+    (grupos[k] = grupos[k] || []).push(f);
+  });
+  const claves = Object.keys(grupos).sort((a, b) => a.localeCompare(b, 'es'));
+  let v = null;
+  v = ventana({titulo: 'Fotos de la casa y de la obra (' + fotos.length + ')', ancha: true, cuerpo: h('div',
+    !fotos.length ? h('p.nota', 'Todavía no hay fotos. Se suben en la pestaña «Proyecto, fotos y documentos» o las sube el instalador desde la obra.') : null,
+    claves.map(k => h('div', {estilo: {marginBottom: '14px'}},
+      h('h4', {estilo: {margin: '0 0 6px'}}, k.replace(/^\d · /, '') + ' (' + grupos[k].length + ')'),
+      h('div', {estilo: {display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: '8px'}},
+        grupos[k].map(f => h('figure', {estilo: {margin: 0, cursor: 'pointer'}, onclick: () => verArchivo(f)},
+          f.miniatura ? h('img', {src: f.miniatura, alt: txt(f.nombre), loading: 'lazy', estilo: {width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: '8px', border: '1px solid var(--borde, #ddd)'}})
+            : h('div', {estilo: {aspectRatio: '1', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--fondo, #f4f4f2)', borderRadius: '8px'}}, '📷'),
+          h('figcaption.nota', {estilo: {fontSize: '11px', marginTop: '2px'}}, fechaCorta(f.subido))))))),
+    abrir ? h('button.btn.mini', {onclick: () => { if (v) v.cerrar(); abrir('proyecto'); }}, 'Subir fotos o ver la carpeta') : null)});
+}
+
+/* ---------- enviar documentación al cliente (21/11/2026) ----------
+   Nunca se manda nada solo: se prepara el mensaje (tuteando) y el archivo, y la persona
+   lo envía desde su WhatsApp o su correo. En el móvil se comparte el PDF directamente. */
+function ventanaEnviar(c, A, fichas) {
+  const docs = [...(A.proyectos || []).slice(0, 1).map(a => ({a, et: '📄 Proyecto · ' + fechaCorta(a.subido)})),
+    ...(A.manuales || []).map(a => ({a, et: '📘 ' + a.nombre})),
+    ...fichas.map(f => ({ficha: f, et: '📘 Ficha técnica · ' + f.nombre})),
+    ...(A.documentos || []).filter(a => /certific|garant|legaliz|boletin|cie/i.test(txt(a.nombre) + ' ' + txt(a.clase))).map(a => ({a, et: '📄 ' + a.nombre}))];
+  const elegido = new Set(docs.length ? [0] : []);
+  const yo = (api.estado.usuario || {}).nombre || '';
+  const nombre = txt(c.nombre).split(' ')[0];
+  const msg = h('textarea', {rows: 4, estilo: {width: '100%'}});
+  const rehacer = () => { const ds = [...elegido].map(i => docs[i]); msg.value = 'Hola ' + nombre + ', te paso ' + (ds.length === 1 ? 'la documentación' : 'los documentos') +
+    ' de tu instalación' + (ds.length ? ' (' + ds.map(d => d.et.replace(/^\S+\s/, '').replace(/ · \d.*$/, '')).join(', ') + ')' : '') + '. Cualquier duda me dices. Un saludo, ' + yo + ' · Zero Wattios'; };
+  rehacer();
+  const bajar = async d => {
+    const r = d.ficha ? await api.pedir('fichaTecnica', {clave: d.ficha.clave}) : await api.descargarArchivo(d.a.id);
+    const bin = Uint8Array.from(atob(r.datos), x => x.charCodeAt(0));
+    return new File([bin], r.nombre || (d.a && d.a.nombre) || 'documento.pdf', {type: r.mime || 'application/pdf'});
+  };
+  const tel = String(c.telefono || '').replace(/\D/g, '').replace(/^(?!34)(\d{9})$/, '34$1');
+  const estado = h('p.nota');
+  ventana({titulo: 'Enviar al cliente · ' + [c.direccion, c.nombre].filter(Boolean).join(' · '), cuerpo: h('div',
+    docs.length ? h('div', docs.map((d, i) => { const cb = h('input', {type: 'checkbox', checked: elegido.has(i), estilo: {width: 'auto'}, onchange: () => { cb.checked ? elegido.add(i) : elegido.delete(i); rehacer(); }});
+      return h('label', {estilo: {display: 'flex', gap: '8px', alignItems: 'center', padding: '4px 0'}}, cb, d.et); })) : h('p.nota', 'No hay proyecto, manuales ni certificados para enviar todavía.'),
+    h('p', {estilo: {margin: '10px 0 4px'}}, h('b', 'Mensaje')), msg,
+    h('div', {estilo: {display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px'}},
+      h('button.btn.primario', {onclick: async () => {
+        /* En el móvil: comparte los archivos directamente (WhatsApp, correo…). En el ordenador: los baja y abre WhatsApp con el mensaje. */
+        try {
+          poner(estado, 'Preparando los archivos…');
+          const files = await Promise.all([...elegido].map(i => bajar(docs[i])));
+          if (navigator.canShare && files.length && navigator.canShare({files})) { await navigator.share({files, text: msg.value}); poner(estado, '✓ Elige a quién enviarlo en tu móvil.'); return; }
+          files.forEach(f => { const a = h('a', {href: URL.createObjectURL(f), download: f.name}); document.body.appendChild(a); a.click(); a.remove(); });
+          if (tel) window.open('https://wa.me/' + tel + '?text=' + encodeURIComponent(msg.value), '_blank');
+          poner(estado, '✓ Archivos descargados' + (tel ? ' y WhatsApp abierto con el mensaje: adjúntalos y pulsa enviar.' : '. El cliente no tiene teléfono: envíalos por correo.'));
+        } catch (e) { if (e.name !== 'AbortError') poner(estado, e.message || String(e)); }
+      }}, '📱 WhatsApp / compartir'),
+      txt(c.email) ? h('a.btn', {href: 'mailto:' + c.email + '?subject=' + encodeURIComponent('Documentación de tu instalación · Zero Wattios') + '&body=' + encodeURIComponent(msg.value),
+        onclick: async () => { const files = await Promise.all([...elegido].map(i => bajar(docs[i]))); files.forEach(f => { const a = h('a', {href: URL.createObjectURL(f), download: f.name}); document.body.appendChild(a); a.click(); a.remove(); }); }}, '✉ Correo') : null,
+      api.esDireccion() ? h('button.btn', {onclick: async () => {
+        try { let n = 0; for (const i of elegido) { const d = docs[i]; if (d.a) { await api.pedir('visibleArchivoPortal', {id: d.a.id, visible: true}); n++; } }
+          poner(estado, '✓ ' + n + ' documento' + (n === 1 ? '' : 's') + ' visible' + (n === 1 ? '' : 's') + ' en su área de cliente (clientes.zerowattios.com).'); }
+        catch (e) { poner(estado, e.message || String(e)); }
+      }}, '🏠 Dejar en su área de cliente') : null),
+    h('p.nota', {estilo: {marginTop: '8px'}}, 'No se envía nada solo: eres tú quien pulsa enviar en WhatsApp o en el correo.'),
+    estado)});
 }

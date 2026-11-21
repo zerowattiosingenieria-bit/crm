@@ -481,12 +481,16 @@ function accAlertas_(array $u, array $p): array {
   $clientes = misClientes_($u);
   $operaciones = misOperaciones_($u);
   $avisos = [];
+  $etq = function ($cid) use ($clientes) {
+    foreach ($clientes as $c) if (mismo_($c['id'], $cid)) return trim(trim(preg_replace('/,.*$/', '', txt_($c['direccion']))) . ' · ' . txt_($c['nombre']), ' ·');
+    return txt_($cid);
+  };
 
   foreach ($clientes as $c) {
     if (txt_($c['proxima_fecha']) !== '' && txt_($c['proxima_fecha']) < $hoy &&
         !in_array(normal_($c['estado']), ['ganado', 'perdido'], true)) {
       $avisos[] = ['tipo' => 'accion_vencida', 'nivel' => 'alto', 'cliente_id' => $c['id'],
-        'texto' => txt_($c['nombre']) . ': "' . (txt_($c['proxima_accion']) ?: 'seguimiento') . '" venció el ' . txt_($c['proxima_fecha']) . '.'];
+        'texto' => $etq($c['id']) . ': "' . (txt_($c['proxima_accion']) ?: 'seguimiento') . '" venció el ' . txt_($c['proxima_fecha']) . '.'];
     }
   }
 
@@ -494,12 +498,48 @@ function accAlertas_(array $u, array $p): array {
     $f = txt_($o['fecha_propuesta']);
     if (normal_($o['estado']) === 'propuesta' && $f !== '' && (diasEntre_($f, $hoy) ?? 0) > 15) {
       $avisos[] = ['tipo' => 'propuesta_dormida', 'nivel' => 'medio', 'operacion_id' => $o['id'], 'cliente_id' => $o['cliente_id'],
-        'texto' => 'Propuesta de ' . diasEntre_($f, $hoy) . ' días sin cerrar (' . (txt_($o['referencia']) ?: txt_($o['id'])) . ').'];
+        'texto' => $etq($o['cliente_id']) . ': propuesta de hace ' . diasEntre_($f, $hoy) . ' días sin cerrar.'];
     }
     if (in_array(normal_($o['estado']), ['material', 'instalacion'], true) && txt_($o['fecha_prevista_instalacion']) === '') {
       $avisos[] = ['tipo' => 'sin_fecha', 'nivel' => 'medio', 'operacion_id' => $o['id'], 'cliente_id' => $o['cliente_id'],
-        'texto' => 'Obra en marcha sin fecha prevista de instalación (' . (txt_($o['referencia']) ?: txt_($o['id'])) . ').'];
+        'texto' => $etq($o['cliente_id']) . ': obra en marcha sin fecha prevista de instalación.'];
     }
+  }
+
+  /* 21/11/2026: avisos de seguimiento de cada cliente (Nando). Se ven en «Hoy»/Inicio, en el
+     Panel y en la ficha del cliente. Los clientes se nombran por dirección y nombre. */
+  $visibles = []; foreach ($clientes as $c) $visibles[txt_($c['id'])] = $c;
+  foreach ($operaciones as $o) {
+    $est = normal_($o['estado']);
+    if (in_array($est, ['firmada', 'financiacion', 'tramite'], true) && txt_($o['fecha_prevista_instalacion']) === '') {
+      $d = diasEntre_(txt_($o['fecha_firma']) ?: txt_($o['fecha_contrato']) ?: $hoy, $hoy) ?? 0;
+      $avisos[] = ['tipo' => 'firmado_sin_fecha', 'nivel' => $d > 15 ? 'alto' : 'medio', 'operacion_id' => $o['id'], 'cliente_id' => $o['cliente_id'],
+        'texto' => $etq($o['cliente_id']) . ': firmado' . ($d ? ' hace ' . $d . ' días' : '') . ' y sin fecha de instalación.'];
+    }
+    if ($est === 'instalada' && txt_($o['fecha_legalizacion']) === '' && txt_($o['fecha_instalacion']) !== '' && (diasEntre_(txt_($o['fecha_instalacion']), $hoy) ?? 0) > 30) {
+      $avisos[] = ['tipo' => 'sin_legalizar', 'nivel' => 'medio', 'operacion_id' => $o['id'], 'cliente_id' => $o['cliente_id'],
+        'texto' => $etq($o['cliente_id']) . ': instalada hace ' . diasEntre_(txt_($o['fecha_instalacion']), $hoy) . ' días y sin legalizar.'];
+    }
+  }
+  /* CAE y WIXER parados más de 15 días */
+  foreach (leer_('TRAMITES') as $t) {
+    if (!isset($visibles[txt_($t['cliente_id'])])) continue;
+    $e = normal_($t['estado']);
+    if (in_array($e, ['cobrado', 'cancelado', 'finalizado', 'pte_facturar'], true)) continue;
+    $ult = substr(txt_($t['modificado']) ?: txt_($t['creado']), 0, 10);
+    $d = $ult !== '' ? (diasEntre_($ult, $hoy) ?? 0) : 0;
+    if ($d > 15) $avisos[] = ['tipo' => 'tramite_parado', 'nivel' => 'medio', 'cliente_id' => $t['cliente_id'],
+      'texto' => $etq($t['cliente_id']) . ': ' . (normal_($t['tipo']) === 'wixer' ? 'cambio de compañía (WIXER)' : 'CAE') . ' parado hace ' . $d . ' días (' . $e . ').'];
+  }
+  /* proyecto enviado hace más de 7 días sin una llamada o contacto después */
+  $seg = [];
+  foreach (leer_('SEGUIMIENTO') as $x) { $k = txt_($x['cliente_id']); if (isset($visibles[$k]) && txt_($x['fecha']) > ($seg[$k] ?? '')) $seg[$k] = txt_($x['fecha']); }
+  foreach (leer_('PROYECTOS') as $pr) {
+    $k = txt_($pr['cliente_id']); $env = substr(txt_($pr['enviado']), 0, 10);
+    if ($env === '' || !isset($visibles[$k]) || in_array(normal_($visibles[$k]['estado']), ['ganado', 'perdido', 'frio'], true)) continue;
+    $d = diasEntre_($env, $hoy) ?? 0;
+    if ($d > 7 && ($seg[$k] ?? '') <= $env) $avisos[] = ['tipo' => 'propuesta_sin_llamada', 'nivel' => 'alto', 'cliente_id' => $k,
+      'texto' => $etq($k) . ': proyecto enviado hace ' . $d . ' días y nadie le ha llamado después.'];
   }
 
   if (!empty($per['finanzas'])) {
@@ -508,7 +548,7 @@ function accAlertas_(array $u, array $p): array {
     foreach (leer_('COBROS') as $c) {
       if (txt_($c['fecha_cobro']) === '' && txt_($c['fecha_prevista']) !== '' && txt_($c['fecha_prevista']) < $hoy) {
         $op = $opIds[txt_($c['operacion_id'])] ?? [];
-        $avisos[] = ['tipo' => 'cobro_vencido', 'nivel' => 'alto', 'operacion_id' => $c['operacion_id'],
+        $avisos[] = ['tipo' => 'cobro_vencido', 'nivel' => 'alto', 'operacion_id' => $c['operacion_id'], 'cliente_id' => $op['cliente_id'] ?? '',
           'texto' => 'Cobro vencido de ' . redondear_(num_($c['importe']), 0) . ' € (' . (txt_($op['referencia'] ?? '') ?: txt_($c['operacion_id'])) . ') desde el ' . txt_($c['fecha_prevista']) . '.'];
       }
     }
@@ -530,7 +570,9 @@ function accAlertas_(array $u, array $p): array {
 
   $orden = ['alto' => 0, 'medio' => 1, 'bajo' => 2];
   $avisos = ordenar_($avisos, fn($a, $b) => ($orden[$a['nivel']] ?? 0) <=> ($orden[$b['nivel']] ?? 0));
-  return ['ok' => true, 'alertas' => array_slice($avisos, 0, 80)];
+  /* p.cliente_id: solo los de ese cliente (ficha) */
+  if (txt_($p['cliente_id'] ?? '') !== '') $avisos = array_values(array_filter($avisos, fn($a) => mismo_($a['cliente_id'] ?? '', $p['cliente_id'])));
+  return ['ok' => true, 'alertas' => array_slice($avisos, 0, 120)];
 }
 
 

@@ -33,6 +33,7 @@ import {vistaRegistro} from './vistas/registro.js';
 import {vistaDashboard} from './vistas/dashboard.js?v=2';
 import {vistaTablero, tituloTablero} from './vistas/tablero.js';
 import {vistaHoy} from './vistas/hoy.js';
+import {vistaInicio} from './vistas/inicio.js';
 import {vistaVisita, vaciarColaVisita} from './vistas/visita.js';
 import {vistaVisor3d, veVisor} from './vistas/visor3d.js';
 import {vistaCotizador, veCotizador} from './vistas/cotizador.js';
@@ -42,6 +43,7 @@ export const VERSION = '1.0.0';
 
 /* ---------- pantallas ---------- */
 const VISTAS = {
+  inicio:       {titulo: 'Inicio',             pinta: vistaInicio},
   hoy:          {titulo: 'Hoy',                pinta: vistaHoy},
   visita:       {titulo: 'Modo visita',        pinta: vistaVisita},
   visor:        {titulo: 'Visor 3D',           pinta: vistaVisor3d,       permiso: 'visor'},
@@ -105,8 +107,7 @@ function menuDe(rol) {
   if (rol === 'captador') {
     return [
       trabajo,
-      {id: 'hoy', et: 'Hoy', ico: '★'},
-      {id: 'panel', et: 'Panel', ico: '▦'},
+      {id: 'inicio', et: 'Inicio', ico: '★'},
       {id: 'tablero', et: 'Mi tablero', ico: '◑'},
       {id: 'agenda', et: 'Agenda', ico: '◷'},
       {id: 'parte', et: 'Parte del día', ico: '✓'},
@@ -127,8 +128,7 @@ function menuDe(rol) {
   if (rol === 'comercial') {
     return [
       trabajo,
-      {id: 'hoy', et: 'Hoy', ico: '★'},
-      {id: 'panel', et: 'Panel', ico: '▦'},
+      {id: 'inicio', et: 'Inicio', ico: '★'},
       {id: 'tablero', et: 'Mi tablero', ico: '◑'},
       {id: 'agenda', et: 'Agenda', ico: '◷'},
       {id: 'visitas', et: 'Mis visitas', ico: '✔'},
@@ -154,8 +154,7 @@ function menuDe(rol) {
   }
   return [
     trabajo,
-    {id: 'hoy', et: 'Hoy', ico: '★'},
-    {id: 'panel', et: 'Panel', ico: '▦'},
+    {id: 'inicio', et: 'Inicio', ico: '★'},
     {id: 'tablero', et: etiquetaTablero(), ico: '◑'},
     {id: 'agenda', et: 'Agenda', ico: '◷'},
     {id: 'incidencias', et: 'Incidencias', ico: '⚠'},
@@ -198,17 +197,17 @@ function menuDe(rol) {
 export function ir(ruta) { location.hash = '#' + ruta; }
 
 function rutaActual() {
-  const partes = (location.hash || '#panel').slice(1).split('/');
-  return {vista: partes[0] || 'panel', id: partes[1] ? decodeURIComponent(partes[1]) : null};
+  const partes = (location.hash || '#inicio').slice(1).split('/');
+  return {vista: partes[0] || 'inicio', id: partes[1] ? decodeURIComponent(partes[1]) : null};
 }
 
 /* Menú corto (02/11/2026): solo lo que cada uno usa a diario. Se cambia
    abajo del menú y queda guardado en ese aparato. */
 const K_MENU = 'zw.crm.menuSimple';
 const MENU_CORTO = {
-  captador: ['hoy', 'agenda', 'captaciones', 'clientes', 'operaciones', 'parte', 'tramites', 'avisar', 'perfil'],
-  comercial: ['hoy', 'agenda', 'visitas', 'clientes', 'visor', 'cotizador', 'operaciones', 'calinstalaciones', 'calfechas', 'parte', 'avisar', 'perfil'],
-  otro: ['hoy', 'panel', 'tablero', 'incidencias', 'agenda', 'visitas', 'clientes', 'operaciones', 'calinstalaciones', 'calfechas', 'gantt', 'seguimiento', 'subcontratas', 'tramites', 'captaciones', 'estadisticas', 'dinero', 'perfil']
+  captador: ['inicio', 'agenda', 'captaciones', 'clientes', 'operaciones', 'parte', 'tramites', 'avisar', 'perfil'],
+  comercial: ['inicio', 'agenda', 'visitas', 'clientes', 'visor', 'cotizador', 'operaciones', 'calinstalaciones', 'calfechas', 'parte', 'avisar', 'perfil'],
+  otro: ['inicio', 'tablero', 'incidencias', 'agenda', 'visitas', 'clientes', 'operaciones', 'calinstalaciones', 'calfechas', 'gantt', 'seguimiento', 'subcontratas', 'tramites', 'captaciones', 'estadisticas', 'dinero', 'perfil']
 };
 const menuCorto = () => { try { return localStorage.getItem(K_MENU) === '1'; } catch (e) { return false; } };
 
@@ -408,7 +407,7 @@ function pasoClave() {
 async function dentro() {
   await api.cargarDatos();
   mostrarApp();
-  if (!location.hash || location.hash === '#') location.hash = '#panel';
+  if (!location.hash || location.hash === '#') location.hash = '#inicio';
   await pintar();
   if (api.estado.usuario.debe_cambiar_clave === 'si') {
     aviso('Tu clave es la inicial: cámbiala desde Mi perfil.');
@@ -502,7 +501,7 @@ async function arrancar() {
     try {
       await api.cargarDatos();
       mostrarApp();
-      if (!location.hash || location.hash === '#') location.hash = '#panel';
+      if (!location.hash || location.hash === '#') location.hash = '#inicio';
       await pintar();
       return;
     } catch (e) { api.olvidarSesion(); }

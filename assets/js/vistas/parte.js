@@ -170,7 +170,7 @@ export async function vistaParte({ir, refrescar}) {
             esCaptador ? 'Lo que cuentes aquí lo ve dirección en el parte.'
               : 'Nombra a los clientes tal y como están en el CRM: así puedo actualizar sus fichas.')),
         h('.acciones', btnEnviar,
-          h('button.btn', {onclick: () => ir('panel')}, 'Volver al panel')))),
+          h('button.btn', {onclick: () => ir('inicio')}, 'Volver al inicio')))),
 
     zonaAnalisis,
 

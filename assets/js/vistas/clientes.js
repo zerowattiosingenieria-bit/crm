@@ -250,6 +250,10 @@ const celdaComentario = (c, alCambiar) => {
       onclick: e => { e.stopPropagation(); editarComentario(c, alCambiar); }}, '✎ Comentario'));
 };
 
+/* Lo que le falta a una ficha (los mismos datos clave que «Falta por meter» en la ficha). */
+const nada = () => {};
+const faltanDe = c => faltaPorMeter(c, {editarContacto: nada, editarVivienda: nada, irA: nada}).map(x => x[0]).filter(x => x !== 'Próximo paso con fecha');
+
 /* ================= listado ================= */
 export async function vistaClientes({ir, refrescar}) {
   const caja = h('div');
@@ -274,6 +278,8 @@ export async function vistaClientes({ir, refrescar}) {
       .concat(api.opciones('estadosOperacion'))},
     {id: 'visita', tipo: 'select', opciones: [['', 'Todas las visitas'],
       ['sin_confirmar', 'Con visita sin confirmar']]},
+    /* 21/11/2026: fichas a las que les faltan datos clave (gasto, m² del Catastro, teléfono…). */
+    {id: 'incompletas', tipo: 'select', opciones: [['', 'Todas las fichas'], ['si', 'Solo fichas con datos que faltan']]},
     ...(api.puede('editarTodo') ? [{tipo: 'boton', et: '⧉ Fichas repetidas',
      accion: () => ventanaRepetidos({ir, refrescar})}] : []),
     {tipo: 'boton', et: '+ Nuevo cliente', clase: 'primario',
@@ -298,6 +304,7 @@ export async function vistaClientes({ir, refrescar}) {
         if (!o || normal(o.estado) !== estado.estado_op) return false;
       }
       if (estado.visita === 'sin_confirmar' && !visitaSinConfirmar(c)) return false;
+      if (estado.incompletas === 'si' && !faltanDe(c).length) return false;
       if (!q) return true;
       return [c.nombre, c.direccion, c.municipio, c.telefono, c.email, c.id, c.perfil,
               ...comentariosDe(c).map(s => s.nota)]
@@ -314,7 +321,8 @@ export async function vistaClientes({ir, refrescar}) {
       {clave: 'nombre', et: 'Cliente', valor: c => etiquetaCliente(c), pinta: c => h('div',
         h('b', etiquetaCliente(c)),
         h('div.nota', [txt(c.municipio), txt(c.telefono)].filter(Boolean).join(' · ') || '—'),
-        visitaSinConfirmar(c) ? h('div', {estilo: {marginTop: '3px'}}, marca('VISITA NO CONFIRMADA', 'mal')) : null)},
+        visitaSinConfirmar(c) ? h('div', {estilo: {marginTop: '3px'}}, marca('VISITA NO CONFIRMADA', 'mal')) : null,
+        estado.incompletas === 'si' ? h('div', {estilo: {marginTop: '3px', color: '#9A5B00', fontSize: '12px'}}, 'Falta: ' + faltanDe(c).join(', ')) : null)},
       {clave: 'estado', et: 'Estado', pinta: c => etiquetaEstado(c.estado,
         api.etiquetaCatalogo('estadosCliente', c.estado))},
       {clave: 'interes', et: 'Interés', num: true, valor: c => num(c.interes),
@@ -358,7 +366,9 @@ export async function vistaClientes({ir, refrescar}) {
         kpi('En marcha', miles(lista.filter(c => !['ganado', 'perdido'].includes(txt(c.estado))).length),
           'sin cerrar'),
         kpi('Ganados', miles(porEstado.ganado || 0), 'instalaciones vendidas', {estado: 'bien'}),
-        kpi('Gasto medio', eur(lista.length ? suma(lista, gastoAnual) / lista.length : 0), 'energía al año')
+        kpi('Gasto medio', eur(lista.length ? suma(lista, gastoAnual) / lista.length : 0), 'energía al año'),
+        kpi('Fichas incompletas', miles(lista.filter(c => faltanDe(c).length).length), 'pulsa para verlas',
+          {estado: 'aviso', alPulsar: () => { const sel = [...f.nodo.querySelectorAll('select')].find(x => [...x.options].some(o => o.value === 'si' && /faltan/.test(o.textContent))); estado.incompletas = 'si'; if (sel) sel.value = 'si'; pinta(); }})
       ),
       tarjeta(miles(lista.length) + ' cliente(s)', t, {
         sinRelleno: true,
