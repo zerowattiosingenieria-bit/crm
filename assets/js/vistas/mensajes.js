@@ -63,6 +63,7 @@ function fila(m, recargar) {
             if (r.whatsapp) { window.open(r.whatsapp, '_blank', 'noopener'); aviso('Se abre WhatsApp con el texto. Cuando lo mandes, márcalo como enviado.', 'ok'); }
             else if (r.email) { await copiar(r.email.cuerpo, 'Texto'); aviso('Texto copiado. Pégalo en tu correo para ' + r.email.para + ' y, cuando lo mandes, márcalo como enviado.', 'ok'); }
             recargar();
-          })],
+          }),
+          h('button.btn.mini', {title: 'Copia el texto tal y como está, sin aprobarlo ni enviarlo', onclick: () => copiar(cuerpo.value, 'Texto')}, '📋 Copiar texto')],
       boton('Descartar', '', async () => { await api.pedir('marcarMensaje', {id: m.id, estado: 'descartado'}); aviso('Descartado', 'ok'); recargar(); })));
 }
