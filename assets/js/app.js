@@ -99,6 +99,8 @@ function etiquetaTablero() {
 }
 
 function menuDe(rol) {
+  /* 21/11/2026: menús agrupados por lo que se hace (trabajo del día, clientes,
+     instalaciones, dinero, equipo), sin quitar ninguna pantalla. */
   const trabajo = {grupo: 'Trabajo diario'};
   if (rol === 'captador') {
     return [
@@ -107,11 +109,13 @@ function menuDe(rol) {
       {id: 'panel', et: 'Panel', ico: '▦'},
       {id: 'tablero', et: 'Mi tablero', ico: '◑'},
       {id: 'agenda', et: 'Agenda', ico: '◷'},
-      {id: 'captaciones', et: 'Mis captaciones', ico: '⚑'},
-      {id: 'estadisticas', et: 'Estadísticas del equipo', ico: '▥'},
-      {id: 'clientes', et: 'Mis clientes', ico: '☰'},
       {id: 'parte', et: 'Parte del día', ico: '✓'},
+      {grupo: 'Mis clientes'},
+      {id: 'clientes', et: 'Mis clientes', ico: '☰'},
+      {id: 'captaciones', et: 'Mis captaciones', ico: '⚑'},
+      {id: 'operaciones', et: 'Sus instalaciones', ico: '⚡'},
       {id: 'tramites', et: 'CAEs y WIXER', ico: '♻'},
+      {id: 'estadisticas', et: 'Estadísticas del equipo', ico: '▥'},
       {id: 'avisar', et: 'Avisar incidencia', ico: '⚠'},
       {grupo: 'Lo mío'},
       {id: 'resumen', et: 'Mi resumen', ico: '◔'},
@@ -128,16 +132,18 @@ function menuDe(rol) {
       {id: 'tablero', et: 'Mi tablero', ico: '◑'},
       {id: 'agenda', et: 'Agenda', ico: '◷'},
       {id: 'visitas', et: 'Mis visitas', ico: '✔'},
+      {id: 'parte', et: 'Parte del día', ico: '✓'},
+      {grupo: 'Clientes y ventas'},
       {id: 'clientes', et: 'Mis clientes', ico: '☰'},
-      {id: 'visor', et: 'Visor 3D', ico: '⌂'},
+      {id: 'captaciones', et: 'Captaciones', ico: '⚑'},
       {id: 'cotizador', et: 'Cotizador', ico: '€'},
+      {id: 'visor', et: 'Visor 3D', ico: '⌂'},
+      {id: 'directorio', et: 'Directorio', ico: '🗂'},
+      {id: 'estadisticas', et: 'Estadísticas', ico: '▥'},
+      {grupo: 'Instalaciones'},
       {id: 'operaciones', et: 'Mis instalaciones', ico: '⚡'},
       {id: 'calinstalaciones', et: 'Calendario de instalaciones', ico: '▦'},
       {id: 'calfechas', et: 'Calendario FECHAS', ico: '📅'},
-      {id: 'captaciones', et: 'Captaciones', ico: '⚑'},
-      {id: 'estadisticas', et: 'Estadísticas', ico: '▥'},
-      {id: 'parte', et: 'Parte del día', ico: '✓'},
-      {id: 'directorio', et: 'Directorio', ico: '🗂'},
       {id: 'avisar', et: 'Avisar incidencia', ico: '⚠'},
       {grupo: 'Lo mío'},
       {id: 'resumen', et: 'Mi resumen', ico: '◔'},
@@ -151,12 +157,18 @@ function menuDe(rol) {
     {id: 'hoy', et: 'Hoy', ico: '★'},
     {id: 'panel', et: 'Panel', ico: '▦'},
     {id: 'tablero', et: etiquetaTablero(), ico: '◑'},
-    {id: 'incidencias', et: 'Incidencias', ico: '⚠'},
     {id: 'agenda', et: 'Agenda', ico: '◷'},
-    {id: 'visitas', et: 'Visitas de los comerciales', ico: '✔'},
+    {id: 'incidencias', et: 'Incidencias', ico: '⚠'},
+    {grupo: 'Clientes y ventas'},
     {id: 'clientes', et: 'Clientes', ico: '☰'},
-    {id: 'visor', et: 'Visor 3D', ico: '⌂'},
+    {id: 'visitas', et: 'Visitas de los comerciales', ico: '✔'},
+    {id: 'captaciones', et: 'Captaciones', ico: '⚑'},
     {id: 'cotizador', et: 'Cotizador', ico: '€'},
+    {id: 'visor', et: 'Visor 3D', ico: '⌂'},
+    {id: 'mapa', et: 'Mapa', ico: '◎'},
+    {id: 'estadisticas', et: 'Estadísticas', ico: '▥'},
+    {id: 'directorio', et: 'Directorio y puertas', ico: '🗂'},
+    {grupo: 'Instalaciones'},
     {id: 'operaciones', et: 'Instalaciones', ico: '⚡'},
     {id: 'calinstalaciones', et: 'Calendario de instalaciones', ico: '▦'},
     {id: 'calfechas', et: 'Calendario FECHAS', ico: '📅'},
@@ -164,10 +176,6 @@ function menuDe(rol) {
     {id: 'seguimiento', et: 'Seguimiento de operaciones', ico: '☑'},
     {id: 'subcontratas', et: 'Obras de subcontratas', ico: '⚒'},
     {id: 'tramites', et: 'CAEs y WIXER', ico: '♻'},
-    {id: 'captaciones', et: 'Captaciones', ico: '⚑'},
-    {id: 'estadisticas', et: 'Estadísticas', ico: '▥'},
-    {id: 'mapa', et: 'Mapa', ico: '◎'},
-    {id: 'directorio', et: 'Directorio y puertas', ico: '🗂'},
     {grupo: 'Dinero'},
     {id: 'dinero', et: 'Dinero', ico: '€'},
     {id: 'materiales', et: 'Materiales y costes', ico: '⚙'},
@@ -198,7 +206,7 @@ function rutaActual() {
    abajo del menú y queda guardado en ese aparato. */
 const K_MENU = 'zw.crm.menuSimple';
 const MENU_CORTO = {
-  captador: ['hoy', 'agenda', 'captaciones', 'estadisticas', 'clientes', 'parte', 'tramites', 'avisar', 'perfil'],
+  captador: ['hoy', 'agenda', 'captaciones', 'clientes', 'operaciones', 'parte', 'tramites', 'avisar', 'perfil'],
   comercial: ['hoy', 'agenda', 'visitas', 'clientes', 'visor', 'cotizador', 'operaciones', 'calinstalaciones', 'calfechas', 'parte', 'avisar', 'perfil'],
   otro: ['hoy', 'panel', 'tablero', 'incidencias', 'agenda', 'visitas', 'clientes', 'operaciones', 'calinstalaciones', 'calfechas', 'gantt', 'seguimiento', 'subcontratas', 'tramites', 'captaciones', 'estadisticas', 'dinero', 'perfil']
 };

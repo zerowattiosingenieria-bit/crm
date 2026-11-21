@@ -7,3 +7,4 @@ docs/manuales/pdf/
 docs/manuales/img/
 docs/manuales/__pycache__/
 pruebas/capturas-visor/
+api/config_local.php

@@ -1,5 +1,6 @@
 /* vistas/clientes.js — listado de clientes y ficha completa. */
 
+import {tarjetaInstalacion} from './ficha-instalacion.js';
 import {veVisor} from './visor3d.js';
 import {veCotizador} from './cotizador.js';
 import {h, poner, txt, num, eur, eur2, miles, pct, fechaCorta, fechaLarga, haceDias,
@@ -436,7 +437,7 @@ export async function vistaCliente({id, ir, refrescar}) {
     ['citas', 'Citas (' + citas.length + ')', () => panelCitas(c, {refrescar, nuevaCita: acc.cita})],
     ['vivienda', 'Vivienda y consumo', () => panelVivienda(c, acc.vivienda)],
     ['dimensionado', 'Ficha de dimensionado', () => panelFicha(c)],
-    ['proyecto', 'Proyecto', () => panelProyecto(c)],
+    ['proyecto', 'Proyecto, fotos y documentos', () => panelProyecto(c)],
     veCotizador() && ['cotizar', 'Cotizar', () => { const caja = h('div', h('p.nota', 'Cargando el cotizador…'));
       import('./cotizador.js').then(m => m.vistaCotizador({id: c.id})).then(n => poner(caja, n))
         .catch(e => poner(caja, h('p.nota', 'No se ha podido abrir el cotizador: ' + e.message))); return caja; }],
@@ -487,6 +488,7 @@ function panelResumen(c, ops, seg, refrescar, {acc, abrir, ir}) {
         h('button.btn.mini', {onclick: () => ir('cliente/' + dup.cliente.id)}, 'Ver la otra'),
         api.puede('editarTodo') ? h('button.btn.mini', {onclick: () => ventanaRepetidos({ir, refrescar})}, 'Fusionar') : null,
         api.puede('editarTodo') ? null : h('span.nota', 'Avisa a dirección para que las fusione.'))) : null,
+    tarjetaInstalacion(c, ops, {abrir}),
     falta.length ? tarjeta('Falta por meter (' + falta.length + ')', h('.acciones',
       falta.map(([et, fn]) => h('button.btn.mini', {onclick: fn}, '+ ' + et))),
       {subtitulo: 'Pulsa y se abre justo donde va. Con esto la propuesta sale sin pedir nada más.'}) : null,

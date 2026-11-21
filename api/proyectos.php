@@ -584,7 +584,7 @@ const FICHAS_TECNICAS = [
   'inv_deye' => ['1nMXjmm0J-nVBkySg68mSn-a8vMe8QlQt', 'Inversor Deye SUN 7,6-12K.pdf']
 ];
 function accFichaTecnica_(array $u, array $p): array {
-  if (normal_($u['rol'] ?? '') === 'captador') return ['ok' => false, 'error' => 'Las fichas técnicas son para comerciales y dirección.'];
+  /* 21/11/2026: los captadores llevan a sus clientes de principio a fin; también ven los manuales. */
   $lista = FICHAS_TECNICAS;
   $extra = json_decode(txt_(config_()['fichas_tecnicas'] ?? ''), true);
   if (is_array($extra)) foreach ($extra as $k => $v) $lista[$k] = is_array($v) ? $v : [$v, $k . '.pdf'];
@@ -593,4 +593,57 @@ function accFichaTecnica_(array $u, array $p): array {
   try { $a = driveDescargar_($lista[$k][0]); }
   catch (Throwable $e) { return ['ok' => false, 'error' => 'La ficha técnica ya no está en el Drive de la empresa.']; }
   return ['ok' => true, 'nombre' => $lista[$k][1], 'mime' => 'application/pdf', 'datos' => $a['base64'] ?? ''];
+}
+
+/* ---------- la instalación del cliente, de un vistazo (21/11/2026) ----------
+   Para la ficha de cliente de todo el equipo (también captadores, que llevan a
+   sus clientes de principio a fin): en qué fase está, quién instala y cuándo,
+   el último proyecto, fotos, manuales y documentación, CAE/WIXER e incidencias.
+   Sin nada de dinero de la empresa (costes, márgenes, cobros, facturas). */
+function accInstalacionCliente_(array $u, array $p): array {
+  $v = clienteVisible_($u, $p['cliente_id'] ?? '');
+  if (isset($v['error'])) return ['ok' => false, 'error' => $v['error']];
+  $cli = $v['cliente'];
+  $cuentas = indexar_(leer_('PORTAL_CUENTAS'));
+  $nombreContrata = fn($id) => txt_(($cuentas[txt_($id)] ?? [])['empresa'] ?? '') ?: txt_(($cuentas[txt_($id)] ?? [])['nombre'] ?? '');
+  $obras = array_map(fn($o) => ['id' => $o['id'], 'operacion_id' => txt_($o['operacion_id']), 'especialidad' => txt_($o['especialidad']),
+      'estado' => txt_($o['estado']), 'fecha_prevista' => txt_($o['fecha_prevista']), 'llegada' => txt_($o['llegada']),
+      'terminada' => txt_($o['terminada']), 'progreso' => num_($o['progreso']), 'instalador' => $nombreContrata($o['contrata_id'])],
+    filtrar_('OBRAS', fn($o) => mismo_($o['cliente_id'], $cli['id'])));
+  $visitas = array_map(fn($x) => ['fecha' => txt_($x['fecha']), 'hora' => txt_($x['hora']), 'tipo' => txt_($x['tipo']),
+      'estado' => txt_($x['estado']), 'hecha' => txt_($x['hecha']), 'instalador' => $nombreContrata($x['contrata_id'])],
+    filtrar_('VISITAS_INSTALADOR', fn($x) => mismo_($x['cliente_id'], $cli['id'])));
+  usort($visitas, fn($a, $b) => strcmp($a['fecha'], $b['fecha']));
+  $proy = buscar1_('PROYECTOS', fn($x) => mismo_($x['cliente_id'], $cli['id']));
+  $archivos = array_map('sinDatos_', array_values(array_filter(archivosDe_($cli['id']), fn($a) => veArchivo_($u, $a))));
+  usort($archivos, fn($a, $b) => strcmp(txt_($b['subido']), txt_($a['subido'])));
+  $grupo = function ($a) {
+    $c = normal_($a['clase']);
+    if (in_array($c, ['foto', 'obra_foto', 'foto_antes'], true) || strpos(txt_($a['mime']), 'image/') === 0) return 'fotos';
+    if ($c === 'proyecto') return 'proyectos';
+    if (in_array($c, ['manual', 'garantia', 'certificado', 'legalizacion'], true)) return 'manuales';
+    return 'documentos';
+  };
+  $porGrupo = ['fotos' => [], 'proyectos' => [], 'manuales' => [], 'documentos' => []];
+  foreach ($archivos as $a) $porGrupo[$grupo($a)][] = $a;
+  $tramites = array_map(fn($t) => ['tipo' => txt_($t['tipo']), 'estado' => txt_($t['estado']), 'progreso' => num_($t['progreso']), 'producto' => txt_($t['producto'])],
+    filtrar_('TRAMITES', fn($t) => mismo_($t['cliente_id'], $cli['id'])));
+  $incid = array_map(fn($i) => ['titulo' => txt_($i['titulo']), 'estado' => txt_($i['estado']), 'fecha' => txt_($i['fecha'])],
+    filtrar_('INCIDENCIAS', fn($i) => mismo_($i['cliente_id'], $cli['id']) && !in_array(normal_($i['estado']), ['resuelta', 'cerrada'], true)));
+  /* manuales de los equipos que lleva (fichas técnicas de la empresa) */
+  $fichas = [];
+  foreach (filtrar_('OPERACIONES', fn($o) => mismo_($o['cliente_id'], $cli['id']) && normal_($o['estado']) !== 'cancelada') as $o) {
+    $t = normal_(implode(' ', [$o['panel_modelo'], $o['panel_wp'], $o['inversor_modelo'], $o['bateria_modelo'], $o['aero_modelo']]));
+    if (preg_match('/hanersun|625/', $t)) $fichas['panel_625'] = 1;
+    if (preg_match('/risen|590/', $t)) $fichas['panel_590'] = 1;
+    if (preg_match('/x1/', $t)) $fichas['inv_x1'] = 1;
+    if (preg_match('/x3/', $t)) $fichas['inv_x3'] = 1;
+    if (preg_match('/deye/', $t)) $fichas['inv_deye'] = 1;
+    if (preg_match('/domusa/', $t)) $fichas['aero_domusa'] = 1;
+  }
+  $lista = FICHAS_TECNICAS;
+  return ['ok' => true, 'obras' => $obras, 'visitas' => $visitas,
+    'proyecto' => $proy ? ['estado' => txt_($proy['estado']), 'pedido' => txt_($proy['pedido']), 'entregado' => txt_($proy['entregado']), 'enviado' => txt_($proy['enviado']), 'faltan' => txt_($proy['faltan'])] : null,
+    'archivos' => $porGrupo, 'tramites' => $tramites, 'incidencias' => $incid,
+    'fichas' => array_map(fn($k) => ['clave' => $k, 'nombre' => $lista[$k][1] ?? $k], array_keys($fichas))];
 }
