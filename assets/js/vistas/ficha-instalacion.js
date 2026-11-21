@@ -8,7 +8,7 @@
 
 import {h, poner, txt, num, eur, eur2, fechaCorta, hoyISO, normal} from '../util.js';
 import * as api from '../api.js';
-import {tarjeta, ventana, avisoError} from '../ui.js';
+import {tarjeta, ventana, avisoError, aviso} from '../ui.js';
 
 const FASES = [
   ['captado', 'Captado', '🚪'], ['visita', 'Visita', '🤝'], ['proyecto', 'Proyecto', '📐'], ['firmado', 'Firmado', '✍️'],
@@ -128,7 +128,7 @@ export function tarjetaInstalacion(c, ops, {abrir} = {}) {
     pago,
     o ? h('div', {estilo: {display: 'grid', gridTemplateColumns: 'minmax(0, 3fr) minmax(0, 2fr)', gap: '18px', marginTop: '12px'}, class: 'doble-instalacion'},
       h('div', h('h4', {estilo: {margin: '0 0 8px'}}, 'Qué lleva'), equipos(o), docs),
-      h('div', h('h4', {estilo: {margin: '0 0 8px'}}, 'Obra, trámites y avisos'), der))
+      h('div', h('h4', {estilo: {margin: '0 0 8px'}}, 'Obra, trámites y avisos'), der, bloqueApp(c)))
       : h('div', {estilo: {marginTop: '12px'}}, docs, der)),
     {acciones: o ? [h('button.btn.mini', {onclick: () => abrir && abrir('instalaciones')}, 'Ver la instalación')] : []});
 
@@ -167,6 +167,33 @@ export function tarjetaInstalacion(c, ops, {abrir} = {}) {
       !obras.length && !prox.length && !tram.length && !inc.length && !(o && txt(o.fecha_prevista_instalacion)) ? h('p.nota', 'Sin obra, trámites ni incidencias todavía.') : null));
   }).catch(e => poner(der, h('p.nota', e.message || 'No se ha podido cargar la obra.')));
   return t;
+}
+
+/* ---------- su app de cliente (21/11/2026) ----------
+   Si tiene acceso, cuándo entró, preparar la bienvenida (la aprueban Nando o Rubén antes de
+   que salga) y, solo dirección, activar la parte de fin de obra (conformidad, reseña y
+   recomendar a un vecino). */
+function bloqueApp(c) {
+  const caja = h('div', {estilo: {marginTop: '14px'}});
+  const pinta = () => api.pedir('estadoAppCliente', {cliente_id: c.id}).then(r => {
+    const cu = r.cuenta;
+    const estado = cu && cu.activa ? '✅ Entra en su app' + (cu.ultimo_acceso ? ' · última vez ' + fechaCorta(cu.ultimo_acceso) : '')
+      : r.bienvenida === 'pendiente' ? '⏳ Bienvenida preparada: falta que la aprueben Nando o Rubén'
+      : r.bienvenida === 'aprobado' ? '⏳ Bienvenida aprobada por WhatsApp: falta marcarla enviada'
+      : r.bienvenida === 'enviado' ? '✉️ Bienvenida enviada · aún no ha creado su clave'
+      : r.firmado ? 'Todavía no tiene acceso a su app' : 'Tendrá su app cuando firme el proyecto';
+    const fin = r.conformidad ? '✍️ Conformidad firmada ' + fechaCorta(r.conformidad.fecha) + (r.conformidad.valoracion ? ' · ' + '★'.repeat(r.conformidad.valoracion) : '') : '';
+    poner(caja, h('h4', {estilo: {margin: '0 0 8px'}}, '📱 Su app de cliente'),
+      fila('📱', estado, fin),
+      h('div', {estilo: {display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '6px'}},
+        r.firmado && !(cu && cu.activa) && !['pendiente', 'aprobado'].includes(r.bienvenida) ? h('button.btn.mini', {onclick: () => api.pedir('prepararAccesoCliente', {cliente_id: c.id})
+          .then(x => { aviso(x.aviso || 'Preparado', 'ok'); pinta(); }).catch(avisoError)}, 'Preparar acceso a su app') : null,
+        api.esDireccion() && r.firmado ? h('button.btn.mini' + (r.fin_activo ? '' : '.primario'), {title: 'Solo dirección. Al activarlo, el cliente ve en su app la conformidad de fin de obra, la reseña en Google y «recomienda a un vecino».',
+          onclick: () => api.pedir('activarFinApp', {cliente_id: c.id, activo: !r.fin_activo}).then(() => { aviso(r.fin_activo ? 'Fin de obra quitado de su app' : 'Fin de obra activado en su app', 'ok'); pinta(); }).catch(avisoError)},
+          r.fin_activo ? '✅ Fin de obra activo en su app · quitar' : '🏁 Activar fin de obra en su app') : null));
+  }).catch(() => {});
+  pinta();
+  return caja;
 }
 
 /** Manuales: los que ha subido la obra (manual, garantía, certificado, legalización) y las fichas técnicas de los equipos. */

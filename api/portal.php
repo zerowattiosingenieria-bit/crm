@@ -67,7 +67,8 @@ const PORTAL_FASES = [
 ];
 /* Las acciones que cambian algo: en «Ver como» (vista previa del superadmin) no se dejan. */
 const PORTAL_ESCRIBEN = ['portalVisitaHecha', 'portalLlegada', 'portalFase', 'portalAviso', 'portalTerminar', 'portalNota', 'portalSubir',
-                         'portalTicket', 'portalMensaje', 'portalCambiarClave'];
+                         'portalTicket', 'portalMensaje', 'portalCambiarClave', 'portalSubirCliente', 'portalAceptarFecha', 'portalConformidad',
+                         'portalRecomendar', 'portalSubirFactura', 'portalMaterial', 'portalSubirDocContrata'];
 /* Las direcciones que se dan (redirigen a crm.zerowattios.com/clientes/ y /contratas/). */
 const PORTAL_WEB = ['cliente' => 'https://clientes.zerowattios.com/', 'contrata' => 'https://contratas.zerowattios.com/'];
 /* Donde vive de verdad cada app (para «Ver como», que no puede perder el #). */
@@ -85,7 +86,10 @@ function atenderPortal_(array $p, string $accion): array {
     'portalLlegada' => 'portalLlegada_', 'portalFase' => 'portalFase_', 'portalAviso' => 'portalAviso_',
     'portalTerminar' => 'portalTerminar_', 'portalNota' => 'portalNota_', 'portalSubir' => 'portalSubir_',
     'portalDescargar' => 'portalDescargar_', 'portalTicket' => 'portalTicket_', 'portalMensaje' => 'portalMensaje_',
-    'portalCambiarClave' => 'portalCambiarClave_', 'portalVisitaHecha' => 'portalVisitaHecha_'
+    'portalCambiarClave' => 'portalCambiarClave_', 'portalVisitaHecha' => 'portalVisitaHecha_',
+    'portalSubirCliente' => 'portalSubirCliente_', 'portalAceptarFecha' => 'portalAceptarFecha_', 'portalConformidad' => 'portalConformidad_',
+    'portalRecomendar' => 'portalRecomendar_', 'portalSubirFactura' => 'portalSubirFactura_', 'portalMaterial' => 'portalMaterial_',
+    'portalDocsContrata' => 'portalDocsContrata_', 'portalSubirDocContrata' => 'portalSubirDocContrata_'
   ];
   $fn = $mapa[$accion] ?? null;
   if (!$fn) return ['ok' => false, 'error' => 'Acción desconocida.'];
@@ -345,7 +349,7 @@ function portalInicioCliente_(array $c): array {
     'facturas' => array_map(fn($f) => ['id' => $f['id'], 'numero' => $f['numero'], 'fecha' => $f['fecha_emision'], 'concepto' => $f['concepto'],
       'total' => num_($f['total']), 'estado' => normal_($f['estado']), 'descargable' => portalIdDrive_($f['url'] ?? '') !== ''], $facturas),
     'tickets' => array_map(fn($t) => portalTicketPublico_($t, 'cliente'), portalOrdenTickets_($tickets))
-  ];
+  ] + (function_exists('portalExtrasCliente_') ? portalExtrasCliente_($c, $ops) : []);
 }
 
 function portalTipoOp_(array $op): string {
@@ -480,7 +484,7 @@ function portalInicioContrata_(array $c): array {
   $tickets = filtrar_('TICKETS', fn($t) => mismo_($t['contrata_id'], $c['id']));
   return ['obras' => $lista, 'avisos' => $avisos, 'visitas' => $visitas,
           'tickets' => array_map(fn($t) => portalTicketPublico_($t, 'contrata'), portalOrdenTickets_($tickets)),
-          'sla' => PORTAL_SLA];
+          'sla' => PORTAL_SLA, 'docs_faltan' => function_exists('docsQueFaltan_') ? docsQueFaltan_($c['id']) : []];
 }
 
 function portalObraResumen_(array $o, array $cli, array $op): array {
@@ -584,6 +588,8 @@ function portalObraCompleta_(array $o, string $para): array {
     'clases' => PORTAL_CLASES,
     'fichas' => array_values(array_filter(portalManuales_($op ? [$op] : []), fn($m) => portalFichaDeEspecialidad_($m['clave'], normal_($o['especialidad']))))
   ];
+  if (function_exists('portalMaterialObra_')) $r['material'] = portalMaterialObra_($o, $op);
+  if ($para === 'contrata' && function_exists('portalFacturasObra_')) $r['facturas'] = portalFacturasObra_([], $o);
   if ($para === 'zw') { $r['avisos_extra'] = deJson_($o['avisos'] ?? '', []) ?: []; $r['notas_internas'] = txt_($o['notas_internas'] ?? ''); $r['salida'] = txt_($o['salida']); }
   return $r;
 }

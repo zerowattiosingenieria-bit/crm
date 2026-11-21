@@ -7,16 +7,20 @@ import * as api from '../api.js';
 import {tarjeta} from '../ui.js';
 import {vistaHoy} from './hoy.js';
 import {vistaPanel} from './panel.js';
+import {tarjetaMensajes} from './mensajes.js';
 
 export async function vistaInicio(ctx) {
-  const [hoy, panel, al] = await Promise.all([vistaHoy(ctx), vistaPanel({...ctx, enInicio: true}), api.pedir('alertas').catch(() => ({alertas: []}))]);
+  const [hoy, panel, al, msg] = await Promise.all([vistaHoy(ctx), vistaPanel({...ctx, enInicio: true}), api.pedir('alertas').catch(() => ({alertas: []})),
+    (api.esDireccion() || ['U-000001', 'U-000002', 'U-000003', 'U-000004'].includes((api.estado.usuario || {}).id) ? api.pedir('mensajesPendientes').catch(() => null) : null)]);
   /* Avisos de seguimiento de los clientes, arriba y pulsables (llevan a la ficha). */
   const L = (al.alertas || []);
   const avisos = L.length ? tarjeta('Avisos (' + L.length + ')', h('ul.lista-avisos', L.slice(0, 25).map(a =>
     h('li', a.cliente_id ? {onclick: () => ctx.ir('cliente/' + a.cliente_id), estilo: {cursor: 'pointer'}, title: 'Abrir la ficha'} : null,
       h('span.nivel.' + a.nivel), h('span', a.texto)))),
     {subtitulo: 'Pulsa uno para abrir la ficha del cliente' + (L.length > 25 ? ' · se ven los 25 más urgentes' : '')}) : null;
-  return h('div', hoy, avisos,
+  /* Solo Nando y Rubén (y superadmin) reciben la lista: a los demás el servidor se la niega. */
+  const mensajes = msg && msg.ok && (msg.mensajes || []).length ? tarjetaMensajes(ctx, msg.mensajes) : null;
+  return h('div', mensajes, hoy, avisos,
     h('h2', {estilo: {margin: '28px 0 6px', paddingTop: '18px', borderTop: '2px solid var(--borde, #e5e5e5)'}}, '📊 Cifras y seguimiento'),
     panel);
 }

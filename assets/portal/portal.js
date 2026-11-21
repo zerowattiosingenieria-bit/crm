@@ -398,11 +398,11 @@
   function pintar() {
     if (!D) return arrancar();
     const {v, id} = ruta();
-    const enObra = !ES_CLIENTE && (v === 'obra' || v === 'visita');
+    const enObra = !ES_CLIENTE && (v === 'obra' || v === 'visita' || v === 'docs');
     const nombre = ES_CLIENTE ? (D.cliente.nombre || D.cuenta.nombre) : (D.cuenta.empresa || D.cuenta.nombre);
     const cab = h('header.cabecera',
       enObra ? h('button.atras', {onclick: () => ir('inicio'), 'aria-label': 'Volver'}, '‹') : h('img.logo', {src: '/assets/img/logo-dark-h96.png', alt: 'ZERO WATTIOS'}),
-      enObra ? h('.tit', v === 'visita' ? 'Visita' : 'Ficha de obra') : h('.tit'),
+      enObra ? h('.tit', v === 'visita' ? 'Visita' : v === 'docs' ? 'Mi documentación' : 'Ficha de obra') : h('.tit'),
       h('button.yo', {onclick: menuYo, 'aria-label': 'Mi cuenta'}, inicialesDe(nombre)));
     const main = h('main');
     const nav = h('nav.pestanas', PESTANAS.map(([k, et, ic]) => {
@@ -424,6 +424,7 @@
       else if (v === 'visita' && id) vistaVisita(main, id);
       else if (v === 'avisos') vistaAvisos(main);
       else if (v === 'tickets') vistaAyuda(main, id);
+      else if (v === 'docs') vistaDocsContrata(main);
       else vistaObras(main);
     }
   }
@@ -517,6 +518,9 @@
       fechaInst,
       h('.camino', pasos.map(p => h('.paso.' + p.estado, h('.bola', ico(p.estado === 'hecho' && p.clave !== 'fin' ? 'check' : ICONO_PASO[p.clave])), h('span', CORTO_PASO[p.clave] || p.titulo))))));
 
+    necesitamosCliente(main);
+    produccionCliente(main);
+
     /* 2. El avance de la obra, si está en marcha */
     const obras = inst.obras || [];
     if (obras.length && obras.some(o => o.estado !== 'asignada')) {
@@ -545,9 +549,185 @@
     if ((inst.equipos || []).length) main.appendChild(h('.tarjeta', h('h2', 'Tu equipo'), h('.equipos', inst.equipos.map(e =>
       h('.equipo', h('.ic', ico(ICONO_EQUIPO[e.clave] || iconoPorNombre(e.equipo))), h('div', h('b', e.equipo), h('small', e.detalle)), h('.cant', e.cantidad > 1 ? '×' + e.cantidad : ''))))));
 
+    finDeObraCliente(main);
+    ayudasCliente(main);
+    financiacionCliente(main);
+
     main.appendChild(h('.tarjeta', h('h2', '¿Necesitas algo?'), h('p.nota', {estilo: {marginTop: 0}}, 'Escríbenos desde aquí y te respondemos en el plazo indicado.'),
       h('button.btn.lima.ancho', {onclick: () => ir('ayuda')}, ico('chat'), 'Abrir una consulta')));
   }
+  /* ---------- Más cosas en la app del cliente (21/11/2026) ---------- */
+  const kwh = n => (Math.round((Number(n) || 0) * 10) / 10).toLocaleString('es-ES') + ' kWh';
+  async function subirUnoCliente(que, titulo) {
+    const fs = await elegirArchivos({aceptar: 'application/pdf,image/*', camara: que === 'contador'});
+    if (!fs.length) return;
+    const fin = cargandoGrande('Subiendo…');
+    try { const a = await prepararArchivo(fs[0]); const r = await pedir('portalSubirCliente', Object.assign({que}, a)); fin();
+      if (!r.ok) return toast(r.error, 'error'); toast('¡Gracias! Ya lo tenemos: ' + titulo.toLowerCase(), 'ok'); await refrescar(); pintar(); }
+    catch (e) { fin(); toast(e.message, 'error'); }
+  }
+  function necesitamosCliente(main) {
+    const l = D.necesitamos || [];
+    if (!l.length) return;
+    main.appendChild(h('.tarjeta', {estilo: {borderLeft: '5px solid var(--lima)'}}, h('h2', 'Lo que necesitamos de ti'),
+      h('p.nota', {estilo: {marginTop: 0}}, 'Con esto adelantamos los trámites. Solo tienes que hacer una foto o subir el archivo.'),
+      h('.docs', l.map(n => n.clave === 'fecha'
+        ? h('.doc', {estilo: {cursor: 'default'}}, h('.ic', ico('reloj')), h('div', h('b', 'Instalación prevista el ' + fechaLarga(n.fecha)), h('small', '¿Te viene bien ese día?')),
+          previa ? null : h('div', {estilo: {display: 'flex', gap: '6px'}},
+            h('button.btn.chico.lima', {onclick: async () => { try { const r = await pedir('portalAceptarFecha', {operacion_id: n.operacion_id, acepta: true}); if (!r.ok) return toast(r.error, 'error'); toast('¡Perfecto! Fecha confirmada', 'ok'); await refrescar(); pintar(); } catch (e) { toast(e.message, 'error'); } }}, 'Sí'),
+            h('button.btn.chico.borde', {onclick: () => {
+              const nota = h('textarea', {placeholder: 'Cuéntanos qué días te vienen mejor'});
+              const cerrar = hoja('No me viene bien ese día', h('.form', h('label.campo', h('span', '¿Qué días te vienen bien?'), nota),
+                h('button.btn.lima.ancho', {onclick: async () => { try { const r = await pedir('portalAceptarFecha', {operacion_id: n.operacion_id, acepta: false, nota: nota.value}); if (!r.ok) return toast(r.error, 'error'); cerrar(); toast('Gracias, te llamamos para buscar otro día', 'ok'); await refrescar(); pintar(); } catch (e) { toast(e.message, 'error'); } }}, 'Enviar')));
+            }}, 'No')))
+        : h('button.doc', {onclick: () => previa ? null : subirUnoCliente(n.clave, n.titulo)}, h('.ic', ico(n.clave === 'contador' ? 'camara' : 'subir')),
+          h('div', h('b', n.titulo), h('small', n.clave === 'contador' ? 'Haz la foto con el móvil' : 'Foto o PDF')), h('span.baja', ico('mas')))))));
+  }
+  function produccionCliente(main) {
+    const m = D.monitor;
+    if (!m) return;
+    const dias = m.dias || [];
+    const max = Math.max(1, ...dias.map(d => d.kwh || 0));
+    main.appendChild(h('.tarjeta', h('h2', 'Tu producción', h('small.nota', {estilo: {fontWeight: 400, marginLeft: '8px'}}, 'actualizado ' + fecha(m.fecha))),
+      h('div', {estilo: {display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: '10px', margin: '6px 0 14px'}},
+        [['Hoy', kwh(m.hoy)], ['Este mes', kwh(m.mes)], ['Ahorro estimado este mes', eur(m.ahorro_mes_est)], m.bateria != null ? ['Batería', Math.round(m.bateria) + ' %'] : ['CO₂ evitado', (m.co2_kg || 0).toLocaleString('es-ES') + ' kg']]
+          .map(([t, v]) => h('div', {estilo: {background: '#f4f6ef', borderRadius: '12px', padding: '10px 12px'}}, h('small.nota', t), h('div', {estilo: {fontSize: '20px', fontWeight: 800}}, v)))),
+      dias.length ? h('div', {estilo: {display: 'flex', alignItems: 'flex-end', gap: '4px', height: '90px'}, title: 'Últimos 14 días'},
+        dias.map(d => h('div', {title: fecha(d.fecha) + ': ' + kwh(d.kwh), estilo: {flex: 1, background: 'var(--lima)', borderRadius: '4px 4px 0 0', height: Math.max(3, (d.kwh || 0) / max * 100) + '%'}}))) : null,
+      dias.length ? h('small.nota', 'Lo que han producido tus placas los últimos 14 días') : null,
+      h('p.nota', {estilo: {marginBottom: 0}}, 'Total desde que se instaló: ' + kwh(m.total) + '. El ahorro es una estimación con el precio medio de la luz.')));
+  }
+  function ayudasCliente(main) {
+    const l = D.ayudas || [];
+    if (!l.length) return;
+    main.appendChild(h('.tarjeta', h('h2', 'Tus ayudas paso a paso'), h('.linea-tiempo', l.map(a => h('.lt.' + (a.hecho ? 'hecho' : a.estado === 'info' ? 'pendiente' : 'ahora'),
+      h('.marca', ico(a.hecho ? 'check' : 'euro')), h('div', h('h3', a.titulo), h('p', a.texto)))))));
+  }
+  function financiacionCliente(main) {
+    const l = D.financiacion || [];
+    if (!l.length) return;
+    main.appendChild(h('.tarjeta', h('h2', 'Tu financiación'), l.map(f => h('div', {estilo: {display: 'grid', gap: '6px'}},
+      h('.lista-mini', f.cuota ? h('div', h('span', 'Cuota'), h('b', f.cuota.toLocaleString('es-ES', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' €/mes')) : null,
+        f.meses ? h('div', h('span', 'Plazo'), h('b', Math.round(f.meses / 12) + ' años')) : null, f.financiera ? h('div', h('span', 'Con'), h('b', f.financiera)) : null),
+      h('p.nota', {estilo: {margin: 0}}, f.texto)))));
+  }
+  function finDeObraCliente(main) {
+    const f = D.fin;
+    if (!f || !f.activo) return;
+    const caja = h('.tarjeta', h('h2', '¡Tu instalación está lista!'));
+    if (f.conformidad) caja.append(h('p', {estilo: {marginTop: 0}}, '✅ Firmaste la conformidad el ' + fecha(f.conformidad.fecha) + '. ¡Gracias!'));
+    else if (!previa) caja.append(h('p.nota', {estilo: {marginTop: 0}}, 'Revisa que todo está a tu gusto y firma la conformidad de fin de obra.'),
+      h('button.btn.lima.ancho', {onclick: firmarConformidad}, ico('firma'), 'Firmar la conformidad'));
+    caja.append(h('div', {estilo: {display: 'grid', gap: '8px', marginTop: '12px'}},
+      h('a.btn.borde.ancho', {href: f.resenas, target: '_blank', rel: 'noopener'}, '⭐ Déjanos tu opinión en Google'),
+      previa ? null : h('button.btn.borde.ancho', {onclick: recomendar}, ico('usuario'), 'Recomiéndanos a un vecino o amigo')));
+    main.appendChild(caja);
+  }
+  function firmarConformidad() {
+    const c = document.createElement('canvas'); c.width = 600; c.height = 220;
+    Object.assign(c.style, {width: '100%', height: '160px', background: '#fff', border: '1px solid #d8dbd0', borderRadius: '12px', touchAction: 'none'});
+    const x = c.getContext('2d'); x.lineWidth = 3; x.lineCap = 'round'; x.strokeStyle = '#111';
+    let pinta = false, hay = false;
+    const pos = e => { const r = c.getBoundingClientRect(); return [(e.clientX - r.left) * c.width / r.width, (e.clientY - r.top) * c.height / r.height]; };
+    c.addEventListener('pointerdown', e => { pinta = true; hay = true; x.beginPath(); x.moveTo(...pos(e)); c.setPointerCapture(e.pointerId); });
+    c.addEventListener('pointermove', e => { if (!pinta) return; x.lineTo(...pos(e)); x.stroke(); });
+    c.addEventListener('pointerup', () => { pinta = false; });
+    let val = 5;
+    const estrellas = h('div', {estilo: {fontSize: '30px', display: 'flex', gap: '4px'}});
+    const pintaE = () => { estrellas.innerHTML = ''; for (let i = 1; i <= 5; i++) estrellas.appendChild(h('button', {type: 'button', estilo: {background: 'none', border: 0, fontSize: '30px', cursor: 'pointer', opacity: i <= val ? 1 : 0.25}, onclick: () => { val = i; pintaE(); }}, '★')); };
+    pintaE();
+    const com = h('textarea', {placeholder: 'Algo que quieras contarnos (opcional)'});
+    const cerrar = hoja('Conformidad de fin de obra', h('.form',
+      h('p.nota', {estilo: {margin: 0}}, 'Con tu firma confirmas que la instalación se ha terminado y que funciona correctamente.'),
+      h('label.campo', h('span', '¿Qué nota nos pones?'), estrellas), h('label.campo', h('span', 'Comentario'), com),
+      h('label.campo', h('span', 'Firma con el dedo'), c), h('button.btn.borde.chico', {type: 'button', onclick: () => { x.clearRect(0, 0, c.width, c.height); hay = false; }}, 'Borrar firma'),
+      h('button.btn.lima.ancho', {onclick: async () => {
+        if (!hay) return toast('Falta tu firma', 'error');
+        const fin = cargandoGrande('Guardando…');
+        try { const r = await pedir('portalConformidad', {firma: c.toDataURL('image/png').split(',')[1], valoracion: val, comentario: com.value}); fin();
+          if (!r.ok) return toast(r.error, 'error'); cerrar(); toast('¡Gracias! Conformidad firmada', 'ok'); await refrescar(); pintar(); }
+        catch (e) { fin(); toast(e.message, 'error'); }
+      }}, ico('firma'), 'Firmar')));
+  }
+  function recomendar() {
+    const n = h('input', {autocomplete: 'off'}), t = h('input', {type: 'tel'}), d = h('input'), m = h('input'), no = h('textarea', {placeholder: 'Ej.: le interesa la aerotermia'});
+    const cerrar = hoja('Recomiéndanos', h('.form', h('p.nota', {estilo: {margin: 0}}, 'Le llamaremos de tu parte para contarle cómo funciona, sin compromiso.'),
+      h('label.campo', h('span', 'Nombre'), n), h('label.campo', h('span', 'Teléfono'), t), h('label.campo', h('span', 'Dirección (opcional)'), d),
+      h('label.campo', h('span', 'Municipio (opcional)'), m), h('label.campo', h('span', 'Nota'), no),
+      h('button.btn.lima.ancho', {onclick: async () => {
+        try { const r = await pedir('portalRecomendar', {nombre: n.value, telefono: t.value, direccion: d.value, municipio: m.value, nota: no.value});
+          if (!r.ok) return toast(r.error, 'error'); cerrar(); toast('¡Gracias por recomendarnos!', 'ok'); } catch (e) { toast(e.message, 'error'); }
+      }}, 'Enviar')));
+  }
+
+  /* ---------- Más cosas en la app del instalador (21/11/2026) ---------- */
+  function avisoDocsContrata(main) {
+    const f = D.docs_faltan || [];
+    main.appendChild(h('button.tarjeta', {onclick: () => ir('docs'), estilo: {display: 'flex', gap: '12px', alignItems: 'center', width: '100%', textAlign: 'left', cursor: 'pointer', borderLeft: '5px solid ' + (f.length ? '#e0a100' : 'var(--lima)')}},
+      h('div', {estilo: {fontSize: '26px'}}, f.length ? '📄' : '✅'),
+      h('div', {estilo: {flex: 1}}, h('b', 'Mi documentación'), h('div.nota', f.length ? 'Te falta: ' + f.map(x => x.nombre + (x.motivo !== 'falta' ? ' (' + x.motivo + ')' : '')).join(', ') : 'Todo al día. Gracias.')),
+      h('span', '›')));
+  }
+  async function vistaDocsContrata(main) {
+    main.appendChild(h('.hola', h('h1', 'Mi documentación'), h('p', 'Para asignarte obras necesitamos tener al día tu seguro, el REA, la formación PRL y los TC2.')));
+    const caja = h('div'); main.appendChild(caja);
+    let r; try { r = await pedir('portalDocsContrata'); } catch (e) { return toast(e.message, 'error'); }
+    if (!r.ok) return toast(r.error, 'error');
+    const EST = {pendiente: ['Lo está revisando Zero Wattios', 'aviso'], valido: ['Válido', 'ok'], rechazado: ['Rechazado', 'mal']};
+    if (r.faltan.length) caja.appendChild(h('.tarjeta', {estilo: {borderLeft: '5px solid #e0a100'}}, h('h2', 'Te falta'), h('.lista-mini', r.faltan.map(x => h('div', h('span', x.nombre), h('b', x.motivo))))));
+    if (!previa) {
+      const tipo = h('select', Object.entries(r.tipos).map(([k, v]) => h('option', {value: k}, v)));
+      if (r.faltan.length) tipo.value = r.faltan[0].tipo;
+      const cad = h('input', {type: 'date'});
+      const b = h('button.btn.lima.ancho', {type: 'submit'}, ico('subir'), 'Elegir archivo y subir');
+      caja.appendChild(h('form.tarjeta.form', {onsubmit: async e => {
+        e.preventDefault();
+        const fs = await elegirArchivos({aceptar: 'application/pdf,image/*'}); if (!fs.length) return;
+        b.disabled = true; const fin = cargandoGrande('Subiendo…');
+        try { const a = await prepararArchivo(fs[0]); const x = await pedir('portalSubirDocContrata', Object.assign({tipo: tipo.value, caduca: cad.value}, a)); fin();
+          if (!x.ok) return toast(x.error, 'error'); toast('Subido. Zero Wattios lo revisa.', 'ok'); await refrescar(); pintar(); }
+        catch (er) { fin(); toast(er.message, 'error'); } finally { b.disabled = false; }
+      }}, h('h2', 'Subir un documento'), h('label.campo', h('span', 'Qué es'), tipo), h('label.campo', h('span', 'Caduca el (si tiene fecha)'), cad), b));
+    }
+    caja.appendChild(h('.tarjeta', h('h2', 'Lo que has subido'), r.docs.length ? h('.docs', r.docs.map(d => h('.doc', {estilo: {cursor: 'default'}}, h('.ic', ico('doc')),
+      h('div', h('b', r.tipos[d.tipo] || d.tipo), h('small', 'Subido ' + fecha(d.subido) + (d.caduca ? ' · caduca ' + fecha(d.caduca) : '') + (d.notas ? ' · ' + d.notas : ''))),
+      h('span.chip.' + (EST[d.estado] || ['', ''])[1], (EST[d.estado] || [d.estado])[0])))) : h('p.nota', {estilo: {margin: 0}}, 'Todavía no has subido nada.')));
+  }
+  function materialObra(main, o) {
+    const m = o.material; if (!m) return;
+    const est = m.estado;
+    main.appendChild(h('.tarjeta', h('h2', 'Material de la obra'),
+      (m.lista || []).length ? h('.lista-mini', m.lista.map(e => h('div', h('span', e.equipo + (e.detalle ? ' · ' + e.detalle : '')), h('b', '×' + (e.cantidad || 1))))) : h('p.nota', {estilo: {marginTop: 0}}, 'Zero Wattios completará la lista.'),
+      est ? h('p', {estilo: {marginBottom: 0}}, h('span.chip.' + (est.estado === 'recibido' ? 'ok' : 'mal'), est.estado === 'recibido' ? 'Recibido completo' : 'Con incidencia'), ' ', fecha(est.fecha, true) + (est.nota ? ' · ' + est.nota : '')) : null,
+      previa || o.estado === 'validada' ? null : h('div', {estilo: {display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '12px'}},
+        h('button.btn.chico.lima', {onclick: () => accionObra('portalMaterial', {estado: 'recibido'}, 'Material recibido')}, ico('check'), 'Está todo'),
+        h('button.btn.chico.borde', {onclick: () => {
+          const nota = h('textarea', {placeholder: 'Qué falta o qué ha llegado roto'});
+          const cerrar = hoja('Problema con el material', h('.form', h('label.campo', h('span', 'Cuéntanos'), nota),
+            h('p.nota', {estilo: {margin: 0}}, 'Si puedes, sube fotos en «Otro documento» o en las fases.'),
+            h('button.btn.lima.ancho', {onclick: async () => { cerrar(); await accionObra('portalMaterial', {estado: 'incidencia', nota: nota.value}, 'Avisado a Zero Wattios'); }}, 'Avisar')));
+        }}, ico('alerta'), 'Falta o roto'))));
+  }
+  function facturaObra(main, o) {
+    const fs = o.facturas || [];
+    const caja = h('.tarjeta', h('h2', 'Mi factura de esta obra'));
+    if (fs.length) caja.append(h('.lista-mini', fs.map(f => h('div', h('span', f.numero + ' · ' + fecha(f.fecha)), h('b', f.total.toLocaleString('es-ES', {minimumFractionDigits: 2}) + ' € ' + (f.pagada ? '· pagada' : '· pendiente'))))));
+    if (!previa && ['terminada', 'validada', 'en_curso'].includes(o.estado)) {
+      const num = h('input', {placeholder: 'Ej.: 2026-118'}), fec = h('input', {type: 'date', value: hoyISO()}), tot = h('input', {type: 'number', step: '0.01', inputmode: 'decimal'});
+      const b = h('button.btn.negro.ancho', {type: 'submit'}, ico('subir'), 'Adjuntar PDF o foto y enviar');
+      caja.append(h('form.form', {estilo: {marginTop: fs.length ? '12px' : 0}, onsubmit: async e => {
+        e.preventDefault();
+        if (!txt(num.value) || !(Number(tot.value) > 0)) return toast('Pon el número y el total con IVA', 'error');
+        const a0 = await elegirArchivos({aceptar: 'application/pdf,image/*'}); if (!a0.length) return;
+        b.disabled = true; const fin = cargandoGrande('Subiendo la factura…');
+        try { const a = await prepararArchivo(a0[0]); const r = await pedir('portalSubirFactura', Object.assign({obra_id: o.id, numero: num.value, fecha: fec.value, total: tot.value}, a)); fin();
+          if (!r.ok) return toast(r.error, 'error'); toast('Factura recibida', 'ok'); obraAbierta = null; pintar(); }
+        catch (er) { fin(); toast(er.message, 'error'); } finally { b.disabled = false; }
+      }}, h('label.campo', h('span', 'Número de factura'), num), h('label.campo', h('span', 'Fecha'), fec), h('label.campo', h('span', 'Total con IVA (€)'), tot), b));
+    } else if (!fs.length) caja.append(h('p.nota', {estilo: {margin: 0}}, 'Cuando empieces la obra podrás subir aquí tu factura.'));
+    main.appendChild(caja);
+  }
+
   function iconoPorNombre(n) {
     n = txt(n).toLowerCase();
     if (/panel|placa/.test(n)) return 'panel'; if (/inversor/.test(n)) return 'inversor'; if (/bater/.test(n)) return 'bateria';
@@ -702,6 +882,7 @@
     const pend = (D.avisos || []).filter(a => a.vencido || a.fecha <= hoyISO());
     main.appendChild(h('.hola', h('h1', 'Hola, ' + (D.cuenta.empresa || D.cuenta.nombre || '')),
       h('p', obras.filter(o => o.estado === 'en_curso' || o.estado === 'asignada').length + ' obras activas · ' + fechaLarga(hoyISO()))));
+    avisoDocsContrata(main);
     if (pend.length) main.appendChild(h('.seccion', h('h2', 'Para hoy'), h('.avisos', pend.slice(0, 4).map(a => tarjetaAviso(a, true)))));
     const visitas = (D.visitas || []).filter(x => x.estado === 'pendiente');
     if (visitas.length) main.appendChild(h('.seccion', h('h2', 'Próximas visitas', h('small', visitas.length + '')),
@@ -833,6 +1014,8 @@
         : h('p.nota', 'Zero Wattios completará aquí los equipos.'),
       o.tejado ? h('p.nota', {estilo: {marginBottom: 0}}, 'Tejado: ' + o.tejado) : null));
 
+    materialObra(main, o);
+
     /* Antes de la obra: cómo es la casa y dónde va cada cosa (fotos de la visita
        del comercial y las que añade Zero Wattios con su explicación). */
     const fotosAntes = (o.archivos || []).filter(a => a.clase === 'foto' || a.clase === 'foto_antes')
@@ -892,6 +1075,8 @@
         h('button.btn.chico.negro', {onclick: () => subirDoc('certificado')}, ico('subir'), 'Certificado'),
         h('button.btn.chico.borde', {onclick: () => subirDoc('documento_obra'), estilo: {gridColumn: '1 / -1'}}, ico('subir'), 'Otro documento (albarán, esquema…)')) : null,
       propios.length ? h('.docs', propios.map(d => filaDoc('doc', d.nombre, d.clase_nombre + ' · ' + fecha(d.subido, true), () => abrir({id: d.id}, d.nombre)))) : h('p.nota', {estilo: {margin: 0}}, 'Aún no has subido documentos.')));
+
+    facturaObra(main, o);
 
     if (deZW.length || (o.fichas || []).length) main.appendChild(h('.tarjeta', h('h2', 'De Zero Wattios para esta obra'), h('p.nota', {estilo: {marginTop: 0}}, 'Proyecto, planos, esquemas, indicaciones y fichas técnicas. Tenlo en cuenta antes de empezar.'), h('.docs',
       deZW.map(d => filaDoc(d.clase === 'proyecto' ? 'lista' : (d.mime || '').startsWith('image/') ? 'foto' : 'doc', d.notas || d.nombre, (d.clase === 'proyecto' ? 'Proyecto técnico' : 'Para el instalador') + (d.notas ? ' · ' + d.nombre : ''), () => abrir({id: d.id}, d.nombre))),

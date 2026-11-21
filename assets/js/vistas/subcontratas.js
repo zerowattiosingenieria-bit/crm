@@ -36,6 +36,48 @@ async function verArchivo(id, nombre) {
   } catch (e) { avisoError(e); }
 }
 
+/* Ficha de cada instalador (21/11/2026): cómo cumple y su documentación (seguro, REA, PRL,
+   TC2) con caducidad. Ellos la suben desde su app; si falta o caduca, el CRM les prepara la
+   petición, que Nando o Rubén aprueban en Inicio antes de que salga. */
+function fichasInstaladores(r, recargar) {
+  const pct = v => v == null ? '—' : v + ' %';
+  const EST = {pendiente: ['Por revisar', 'aviso'], valido: ['Válido', 'bien'], rechazado: ['Rechazado', 'mal']};
+  const ver = async d => {
+    try { const x = await api.pedir('verDocContrata', {id: d.id}); const bin = atob(x.datos || ''); const b = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+      const url = URL.createObjectURL(new Blob([b], {type: x.mime || 'application/pdf'}));
+      window.open(url, '_blank', 'noopener'); setTimeout(() => URL.revokeObjectURL(url), 60000); } catch (e) { avisoError(e); }
+  };
+  const validar = (d, estado) => {
+    const cad = h('input', {type: 'date', value: txt(d.caduca)}), nota = h('input', {placeholder: estado === 'rechazado' ? 'Por qué (lo verá el instalador)' : 'Opcional'});
+    const v = ventana({titulo: (estado === 'valido' ? 'Validar ' : 'Rechazar ') + (r.tipos[d.tipo] || d.tipo), cuerpo: h('div', {estilo: {display: 'grid', gap: '10px'}},
+      estado === 'valido' ? h('label.campo', h('span', 'Caduca el'), cad) : null, h('label.campo', h('span', 'Nota'), nota)),
+      acciones: [h('button.btn.primario', {onclick: async () => { try { await api.pedir('validarDocContrata', {id: d.id, estado, caduca: cad.value, notas: nota.value}); v.cerrar(); aviso('Hecho', 'ok'); recargar(); } catch (e) { avisoError(e); } }}, estado === 'valido' ? 'Validar' : 'Rechazar')]});
+  };
+  return h('div', {estilo: {display: 'grid', gap: '14px', marginTop: '14px'}}, (r.contratas || []).map(c => {
+    const s = c.stats || {};
+    return tarjeta('🧰 ' + c.empresa + (c.especialidad ? ' · ' + (ESP[c.especialidad] || c.especialidad) : ''), h('div',
+      kpis(kpi('Obras', s.obras || 0, (s.terminadas || 0) + ' terminadas'),
+        kpi('Puntualidad', pct(s.puntualidad), 'llega el día previsto', {estado: s.puntualidad != null && s.puntualidad < 80 ? 'mal' : null}),
+        kpi('Responde a tiempo', pct(s.respuesta_en_plazo), (s.tickets || 0) + ' tickets', {estado: s.respuesta_en_plazo != null && s.respuesta_en_plazo < 80 ? 'mal' : null}),
+        kpi('Incidencias', s.incidencias || 0, 'en sus obras', {estado: s.incidencias ? 'aviso' : null}),
+        kpi('Fotos que faltan', s.fases_sin_foto || 0, 'fases terminadas sin foto', {estado: s.fases_sin_foto ? 'aviso' : null})),
+      h('p.nota', 'Última vez en su app: ' + (c.ultimo_acceso ? fh(c.ultimo_acceso) : 'nunca')),
+      c.faltan.length ? h('div', {estilo: {background: 'var(--aviso-b, #FFF4E0)', padding: '8px 12px', borderRadius: '8px', margin: '6px 0'}},
+        h('b', '📄 Le falta: '), c.faltan.map(x => x.nombre + (x.motivo !== 'falta' ? ' (' + x.motivo + ')' : '')).join(' · '),
+        h('div.nota', 'Se le pide automáticamente; el mensaje espera tu aprobación en Inicio.')) : h('p', '✅ Documentación al día'),
+      c.docs.length ? tabla([
+        {clave: 'tipo', et: 'Documento', valor: d => r.tipos[d.tipo] || d.tipo},
+        {clave: 'subido', et: 'Subido', valor: d => fh(d.subido)},
+        {clave: 'caduca', et: 'Caduca', pinta: d => txt(d.caduca) ? (d.caduca < new Date().toLocaleDateString('sv-SE') ? marca(fechaCorta(d.caduca), 'mal') : fechaCorta(d.caduca)) : '—'},
+        {clave: 'estado', et: 'Estado', pinta: d => marca(...(EST[d.estado] || [d.estado]))},
+        {clave: 'id', et: '', pinta: d => h('div', {estilo: {display: 'flex', gap: '4px'}}, h('button.btn.mini', {onclick: () => ver(d)}, 'Ver'),
+          d.estado !== 'valido' ? h('button.btn.mini.primario', {onclick: () => validar(d, 'valido')}, 'Validar') : null,
+          d.estado !== 'rechazado' ? h('button.btn.mini', {onclick: () => validar(d, 'rechazado')}, 'Rechazar') : null)}
+      ], c.docs, {}) : h('p.nota', 'Todavía no ha subido documentación.')), {sinRelleno: false});
+  }));
+}
+
 /* Las fotos se reducen y llevan miniatura, como en la carpeta del cliente. */
 async function prepararFoto(f) {
   const url = await new Promise((ok, mal) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => mal(new Error('No se ha podido leer.')); r.readAsDataURL(f); });
@@ -302,8 +344,10 @@ export async function vistaSubcontratas({id}) {
       {clave: 'obras', et: 'Obras', num: true}, {clave: 'activas', et: 'Activas', num: true}, {clave: 'terminadas', et: 'Terminadas', num: true},
       {clave: 'retrasadas', et: 'Con retraso', num: true, pinta: c => c.retrasadas ? marca(String(c.retrasadas), 'mal') : '0'},
       {clave: 'tickets_fuera', et: 'Tickets fuera de plazo', num: true, pinta: c => c.tickets_fuera ? marca(String(c.tickets_fuera), 'mal') : '0'}
-    ], D.contratas, {vacio: 'Sin subcontratas dadas de alta.'}), {sinRelleno: true}));
+    ], D.contratas, {vacio: 'Sin subcontratas dadas de alta.'}), {sinRelleno: true}), fichas);
+    api.pedir('docsContratas').then(r => poner(fichas, fichasInstaladores(r, () => pintaEquipos(cuerpo)))).catch(e => poner(fichas, h('p.nota', e.message)));
   }
+  const fichas = h('div', cargando('Cargando la documentación y la ficha de cada instalador…'));
 
   cargar();
   return caja;

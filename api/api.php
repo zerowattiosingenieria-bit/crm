@@ -69,6 +69,8 @@ function acciones_(): array {
     'descasarFacturaDoc' => 'accDescasarFacturaDoc_', 'bancoSinFactura' => 'accBancoSinFactura_',
     'driveFacturas' => 'accDriveFacturas_', 'archivoDrive' => 'accArchivoDrive_',
     'casarLote' => 'accCasarLote_', 'dineroCliente' => 'accDineroCliente_', 'instalacionCliente' => 'accInstalacionCliente_', 'archivoDeFactura' => 'accArchivoDeFactura_', 'cuadreContable' => 'accCuadreContable_', 'casadosFacturaDoc' => 'accCasadosFacturaDoc_', 'autoCasar' => 'accAutoCasar_',
+    'mensajesPendientes' => 'accMensajesPendientes_', 'aprobarMensaje' => 'accAprobarMensaje_', 'marcarMensaje' => 'accMarcarMensaje_', 'prepararAccesoCliente' => 'accPrepararAccesoCliente_',
+    'activarFinApp' => 'accPortalActivarFin_', 'estadoAppCliente' => 'accPortalEstadoCliente_', 'docsContratas' => 'accDocsContratas_', 'validarDocContrata' => 'accValidarDocContrata_', 'verDocContrata' => 'accVerDocContrata_',
     'marcarMovimientoSinFactura' => 'accMarcarMovimientoSinFactura_', 'marcarMovimientosSinFactura' => 'accMarcarMovimientosSinFactura_', 'facturasParaMovimiento' => 'accFacturasParaMovimiento_',
     'borrarGasto' => 'accBorrarGasto_',
 

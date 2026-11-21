@@ -25,6 +25,7 @@ function tareasCron_(): array {
     ['record_1930',     [1, 2, 3, 4, 5, 6, 7], '19:30', fn() => recordatoriosCRM()],
     /* 20/11/2026: casado automático de facturas con el banco, todos los días (tras la sincronización de la tarde y por la mañana) */
     ['casar_0710',      [1, 2, 3, 4, 5, 6, 7], '07:10', fn() => autoCasarCron_()],
+    ['portal_0815',     [1, 2, 3, 4, 5, 6, 7], '08:15', fn() => portalExtraDiario_()],
     ['casar_2140',      [1, 2, 3, 4, 5, 6, 7], '21:40', fn() => autoCasarCron_()],
   ];
 }
