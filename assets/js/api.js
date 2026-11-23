@@ -360,15 +360,22 @@ export function yaCompro(c) {
   return operacionesDe(c.id).some(o => OPERACION_VENDIDA.includes(_norm(o.estado))) ||
     captacionesDe(c.id).some(k => _norm(k.resultado) === 'venta');
 }
-/** «Llamar y agendar visita», «Volver a llamar para agendar», «Reagendar», «Llamar para dar cita»… (23/11/2026) */
-export const esLlamadaDeAgendar = a => /agend|dar (la )?cita|concertar (la )?(cita|visita)/.test(_norm(a));
+/** «Llamar y agendar visita», «Volver a llamar para agendar», «Reagendar», «Llamar para dar cita»,
+ *  «Confirmar la visita», «Reprogramar», «Recontactar», «Nueva fecha»… (23/11/2026) */
+export const RE_AGENDAR = /agend|dar (la |una )?(cita|fecha|visita)|concertar|nueva (cita|fecha|visita)|confirmar (la )?(cita|visita)|reprogram|recontact|cambiar (la )?(cita|visita|fecha)|pendiente de (fecha|cita)/;
+export const esLlamadaDeAgendar = a => RE_AGENDAR.test(_norm(a));
+/* El captador del cliente: el de la ficha o, si la ficha no lo tiene (pasa con las que vinieron de Trello), el de sus citas. */
+export const captadorDe = c => String(c.captador_id ?? '').trim() ||
+  String((estado.captaciones.find(k => String(k.cliente_id) === String(c.id) && String(k.captador_id ?? '').trim()) || {}).captador_id ?? '').trim();
+/* ¿Este próximo paso es del captador? Llamadas para dar o cambiar cita, o el cliente tiene una cita sin fecha por reagendar. */
+export const esPasoDelCaptador = c => !!captadorDe(c) && (esLlamadaDeAgendar(c.proxima_accion) ||
+  captacionesDe(c.id).some(k => _norm(k.estado_cita) === 'recontactar' && !String(k.fecha ?? '').trim() && _norm(k.resultado || 'pendiente') === 'pendiente'));
 export function pasoPendiente(c) {
   if (!c || !String(c.proxima_fecha ?? '').trim()) return false;
   if (['ganado', 'perdido', 'ko'].includes(_norm(c.estado))) return false;
   if (_norm(c.proxima_accion) === 'sentada concertada') return false;
-  /* 23/11/2026: «Llamar para dar cita» (reagendar) lo hace el captador del cliente, no el comercial. */
-  /* Clientes de un captador sin visita hecha: agendar y reagendar es cosa del captador. */
-  if ((estado.usuario || {}).rol === 'comercial' && String(c.captador_id ?? '').trim() && esLlamadaDeAgendar(c.proxima_accion)) return false;
+  /* 23/11/2026: agendar y reagendar es cosa del captador del cliente; al comercial no le llega. */
+  if ((estado.usuario || {}).rol === 'comercial' && esPasoDelCaptador(c)) return false;
   return !yaCompro(c);
 }
 

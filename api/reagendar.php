@@ -41,7 +41,8 @@ function accMarcarReagendar_(array $u, array $p): array {
   if (isset($v['error'])) return ['ok' => false, 'error' => $v['error']];
   $cli = $v['cliente'];
   if (in_array(normal_($cli['estado']), ['ganado', 'ko', 'perdido'], true)) return ['ok' => false, 'error' => 'Este cliente ya no tiene citas que reagendar.'];
-  if (txt_($cli['captador_id']) === '') return ['ok' => false, 'error' => 'Este cliente no tiene captador. Pon tú la nueva fecha desde la pestaña Citas (↻ Reagendar).'];
+  $capCli = captadorDeCliente_($cli);
+  if ($capCli === '') return ['ok' => false, 'error' => 'Este cliente no tiene captador. Pon tú la nueva fecha desde la pestaña Citas (↻ Reagendar).'];
   $motivo = normal_($p['motivo'] ?? '');
   if (!in_array($motivo, array_column(REAGENDAR_MOTIVOS, 0), true)) return ['ok' => false, 'error' => 'Elige el motivo.'];
   $detalle = mb_substr(txt_($p['detalle'] ?? ''), 0, 500);
@@ -58,7 +59,7 @@ function accMarcarReagendar_(array $u, array $p): array {
   } else {
     $ant = array_values(array_filter(leer_('CAPTACIONES'), fn($k) => mismo_($k['cliente_id'], $cli['id'])));
     usort($ant, fn($a, $b) => strcmp(txt_($b['creado']), txt_($a['creado'])));
-    $nueva = insertar_('CAPTACIONES', ['cliente_id' => $cli['id'], 'captador_id' => $cli['captador_id'], 'comercial_id' => txt_($cli['comercial_id']),
+    $nueva = insertar_('CAPTACIONES', ['cliente_id' => $cli['id'], 'captador_id' => $capCli, 'comercial_id' => txt_($cli['comercial_id']),
       'fecha' => '', 'hora_cita' => '', 'estado_cita' => 'recontactar', 'resultado' => 'pendiente', 'volver_llamar' => $volver,
       'tecnologia' => txt_($ant[0]['tecnologia'] ?? ''), 'interes' => txt_($ant[0]['interes'] ?? $cli['interes'] ?? ''), 'creado' => ahora_(),
       'notas' => 'Pendiente de reagendar: ' . $texto . '.']);
@@ -69,7 +70,7 @@ function accMarcarReagendar_(array $u, array $p): array {
   insertar_('SEGUIMIENTO', ['cliente_id' => $cli['id'], 'fecha' => hoyISO_(), 'canal' => 'otro', 'usuario_id' => $u['id'], 'origen' => 'reagendar',
     'nota' => 'Por reagendar (lo lleva el captador): ' . $texto . ($volver !== '' ? ' · volver a llamar el ' . fechaLarga_($volver) : '') . '.']);
   registrar_($u, 'marcar_reagendar', 'CAPTACIONES', $capId, $texto);
-  return ['ok' => true, 'captador' => nombreUsuario_(txt_($cli['captador_id']))];
+  return ['ok' => true, 'captador' => nombreUsuario_($capCli)];
 }
 
 /** Listado «Por reagendar»: dirección todos; captador los suyos; el comercial no lo ve. */
@@ -83,18 +84,18 @@ function accPorReagendar_(array $u, array $p): array {
     if (normal_($k['estado_cita'] ?? '') !== 'recontactar' || txt_($k['fecha']) !== '' || normal_($k['resultado'] ?: 'pendiente') !== 'pendiente') continue;
     $c = $clientes[txt_($k['cliente_id'])] ?? null;
     if (!$c || in_array(normal_($c['estado']), ['ganado', 'ko', 'perdido'], true)) continue;
-    $capId = txt_($k['captador_id']) ?: txt_($c['captador_id']);
+    $capId = txt_($k['captador_id']) ?: captadorDeCliente_($c);
     if (!$dir && $capId !== txt_($u['id'])) continue;
     $vistos[txt_($c['id'])] = 1;
     $l[] = reagFila_($c, $k, $capId, $usuarios);
   }
   /* Clientes con «llamar y agendar» pendiente y sin cita viva (lo que venía de Trello). */
   foreach ($clientes as $c) {
-    if (isset($vistos[txt_($c['id'])]) || txt_($c['captador_id']) === '' || in_array(normal_($c['estado']), ['ganado', 'ko', 'perdido'], true)) continue;
+    if (isset($vistos[txt_($c['id'])]) || captadorDeCliente_($c) === '' || in_array(normal_($c['estado']), ['ganado', 'ko', 'perdido'], true)) continue;
     if (!function_exists('esLlamadaDeAgendar_') || !esLlamadaDeAgendar_($c['proxima_accion'] ?? '')) continue;
-    if (!$dir && txt_($c['captador_id']) !== txt_($u['id'])) continue;
+    if (!$dir && captadorDeCliente_($c) !== txt_($u['id'])) continue;
     if (citaVivaDe_($c['id']) && txt_(citaVivaDe_($c['id'])['fecha']) !== '') continue;   /* ya tiene fecha */
-    $l[] = reagFila_($c, null, txt_($c['captador_id']), $usuarios);
+    $l[] = reagFila_($c, null, captadorDeCliente_($c), $usuarios);
   }
   usort($l, fn($a, $b) => strcmp($a['volver_llamar'] ?: '9999', $b['volver_llamar'] ?: '9999') ?: strcmp($a['desde'], $b['desde']));
   return ['ok' => true, 'citas' => $l, 'motivos' => REAGENDAR_MOTIVOS];

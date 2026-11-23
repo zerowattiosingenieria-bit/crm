@@ -510,7 +510,7 @@ export const MOTIVOS_REAGENDAR = [['no_puede', 'Aún no puede dar fecha'], ['anu
 const citaPorReagendar = c => api.captacionesDe(c.id).find(k => normal(k.estado_cita) === 'recontactar' && !txt(k.fecha) && normal(k.resultado || 'pendiente') === 'pendiente');
 
 export function ponerReagendar(c, refrescar) {
-  const cap = api.nombrePersona(c.captador_id);
+  const cap = api.nombrePersona(api.captadorDe(c));
   ventanaFormulario({
     titulo: '↻ Reagendar · ' + etiquetaCliente(c), textoBoton: 'Pasar a ' + cap + ' para reagendar',
     campos: [
@@ -527,7 +527,7 @@ export function ponerReagendar(c, refrescar) {
   });
 }
 function botonReagendar(c, refrescar) {
-  if (!txt(c.captador_id) || ['ganado', 'ko', 'perdido'].includes(normal(c.estado)) || citaPorReagendar(c)) return null;
+  if (!api.captadorDe(c) || ['ganado', 'ko', 'perdido'].includes(normal(c.estado)) || citaPorReagendar(c)) return null;
   return h('button.btn', {onclick: () => ponerReagendar(c, refrescar), title: 'El cliente quiere otro día: la cita pasa a su captador para que le dé fecha'}, '↻ Reagendar');
 }
 function bandaReagendar(c, refrescar) {
@@ -535,7 +535,7 @@ function bandaReagendar(c, refrescar) {
   /* Al comercial no le llegan: las reagendadas están siempre en manos del captador. */
   if (!k || (api.estado.usuario || {}).rol === 'comercial') return null;
   const motivo = (MOTIVOS_REAGENDAR.find(m => m[0] === txt(k.reag_motivo)) || [])[1];
-  const soyCap = txt((api.estado.usuario || {}).id) === txt(k.captador_id || c.captador_id);
+  const soyCap = txt((api.estado.usuario || {}).id) === txt(k.captador_id || api.captadorDe(c));
   return h('div', {estilo: {background: '#FFF4DE', border: '1px solid #f1d9a6', borderRadius: '10px', padding: '10px 14px', margin: '0 0 12px', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap'}},
     h('b', {estilo: {fontSize: '18px', color: '#9a6a00'}}, '↻'),
     h('div', {estilo: {flex: 1, minWidth: '220px'}}, h('b', 'Pendiente de reagendar' + (motivo ? ' · ' + motivo : '')),
@@ -701,8 +701,8 @@ export async function vistaCliente({id, ir, refrescar}) {
       kpi('Último contacto', contactos.length ? haceDias(contactos[0].fecha) : '—',
         contactos.length ? api.etiquetaCatalogo('canales', contactos[0].canal) : 'sin apuntes'),
       /* 23/11/2026: si el próximo paso es reagendar y el cliente tiene captador, al comercial no le llega. */
-      (api.estado.usuario || {}).rol === 'comercial' && txt(c.captador_id) && api.esLlamadaDeAgendar(c.proxima_accion)
-        ? kpi('Próximo paso', '—', 'reagendar: lo lleva ' + api.nombrePersona(c.captador_id))
+      (api.estado.usuario || {}).rol === 'comercial' && api.esPasoDelCaptador(c)
+        ? kpi('Próximo paso', '—', 'reagendar: lo lleva ' + api.nombrePersona(api.captadorDe(c)))
         : kpi('Próximo paso', txt(c.proxima_fecha) ? fechaCorta(c.proxima_fecha) : '—',
           txt(c.proxima_accion) || 'sin definir',
           {estado: txt(c.proxima_fecha) && txt(c.proxima_fecha) < hoyISO() ? 'mal' : null})

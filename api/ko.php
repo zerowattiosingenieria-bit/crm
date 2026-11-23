@@ -102,9 +102,33 @@ function accClientesKO_(array $u, array $p): array {
  * la cita ya tiene fecha (por la agenda de citas), no como «próximo paso».
  */
 function pasoDelCaptador_(array $c): bool {
-  return txt_($c['captador_id'] ?? '') !== '' && esLlamadaDeAgendar_($c['proxima_accion'] ?? '');
+  $cap = captadorDeCliente_($c);
+  if ($cap === '') return false;
+  if (esLlamadaDeAgendar_($c['proxima_accion'] ?? '')) return true;
+  /* Tiene una cita sin fecha por reagendar: es del captador. */
+  return isset(citasPorReagendar_()[txt_($c['id'] ?? '')]);
 }
-/** «Llamar y agendar visita», «Volver a llamar para agendar», «Reagendar», «Llamar para dar cita»… */
+/** «Llamar y agendar visita», «Volver a llamar para agendar», «Reagendar», «Llamar para dar cita», «Confirmar la visita», «Reprogramar»… */
 function esLlamadaDeAgendar_($accion): bool {
-  return (bool)preg_match('/agend|dar (la )?cita|concertar (la )?(cita|visita)/u', normal_($accion));
+  return (bool)preg_match('/agend|dar (la |una )?(cita|fecha|visita)|concertar|nueva (cita|fecha|visita)|confirmar (la )?(cita|visita)|reprogram|recontact|cambiar (la )?(cita|visita|fecha)|pendiente de (fecha|cita)/u', normal_($accion));
+}
+/** El captador del cliente: el de la ficha o, si no lo tiene (las que vinieron de Trello), el de sus citas. */
+function captadorDeCliente_(array $c): string {
+  $cap = txt_($c['captador_id'] ?? '');
+  if ($cap !== '') return $cap;
+  static $porCliente = null;
+  if ($porCliente === null) {
+    $porCliente = [];
+    foreach (leer_('CAPTACIONES') as $k) if (txt_($k['captador_id'] ?? '') !== '' && !isset($porCliente[txt_($k['cliente_id'])])) $porCliente[txt_($k['cliente_id'])] = txt_($k['captador_id']);
+  }
+  return $porCliente[txt_($c['id'] ?? '')] ?? '';
+}
+function citasPorReagendar_(): array {
+  static $m = null;
+  if ($m === null) {
+    $m = [];
+    foreach (leer_('CAPTACIONES') as $k)
+      if (normal_($k['estado_cita'] ?? '') === 'recontactar' && txt_($k['fecha'] ?? '') === '' && normal_(($k['resultado'] ?? '') ?: 'pendiente') === 'pendiente') $m[txt_($k['cliente_id'])] = 1;
+  }
+  return $m;
 }

@@ -67,7 +67,7 @@ export async function vistaHoy({ir, refrescar}) {
   /* 23/11/2026: las llamadas para reagendar las hacen los captadores de sus clientes, no el comercial
      (salvo que el cliente no tenga captador). */
   const sinFecha = vivas.filter(c => !txt(c.fecha) && normal(c.estado_cita) === 'recontactar' &&
-    normal(c.resultado || 'pendiente') === 'pendiente' && !(yo.rol === 'comercial' && txt(c.captador_id)))
+    normal(c.resultado || 'pendiente') === 'pendiente' && !(yo.rol === 'comercial' && (txt(c.captador_id) || api.captadorDe(cliente(c.cliente_id) || {id: c.cliente_id}))))
     .sort((a, b) => (txt(a.volver_llamar) || '9999').localeCompare(txt(b.volver_llamar) || '9999'));
   if (sinFecha.length) {
     const tocaLlamar = sinFecha.filter(c => txt(c.volver_llamar) && txt(c.volver_llamar) <= hoy).length;
@@ -146,7 +146,7 @@ export async function vistaHoy({ir, refrescar}) {
     if (posible) cifras.push(kpi('Comisión en juego', eur(posible), prox.length + ' citas de los próximos 7 días si se venden'));
     /* 23/11/2026: las llamadas para agendar o reagendar de sus clientes sin visita hecha son del captador. */
     const yaEnLista = new Set(sinFecha.map(k => k.cliente_id));
-    const paraLlamar = api.estado.clientes.filter(c => txt(c.captador_id) === txt(yo.id) && api.esLlamadaDeAgendar(c.proxima_accion) &&
+    const paraLlamar = api.estado.clientes.filter(c => txt(api.captadorDe(c)) === txt(yo.id) && api.esLlamadaDeAgendar(c.proxima_accion) &&
       txt(c.proxima_fecha) && txt(c.proxima_fecha) <= hoy && normal(c.proxima_accion) !== 'sentada concertada' && !yaEnLista.has(c.id))
       .sort((a, b) => txt(a.proxima_fecha).localeCompare(txt(b.proxima_fecha)));
     if (paraLlamar.length) {
