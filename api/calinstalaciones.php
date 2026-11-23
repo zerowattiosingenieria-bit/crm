@@ -15,7 +15,7 @@
  *     asignado), instalada y legalizada.
  *
  * Quién lo ve: dirección todas; cada comercial SOLO las operaciones de sus
- * clientes. Nunca salen importes ni datos de cobro (regla de la casa).
+ * clientes; cada captador SOLO las de los clientes que ha captado (23/11/2026, Nando). Nunca salen importes ni datos de cobro (regla de la casa).
  */
 
 require_once __DIR__ . '/base.php';
@@ -27,17 +27,27 @@ function caliVeTodo_(array $u): bool { return (permisos_($u)['alcance'] ?? '') =
 
 function accCalendarioInstalaciones_(array $u, array $p): array {
   $todo = caliVeTodo_($u);
-  if (!$todo && normal_($u['rol'] ?? '') !== 'comercial') return ['ok' => false, 'error' => 'Tu usuario no tiene acceso al calendario de instalaciones.'];
+  $esCap = normal_($u['rol'] ?? '') === 'captador';
+  if (!$todo && normal_($u['rol'] ?? '') !== 'comercial' && !$esCap) return ['ok' => false, 'error' => 'Tu usuario no tiene acceso al calendario de instalaciones.'];
 
   $mes = preg_match('/^\d{4}-\d{2}$/', txt_($p['mes'] ?? '')) ? $p['mes'] : substr(hoyISO_(), 0, 7);
   $ini = new DateTime($mes . '-01');
   $desde = (clone $ini)->modify('-' . (((int)$ini->format('N')) - 1) . ' days')->format('Y-m-d');      // lunes de la 1.ª semana
   $finMes = (clone $ini)->modify('last day of this month');
   $hasta = (clone $finMes)->modify('+' . (7 - (int)$finMes->format('N')) . ' days')->format('Y-m-d'); // domingo de la última
-  $comercial = $todo ? txt_($p['comercial_id'] ?? '') : txt_($u['id']);
+  $comercial = $todo ? txt_($p['comercial_id'] ?? '') : ($esCap ? '' : txt_($u['id']));
+  /* El captador: las operaciones de sus clientes (el captador de la ficha, de sus citas o de la operación). */
+  $deCaptador = [];
+  if ($esCap) {
+    foreach (leer_('CLIENTES') as $c) {
+      $cap = function_exists('captadorDeCliente_') ? captadorDeCliente_($c) : txt_($c['captador_id'] ?? '');
+      if ($cap === txt_($u['id'])) $deCaptador[txt_($c['id'])] = true;
+    }
+  }
 
   $ops = filtrar_('OPERACIONES', fn($o) => in_array(normal_($o['estado'] ?? ''), CALI_ESTADOS_OP, true)
-    && ($comercial === '' || mismo_($o['comercial_id'] ?? '', $comercial)));
+    && ($comercial === '' || mismo_($o['comercial_id'] ?? '', $comercial))
+    && (!$esCap || isset($deCaptador[txt_($o['cliente_id'])]) || mismo_($o['captador_id'] ?? '', $u['id'])));
   $opsIdx = []; foreach ($ops as $o) $opsIdx[(string)$o['id']] = $o;
   $cliIds = []; foreach ($ops as $o) $cliIds[(string)$o['cliente_id']] = true;
   $clientes = []; foreach (filtrar_('CLIENTES', fn($c) => isset($cliIds[(string)$c['id']])) as $c) $clientes[(string)$c['id']] = $c;

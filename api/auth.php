@@ -380,7 +380,8 @@ function permisos_(array $u): array {
   $o['directorio'] = veDirectorio_($u);
   /* Los Gantt, solo las personas de GANTT_USUARIOS (config.php). */
   $o['gantt'] = veGantt_($u);
-  $o['calfechas'] = in_array(txt_($u['id'] ?? ''), defined('CALFECHAS_USUARIOS') ? CALFECHAS_USUARIOS : [], true);
+  /* 23/11/2026: los captadores también, pero solo con las instalaciones de sus clientes. */
+  $o['calfechas'] = in_array(txt_($u['id'] ?? ''), defined('CALFECHAS_USUARIOS') ? CALFECHAS_USUARIOS : [], true) || normal_($u['rol'] ?? '') === 'captador';
   $o['sinenviar'] = in_array(txt_($u['id'] ?? ''), defined('SIN_ENVIAR_USUARIOS') ? SIN_ENVIAR_USUARIOS : [], true);
   return $o;
 }

@@ -266,14 +266,26 @@ function accGanttEquipo_(array $u, array $p): array {
   return ['ok' => true, 'mes' => $mes, 'hoy' => hoyISO_(), 'personas' => array_values($personas), 'dias' => $dias ?: new stdClass()];
 }
 
-/* ---------- calendario FECHAS (solo superadmin, Nando y Fernando) ---------- */
+/* ---------- calendario FECHAS (superadmin, Nando y Fernando: todo; captadores: solo sus clientes, 23/11/2026) ---------- */
 function veCalFechas_(array $u): bool {
-  return in_array(txt_($u['id'] ?? ''), defined('CALFECHAS_USUARIOS') ? CALFECHAS_USUARIOS : [], true);
+  return in_array(txt_($u['id'] ?? ''), defined('CALFECHAS_USUARIOS') ? CALFECHAS_USUARIOS : [], true) || normal_($u['rol'] ?? '') === 'captador';
 }
 
 function accCalendarioFechas_(array $u, array $p): array {
-  if (!veCalFechas_($u)) return ['ok' => false, 'error' => 'Este calendario solo lo ven el superadmin, Nando y Fernando.'];
+  if (!veCalFechas_($u)) return ['ok' => false, 'error' => 'Este calendario solo lo ven el superadmin, Nando, Fernando y los captadores (sus clientes).'];
   $g = accGantt_(['id' => GANTT_USUARIOS[0]], $p);   // mismos datos, sin órdenes
-  $ops = array_map(fn($o) => ['id' => $o['id'], 'cliente_id' => $o['cliente_id'], 'cliente' => $o['cliente'], 'estado' => $o['estado']], $g['operaciones'] ?? []);
-  return ['ok' => true, 'hoy' => $g['hoy'], 'sincronizado' => $g['sincronizado'], 'eventos' => $g['eventos'] ?? [], 'operaciones' => $ops, 'ordenes' => []];
+  $opsG = $g['operaciones'] ?? []; $evs = $g['eventos'] ?? [];
+  $soloCap = !in_array(txt_($u['id'] ?? ''), defined('CALFECHAS_USUARIOS') ? CALFECHAS_USUARIOS : [], true);
+  if ($soloCap) {
+    $mios = [];
+    foreach (leer_('CLIENTES') as $c) {
+      $cap = function_exists('captadorDeCliente_') ? captadorDeCliente_($c) : txt_($c['captador_id'] ?? '');
+      if ($cap === txt_($u['id'])) $mios[txt_($c['id'])] = true;
+    }
+    $opsG = array_values(array_filter($opsG, fn($o) => isset($mios[txt_($o['cliente_id'])])));
+    $ids = array_flip(array_map(fn($o) => $o['id'], $opsG));
+    $evs = array_values(array_filter($evs, fn($e) => $e['op_id'] !== '' && isset($ids[$e['op_id']])));
+  }
+  $ops = array_map(fn($o) => ['id' => $o['id'], 'cliente_id' => $o['cliente_id'], 'cliente' => $o['cliente'], 'estado' => $o['estado']], $opsG);
+  return ['ok' => true, 'hoy' => $g['hoy'], 'sincronizado' => $g['sincronizado'], 'eventos' => $evs, 'operaciones' => $ops, 'ordenes' => [], 'solo_mios' => $soloCap];
 }

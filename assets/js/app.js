@@ -123,6 +123,8 @@ function menuDe(rol) {
       {id: 'captaciones', et: 'Mis captaciones', ico: '⚑'},
       {id: 'reagendar', et: 'Por reagendar', ico: '↻'},
       {id: 'operaciones', et: 'Sus instalaciones', ico: '⚡'},
+      {id: 'calinstalaciones', et: 'Calendario de sus instalaciones', ico: '▦'},
+      {id: 'calfechas', et: 'Calendario FECHAS', ico: '📅'},
       {id: 'tramites', et: 'CAEs y WIXER', ico: '♻'},
       {id: 'estadisticas', et: 'Estadísticas del equipo', ico: '▥'},
       {id: 'avisar', et: 'Avisar incidencia', ico: '⚠'},
@@ -218,7 +220,7 @@ function rutaActual() {
    abajo del menú y queda guardado en ese aparato. */
 const K_MENU = 'zw.crm.menuSimple';
 const MENU_CORTO = {
-  captador: ['inicio', 'agenda', 'captaciones', 'clientes', 'operaciones', 'parte', 'tramites', 'avisar', 'perfil'],
+  captador: ['inicio', 'agenda', 'captaciones', 'clientes', 'operaciones', 'calinstalaciones', 'parte', 'tramites', 'avisar', 'perfil'],
   comercial: ['inicio', 'agenda', 'visitas', 'sinenviar', 'clientes', 'visor', 'cotizador', 'operaciones', 'calinstalaciones', 'calfechas', 'parte', 'avisar', 'perfil'],
   otro: ['inicio', 'tablero', 'incidencias', 'agenda', 'visitas', 'sinenviar', 'clientes', 'operaciones', 'calinstalaciones', 'calfechas', 'gantt', 'seguimiento', 'subcontratas', 'tramites', 'captaciones', 'estadisticas', 'dinero', 'perfil']
 };
