@@ -365,7 +365,8 @@ export function pasoPendiente(c) {
   if (['ganado', 'perdido', 'ko'].includes(_norm(c.estado))) return false;
   if (_norm(c.proxima_accion) === 'sentada concertada') return false;
   /* 23/11/2026: «Llamar para dar cita» (reagendar) lo hace el captador del cliente, no el comercial. */
-  if (_norm(c.proxima_accion) === 'llamar para dar cita' && String(c.captador_id ?? '').trim() && (estado.usuario || {}).rol === 'comercial') return false;
+  /* Clientes de un captador sin visita hecha: agendar y reagendar es cosa del captador. */
+  if ((estado.usuario || {}).rol === 'comercial' && String(c.captador_id ?? '').trim() && (['nuevo', 'captado', 'cita'].includes(_norm(c.estado)) || _norm(c.proxima_accion) === 'llamar para dar cita')) return false;
   return !yaCompro(c);
 }
 

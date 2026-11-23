@@ -109,7 +109,7 @@ export async function vistaHoy({ir, refrescar}) {
     const rojas = conDias.filter(x => x.d > 7);
     const sentadasSin = mias.filter(c => normal(c.resultado) === 'sentada' &&
       !api.estado.operaciones.some(o => o.cliente_id === c.cliente_id) && dias(txt(c.fecha).slice(0, 10), hoy) >= 2);
-    const pendientesPasadas = mias.filter(c => normal(c.resultado || 'pendiente') === 'pendiente' &&
+    const pendientesPasadas = mias.filter(c => normal(c.resultado || 'pendiente') === 'pendiente' && normal(c.estado_cita) !== 'recontactar' &&
       txt(c.fecha) && txt(c.fecha).slice(0, 10) < sumarDias(hoy, -1));
     cifras.push(kpi('Propuestas sin respuesta', String(rojas.length), 'más de 7 días', {estado: rojas.length ? 'mal' : 'bien'}));
     bloques.push(tarjeta('Semáforo de la cartera', h('ul.hoy-lista',
@@ -144,6 +144,20 @@ export async function vistaHoy({ir, refrescar}) {
     const posible = prox.reduce((a, c) => { const t = normal(c.tecnologia);
       return a + (t.includes('foto') ? cfv : 0) + (t.includes('aero') ? cae : 0); }, 0);
     if (posible) cifras.push(kpi('Comisión en juego', eur(posible), prox.length + ' citas de los próximos 7 días si se venden'));
+    /* 23/11/2026: las llamadas para agendar o reagendar de sus clientes sin visita hecha son del captador. */
+    const yaEnLista = new Set(sinFecha.map(k => k.cliente_id));
+    const paraLlamar = api.estado.clientes.filter(c => txt(c.captador_id) === txt(yo.id) && (['nuevo', 'captado', 'cita'].includes(normal(c.estado)) || normal(c.proxima_accion) === 'llamar para dar cita') &&
+      txt(c.proxima_fecha) && txt(c.proxima_fecha) <= hoy && normal(c.proxima_accion) !== 'sentada concertada' && !yaEnLista.has(c.id))
+      .sort((a, b) => txt(a.proxima_fecha).localeCompare(txt(b.proxima_fecha)));
+    if (paraLlamar.length) {
+      cifras.push(kpi('Para llamar y agendar', String(paraLlamar.length), 'para hoy o atrasados', {estado: 'aviso'}));
+      bloques.push(tarjeta('Para llamar y agendar', h('ul.hoy-lista', paraLlamar.slice(0, 30).map(c => h('li',
+        h('span.que', nom(c), h('span.nota', ' · ' + (txt(c.proxima_accion) || 'llamar') + ' · ' + fechaCorta(c.proxima_fecha) + (txt(c.comercial_id) ? ' · ' + api.nombrePersona(c.comercial_id) : ''))),
+        txt(c.telefono) ? h('a.btn.mini', {href: telHref(c.telefono)}, '📞') : null,
+        h('button.btn.mini.primario', {onclick: () => nuevaCita({refrescar, clienteId: c.id})}, 'Dar cita'),
+        h('button.btn.mini', {onclick: () => nuevoSeguimiento(c, refrescar)}, 'Apuntar')))),
+        {subtitulo: 'Tus clientes sin visita hecha: cuando tengan fecha, le aparecen al comercial.'}));
+    }
     if (sinAdj.length) bloques.push(tarjeta('Fichas sin adjudicar', h('ul.hoy-lista', sinAdj.map(c => h('li',
       h('span.que', nom(cliente(c.cliente_id)), h('span.nota', ' · ' + fechaCorta(c.fecha))),
       h('button.btn.mini.primario', {onclick: () => ir('captaciones')}, 'Adjudicar'))))));

@@ -95,3 +95,13 @@ function accClientesKO_(array $u, array $p): array {
   usort($l, fn($a, $b) => strcmp($b['fecha'], $a['fecha']));
   return ['ok' => true, 'clientes' => $l, 'motivos' => KO_MOTIVOS, 'puede' => puedeKO_($u)];
 }
+
+/**
+ * 23/11/2026, Nando: mientras el cliente de un captador no tiene la visita hecha (nuevo, captado,
+ * cita), las llamadas para agendar o reagendar son del captador. Al comercial solo le sale cuando
+ * la cita ya tiene fecha (por la agenda de citas), no como «próximo paso».
+ */
+function pasoDelCaptador_(array $c): bool {
+  return txt_($c['captador_id'] ?? '') !== '' && (in_array(normal_($c['estado'] ?? ''), ['nuevo', 'captado', 'cita'], true)
+    || normal_($c['proxima_accion'] ?? '') === 'llamar para dar cita');
+}

@@ -130,7 +130,7 @@ function resumenPersona_(array $persona, string $desde, string $hasta, bool $con
   /* 23/11/2026: al comercial no le salen las llamadas para reagendar de clientes con captador: las hace el captador. */
   $soloComercial = normal_($persona['rol'] ?? '') === 'comercial';
   $proximas = array_values(array_filter($misClientes, fn($c) => txt_($c['proxima_fecha']) !== '' && !in_array(normal_($c['estado']), ['ganado', 'perdido', 'ko'], true)
-    && !($soloComercial && normal_($c['proxima_accion']) === 'llamar para dar cita' && txt_($c['captador_id']) !== '')));
+    && !($soloComercial && pasoDelCaptador_($c))));
   $proximas = array_map(fn($c) => [
     'id' => $c['id'], 'nombre' => $c['nombre'], 'accion' => $c['proxima_accion'], 'fecha' => txt_($c['proxima_fecha']),
     'vencida' => txt_($c['proxima_fecha']) < $hoy, 'estado' => $c['estado']
@@ -491,7 +491,8 @@ function accAlertas_(array $u, array $p): array {
 
   foreach ($clientes as $c) {
     if (txt_($c['proxima_fecha']) !== '' && txt_($c['proxima_fecha']) < $hoy &&
-        !in_array(normal_($c['estado']), ['ganado', 'perdido', 'ko'], true)) {
+        !in_array(normal_($c['estado']), ['ganado', 'perdido', 'ko'], true) &&
+        !(normal_($u['rol'] ?? '') === 'comercial' && pasoDelCaptador_($c))) {
       $avisos[] = ['tipo' => 'accion_vencida', 'nivel' => 'alto', 'cliente_id' => $c['id'],
         'texto' => $etq($c['id']) . ': "' . (txt_($c['proxima_accion']) ?: 'seguimiento') . '" venció el ' . txt_($c['proxima_fecha']) . '.'];
     }
