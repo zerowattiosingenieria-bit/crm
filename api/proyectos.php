@@ -368,8 +368,13 @@ function accEstadoProyecto_(array $u, array $p): array {
  * proyecto sale de «listos para enviar». Lo puede marcar el comercial del
  * cliente y la dirección; nadie más (ni captadores ni otros comerciales).
  *
- * Con deshacer: true, la dirección lo devuelve a «entregado» (por si se
- * pulsó sin querer). El comercial no deshace: que lo pida.
+ * Con deshacer: true, se vuelve a «no enviado» (por si se pulsó sin querer o
+ * aún no le ha llegado). 23/11/2026, Nando: «el comercial indicarlo con un
+ * botón si está enviado o no»: lo puede deshacer el comercial del cliente y
+ * la dirección.
+ *
+ * Se puede marcar si el proyecto está hecho (lo entregó el ingeniero) o si en
+ * la ficha hay un PDF de proyecto subido.
  *
  * Y la regla de la casa: a la semana de mandar una propuesta, se llama.
  * Se apunta un seguimiento con ese próximo paso a 7 días, salvo que el
@@ -386,23 +391,37 @@ function accEnviadoProyecto_(array $u, array $p): array {
   }
   $proy = proyectoDe_($cli, $u);
   $estado = normal_($proy['estado']);
+  $hayPdf = count(array_filter(archivosDe_($cli['id']), fn($a) => normal_($a['clase'] ?? '') === 'proyecto')) > 0;
+  $capsEnviadas = array_values(array_filter(leer_('CAPTACIONES'), fn($k) => mismo_($k['cliente_id'], $cli['id']) && txt_($k['proyecto_enviado'] ?? '') !== ''));
 
   if (!empty($p['deshacer'])) {
-    if (empty($per['editarTodo'])) return ['ok' => false, 'error' => 'Deshacerlo solo puede la dirección.'];
-    if ($estado !== 'enviado') return ['ok' => false, 'error' => 'Ese proyecto no está marcado como enviado.'];
-    $r = actualizar_('PROYECTOS', $proy['id'], ['estado' => 'entregado', 'enviado' => '', 'enviado_por' => '',
+    if ($estado !== 'enviado' && !count($capsEnviadas)) return ['ok' => true, 'proyecto' => $proy, 'ya' => true];
+    $vuelve = ($hayPdf || txt_($proy['entregado'] ?? '') !== '') ? 'entregado' : ($estado === 'enviado' ? 'entregado' : $estado);
+    $r = actualizar_('PROYECTOS', $proy['id'], ['estado' => $vuelve, 'enviado' => '', 'enviado_por' => '',
       'modificado' => ahora_(), 'modificado_por' => $u['id']]);
+    foreach ($capsEnviadas as $k) actualizar_('CAPTACIONES', $k['id'], ['proyecto_enviado' => '']);
     registrar_($u, 'proyecto_no_enviado', 'PROYECTOS', $proy['id'], etiquetaCliente_($cli));
+    insertar_('SEGUIMIENTO', ['cliente_id' => $cli['id'], 'operacion_id' => '', 'usuario_id' => $u['id'], 'fecha' => hoyISO_(), 'canal' => 'otro',
+      'nota' => 'Proyecto marcado como NO enviado al cliente.', 'proximo_paso' => '', 'proxima_fecha' => '', 'estado_resultante' => '',
+      'origen' => 'proyecto_enviado', 'creado' => ahora_()]);
     return ['ok' => true, 'proyecto' => $r];
   }
 
   if ($estado === 'enviado') return ['ok' => true, 'proyecto' => $proy, 'ya' => true];
-  if ($estado !== 'entregado') {
+  if ($estado !== 'entregado' && !$hayPdf) {
     return ['ok' => false, 'error' => 'El proyecto todavía no está hecho: no se puede marcar como enviado.'];
   }
   $r = actualizar_('PROYECTOS', $proy['id'], ['estado' => 'enviado', 'enviado' => ahora_(), 'enviado_por' => $u['id'],
     'modificado' => ahora_(), 'modificado_por' => $u['id']]);
   registrar_($u, 'proyecto_enviado', 'PROYECTOS', $proy['id'], etiquetaCliente_($cli));
+  /* Que en «Mis visitas» salga igual: la última visita del cliente queda como «enviado». */
+  $caps = array_values(array_filter(leer_('CAPTACIONES'), fn($k) => mismo_($k['cliente_id'], $cli['id']) && normal_($k['resultado'] ?? '') !== 'cancelada'));
+  usort($caps, fn($a, $b) => strcmp(txt_($b['fecha']) ?: txt_($b['creado']), txt_($a['fecha']) ?: txt_($a['creado'])));
+  if ($caps && txt_($caps[0]['proyecto_enviado'] ?? '') === '') actualizar_('CAPTACIONES', $caps[0]['id'], ['proyecto_enviado' => ahora_()]);
+  if (in_array(normal_($cli['estado'] ?? ''), ['', 'nuevo', 'captado', 'cita', 'sentada'], true)) {
+    actualizar_('CLIENTES', $cli['id'], ['estado' => 'propuesta', 'modificado' => ahora_(), 'modificado_por' => $u['id']]);
+    $cli['estado'] = 'propuesta';
+  }
 
   /* El recordatorio de llamar a la semana. */
   $llamada = ''; $yaTenia = '';
@@ -485,6 +504,8 @@ function accProyectosPendientes_(array $u, array $p): array {
   $desdeEnvio = num_($p['dias'] ?? 0) > 0 ? sumarDias_(hoyISO_(), -num_($p['dias'])) : '';
   $lista = array_values(array_filter(leer_('PROYECTOS'), function ($x) use ($quiero, $desdeEnvio, $clientes, $per, $esCaptador, $u) {
     if (!in_array(normal_($x['estado']), $quiero, true)) return false;
+    /* «Listos para enviar»: fuera los que ya están marcados como enviados en una visita (23/11/2026). */
+    if (normal_($x['estado']) === 'entregado' && function_exists('marcasCliente_') && !empty(marcasCliente_(txt_($x['cliente_id']))['enviado'])) return false;
     if ($desdeEnvio !== '' && trozo_($x['enviado'], 0, 10) < $desdeEnvio) return false;
     $c = $clientes[txt_($x['cliente_id'])] ?? null;
     if (!$c) return false;
@@ -667,4 +688,45 @@ function accInstalacionCliente_(array $u, array $p): array {
     'proyecto' => $proy ? ['estado' => txt_($proy['estado']), 'pedido' => txt_($proy['pedido']), 'entregado' => txt_($proy['entregado']), 'enviado' => txt_($proy['enviado']), 'faltan' => txt_($proy['faltan'])] : null,
     'archivos' => $porGrupo, 'tramites' => $tramites, 'incidencias' => $incid,
     'fichas' => array_map(fn($k) => ['clave' => $k, 'nombre' => $lista[$k][1] ?? $k], array_keys($fichas))];
+}
+
+
+/**
+ * Proyectos hechos y sin enviar al cliente, de todos los comerciales (23/11/2026, Nando).
+ * Solo para SIN_ENVIAR_USUARIOS (Nando y superadmin), por separado de lo de cada comercial.
+ * Hecho = el ingeniero lo entregó o hay un PDF de proyecto en la ficha. Sin enviar = el
+ * proyecto no está «enviado» y ninguna visita lo tiene marcado. Fuera los ganados y los KO.
+ */
+function accProyectosSinEnviar_(array $u, array $p): array {
+  if (empty(permisos_($u)['sinenviar'])) return ['ok' => false, 'error' => 'Este listado es solo de Nando y del superadmin.'];
+  asegurarProyectos_();
+  $usuarios = leer_('USUARIOS');
+  $proys = [];
+  foreach (leer_('PROYECTOS') as $x) $proys[txt_($x['cliente_id'])] = $x;
+  $pdfs = [];
+  foreach (leer_('ARCHIVOS') as $a) {
+    if (normal_($a['clase'] ?? '') !== 'proyecto') continue;
+    $k = txt_($a['cliente_id']);
+    if (!isset($pdfs[$k]) || txt_($a['subido']) > txt_($pdfs[$k]['subido'])) $pdfs[$k] = $a;
+  }
+  $enviadas = [];
+  foreach (leer_('CAPTACIONES') as $k) if (txt_($k['proyecto_enviado'] ?? '') !== '') $enviadas[txt_($k['cliente_id'])] = 1;
+  $hoy = hoyISO_(); $l = [];
+  foreach (leer_('CLIENTES') as $c) {
+    $id = txt_($c['id']);
+    if (in_array(normal_($c['estado']), ['ganado', 'ko', 'perdido'], true)) continue;
+    $pr = $proys[$id] ?? null; $pdf = $pdfs[$id] ?? null;
+    $est = $pr ? normal_($pr['estado']) : '';
+    if ($est === 'enviado' || isset($enviadas[$id])) continue;
+    if ($est !== 'entregado' && !$pdf) continue;
+    $hecho = substr(txt_($pr['entregado'] ?? '') ?: txt_($pdf['subido'] ?? '') ?: txt_($pr['modificado'] ?? ''), 0, 10);
+    $l[] = ['cliente_id' => $id, 'direccion' => txt_($c['direccion']), 'nombre' => txt_($c['nombre']), 'municipio' => txt_($c['municipio']),
+      'telefono' => txt_($c['telefono']), 'estado' => txt_($c['estado']),
+      'comercial_id' => txt_($c['comercial_id']), 'comercial' => nombreUsuario_(txt_($c['comercial_id']), $usuarios),
+      'captador' => nombreUsuario_(txt_($c['captador_id']), $usuarios),
+      'hecho' => $hecho, 'dias' => $hecho !== '' ? max(0, (int)round((strtotime($hoy) - strtotime($hecho)) / 86400)) : null,
+      'puede_marcar' => !empty(permisos_($u)['editarTodo']) || mismo_($c['comercial_id'], $u['id'])];
+  }
+  usort($l, fn($a, $b) => strcmp($a['hecho'] ?: '9999', $b['hecho'] ?: '9999'));
+  return ['ok' => true, 'proyectos' => $l];
 }

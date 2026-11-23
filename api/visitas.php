@@ -67,7 +67,25 @@ function proyectoVisita_(?array $proy, array $archs): array {
   ];
 }
 
+/** 23/11/2026 (Rober: «algunas no me las indica bien»): el envío es del cliente, no de una visita.
+ *  Si un cliente tiene varias visitas (reagendadas, segunda visita…), el «enviado» o el «proyecto hecho»
+ *  marcado en una vale para todas. */
+function marcasCliente_(string $clienteId): array {
+  static $m = null;
+  if ($m === null) {
+    $m = [];
+    foreach (leer_('CAPTACIONES') as $k) {
+      $id = txt_($k['cliente_id']);
+      if (txt_($k['proyecto_enviado'] ?? '') !== '') $m[$id]['enviado'] = max($m[$id]['enviado'] ?? '', txt_($k['proyecto_enviado']));
+      if (txt_($k['proyecto_creado'] ?? '') !== '') $m[$id]['creado'] = max($m[$id]['creado'] ?? '', txt_($k['proyecto_creado']));
+    }
+  }
+  return $m[$clienteId] ?? [];
+}
+
 function filaVisita_(array $cap, array $cli, array $proys, array $segs, array $archs = []): array {
+  $mc = marcasCliente_((string)$cli['id']);
+  $hayPdf = count(array_filter($archs[(string)$cli['id']] ?? [], fn($a) => normal_($a['clase'] ?? '') === 'proyecto')) > 0;
   $proy = $proys[(string)$cli['id']] ?? null;
   $estP = $proy ? normal_($proy['estado'] ?? '') : '';
   $res = normal_($cap['resultado'] ?? '');
@@ -83,10 +101,10 @@ function filaVisita_(array $cap, array $cli, array $proys, array $segs, array $a
     'sentada' => in_array($res, ['sentada', 'venta', 'potencial'], true) ? true : (in_array($res, ['no_sentada', 'cancelada'], true) ? false : null),
     'proyecto_estado' => $estP,
     'proyecto_auto' => in_array($estP, ['entregado', 'enviado'], true),
-    'proyecto' => in_array($estP, ['entregado', 'enviado'], true) || txt_($cap['proyecto_creado'] ?? '') !== '',
+    'proyecto' => in_array($estP, ['entregado', 'enviado'], true) || txt_($cap['proyecto_creado'] ?? '') !== '' || !empty($mc['creado']) || $hayPdf,
     'enviado_auto' => $estP === 'enviado',
     'proy' => proyectoVisita_($proy, $archs[(string)$cli['id']] ?? []),
-    'enviado' => $estP === 'enviado' || txt_($cap['proyecto_enviado'] ?? '') !== '',
+    'enviado' => $estP === 'enviado' || txt_($cap['proyecto_enviado'] ?? '') !== '' || !empty($mc['enviado']),
     /* venta: AUTOMÁTICA, nadie la marca a mano. Solo cuenta cuando la financiera
        la aprueba (la operación ya está en trámite o más allá) o el cliente ha pagado. */
     'venta' => ventaVisita_($op),
@@ -162,12 +180,13 @@ function accVisitaMarcar_(array $u, array $p): array {
   } elseif ($campo === 'enviado') {
     $proy = buscar1_('PROYECTOS', fn($x) => mismo_($x['cliente_id'], $cli['id']));
     $estP = $proy ? normal_($proy['estado'] ?? '') : '';
-    if ($valor && $estP === 'entregado' && function_exists('accEnviadoProyecto_')) {
-      /* El proyecto lo hizo el CRM: se marca allí como enviado (y se agenda la llamada de la semana). */
+    if ($valor && $estP !== 'enviado' && function_exists('accEnviadoProyecto_')) {
+      /* Se marca también en el proyecto (lo ve igual la ficha, Inicio y el listado de sin enviar) y se agenda la llamada de la semana.
+         Si el proyecto no está en el CRM (ni hecho ni con PDF), queda solo en la visita, como antes. */
       $r = accEnviadoProyecto_($u, ['cliente_id' => $cli['id']]);
-      if (empty($r['ok'])) return $r;
+      if (empty($r['ok']) && $estP === 'entregado') return $r;
     }
-    if (!$valor && $estP === 'enviado' && !empty(permisos_($u)['editarTodo']) && function_exists('accEnviadoProyecto_')) {
+    if (!$valor && function_exists('accEnviadoProyecto_')) {
       accEnviadoProyecto_($u, ['cliente_id' => $cli['id'], 'deshacer' => true]);
     }
     $cambios = ['proyecto_enviado' => $valor ? ahora_() : ''];

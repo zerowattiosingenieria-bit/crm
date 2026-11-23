@@ -207,9 +207,9 @@ export async function vistaVisitas({ir}) {
         }, {auto: v.proyecto_auto, titulo: v.proyecto_auto ? 'Hecho en el CRM' : 'Márcalo si el proyecto ya está hecho'}),
         h('span.vis-linea' + (v.enviado ? '.ok' : '')),
         paso('Enviado al cliente', '✉', v.enviado ? true : null, () => {
-          if (v.enviado_auto && !direccion) return aviso('Ya consta como enviado en el CRM.');
+          /* 23/11/2026: el comercial también lo puede quitar si no está enviado. */
           marcar('enviado', !v.enviado);
-        }, {auto: v.enviado_auto, titulo: 'Márcalo cuando le hayas mandado el proyecto al cliente'}),
+        }, {auto: v.enviado_auto, titulo: v.enviado ? 'Enviado. Pulsa si en realidad no se le ha mandado' : 'Márcalo cuando le hayas mandado el proyecto al cliente'}),
         h('span.vis-linea' + (v.venta ? '.ok' : '')),
         paso('Venta', '€', v.venta ? true : null,
           () => aviso(v.venta ? 'Venta: la financiera la ha aprobado o el cliente ya ha pagado.' : 'La venta se marca sola cuando la financiera la aprueba o el cliente paga.'),

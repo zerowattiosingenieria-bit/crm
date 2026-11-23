@@ -381,6 +381,7 @@ function permisos_(array $u): array {
   /* Los Gantt, solo las personas de GANTT_USUARIOS (config.php). */
   $o['gantt'] = veGantt_($u);
   $o['calfechas'] = in_array(txt_($u['id'] ?? ''), defined('CALFECHAS_USUARIOS') ? CALFECHAS_USUARIOS : [], true);
+  $o['sinenviar'] = in_array(txt_($u['id'] ?? ''), defined('SIN_ENVIAR_USUARIOS') ? SIN_ENVIAR_USUARIOS : [], true);
   return $o;
 }
 

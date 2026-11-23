@@ -546,6 +546,55 @@ function bandaReagendar(c, refrescar) {
     soyCap || api.esDireccion() ? h('a', {href: '#reagendar'}, 'Ver todas') : null);
 }
 
+/* ---------- ¿Está enviado el proyecto? (23/11/2026, Nando) ----------
+   «Se tiene que ver claro en la ficha si el proyecto está enviado, y el comercial indicarlo con un
+   botón si está enviado o no.» Se mira el proyecto del CRM y las visitas (Mis visitas). El botón lo
+   tienen el comercial del cliente y dirección; el captador solo lo ve. No manda nada al cliente. */
+function bandaProyecto(c, refrescar) {
+  const hueco = h('div');
+  const yo = api.estado.usuario || {};
+  const puede = api.esDireccion() || (yo.rol === 'comercial' && txt(c.comercial_id) === txt(yo.id));
+  const listo = async () => { for (let i = 0; i < 40 && !hueco.isConnected; i++) await new Promise(r => setTimeout(r, 50)); return hueco.isConnected; };
+  api.proyectoDe(c.id).then(async d => {
+    if (!(await listo())) return;
+    const pr = (d && d.proyecto) || {};
+    const est = normal(pr.estado);
+    const pdfs = ((d && d.archivos) || []).filter(a => a.clase === 'proyecto');
+    const enCita = api.captacionesDe(c.id).map(k => txt(k.proyecto_enviado)).filter(Boolean).sort().pop() || '';
+    const enviado = est === 'enviado' ? (txt(pr.enviado) || enCita || 'sí') : enCita;
+    const hecho = est === 'entregado' || est === 'enviado' || pdfs.length > 0;
+    if (!hecho && !enviado && !['pedido', 'en_curso', 'faltan_datos'].includes(est)) return;
+    const caja = (fondo, borde, ...hijos) => h('div', {estilo: {background: fondo, border: '1px solid ' + borde, borderRadius: '10px', padding: '10px 14px',
+      margin: '0 0 12px', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap'}}, ...hijos);
+    const marcar = deshacer => async e => {
+      e.currentTarget.disabled = true;
+      try {
+        const r = await api.enviadoProyecto(c.id, deshacer);
+        aviso(deshacer ? 'Marcado como NO enviado' : 'Marcado como enviado' + (r && r.llamada ? '. Te queda apuntado llamarle el ' + fechaCorta(r.llamada) : ''), 'ok');
+        await refrescar();
+      } catch (er) { avisoError(er); e.currentTarget.disabled = false; }
+    };
+    let nodo;
+    if (enviado) {
+      nodo = caja('#EAF7DA', '#bfe3a0', h('b', {estilo: {fontSize: '20px', color: '#3d7a00'}}, '✓'),
+        h('div', {estilo: {flex: 1, minWidth: '220px'}}, h('b', 'Proyecto ENVIADO al cliente'),
+          h('div.nota', [/^\d{4}-/.test(enviado) ? 'el ' + fechaCorta(enviado.slice(0, 10)) : '', txt(pr.enviado_por) ? 'marcado por ' + api.nombrePersona(pr.enviado_por) : ''].filter(Boolean).join(' · ') || 'Marcado como enviado')),
+        puede ? h('button.btn.mini', {onclick: marcar(true), title: 'Si se marcó sin querer o aún no le ha llegado'}, '↺ No está enviado') : null);
+    } else if (hecho) {
+      nodo = caja('#FFF4DE', '#f1d9a6', h('b', {estilo: {fontSize: '20px', color: '#9a6a00'}}, '✉'),
+        h('div', {estilo: {flex: 1, minWidth: '220px'}}, h('b', 'Proyecto hecho · SIN ENVIAR al cliente'),
+          h('div.nota', (txt(pr.entregado) ? 'Listo desde el ' + fechaCorta(txt(pr.entregado).slice(0, 10)) + '. ' : '') + (puede ? 'Cuando se lo mandes, márcalo aquí.' : 'Lo marca su comercial cuando se lo manda.'))),
+        puede ? h('button.btn.primario', {onclick: marcar(false)}, '✓ Marcar como enviado') : null);
+    } else {
+      nodo = caja('var(--fondo-2, #f1f2ec)', 'var(--linea, #e4e7de)', h('b', {estilo: {fontSize: '18px'}}, '📐'),
+        h('div', {estilo: {flex: 1}}, h('b', est === 'faltan_datos' ? 'Proyecto parado: faltan datos' : 'Proyecto pedido al ingeniero'),
+          h('div.nota', est === 'faltan_datos' && txt(pr.faltan) ? 'Falta: ' + txt(pr.faltan) : (txt(pr.pedido) ? 'Pedido el ' + fechaCorta(txt(pr.pedido).slice(0, 10)) : 'Todavía no está hecho'))));
+    }
+    hueco.replaceWith(nodo);
+  }).catch(() => {});
+  return hueco;
+}
+
 export async function vistaCliente({id, ir, refrescar}) {
   const c = api.cliente(id);
   if (!c) return h('.tarjeta', h('.cuerpo', h('h2', 'Este cliente no está en tu cartera'),
@@ -644,6 +693,7 @@ export async function vistaCliente({id, ir, refrescar}) {
     cabecera,
     bandaKO(c, refrescar),
     bandaReagendar(c, refrescar),
+    bandaProyecto(c, refrescar),
     kpis(
       kpi('Instalaciones', miles(ops.length), ops.length ? api.etiquetaCatalogo('tiposOperacion', ops[0].tipo) : 'ninguna'),
       kpi('Importe', eur(total), 'IVA incluido'),

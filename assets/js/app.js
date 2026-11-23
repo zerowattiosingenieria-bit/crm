@@ -13,6 +13,7 @@ import {vistaEstadisticas} from './vistas/estadisticas.js';
 import {vistaIncidencias, vistaAvisarIncidencia} from './vistas/incidencias.js';
 import {vistaKO} from './vistas/ko.js';
 import {vistaReagendar} from './vistas/reagendar.js';
+import {vistaSinEnviar} from './vistas/sinenviar.js';
 import {vistaTramites, veTramites} from './vistas/tramites.js';
 import {vistaSubcontratas, vistaCuentasPortal} from './vistas/subcontratas.js';
 import {vistaSeguimiento} from './vistas/seguimiento.js';
@@ -60,6 +61,7 @@ const VISTAS = {
   clientes:     {titulo: 'Clientes',           pinta: vistaClientes},
   ko:           {titulo: 'Clientes KO',        pinta: vistaKO},
   reagendar:    {titulo: 'Por reagendar',      pinta: vistaReagendar},
+  sinenviar:    {titulo: 'Proyectos sin enviar', pinta: vistaSinEnviar,  permiso: 'sinenviar'},
   cliente:      {titulo: 'Ficha de cliente',   pinta: vistaCliente},
   operaciones:  {titulo: 'Instalaciones',      pinta: vistaOperaciones},
   captaciones:  {titulo: 'Captaciones',        pinta: vistaCaptaciones},
@@ -138,6 +140,7 @@ function menuDe(rol) {
       {id: 'tablero', et: 'Mi tablero', ico: '◑'},
       {id: 'agenda', et: 'Agenda', ico: '◷'},
       {id: 'visitas', et: 'Mis visitas', ico: '✔'},
+      {id: 'sinenviar', et: 'Proyectos sin enviar', ico: '✉'},
       {id: 'parte', et: 'Parte del día', ico: '✓'},
       {grupo: 'Clientes y ventas'},
       {id: 'clientes', et: 'Mis clientes', ico: '☰'},
@@ -169,6 +172,7 @@ function menuDe(rol) {
     {id: 'clientes', et: 'Clientes', ico: '☰'},
     {id: 'ko', et: 'Clientes KO', ico: '✕'},
     {id: 'visitas', et: 'Visitas de los comerciales', ico: '✔'},
+    {id: 'sinenviar', et: 'Proyectos sin enviar', ico: '✉'},
     {id: 'captaciones', et: 'Captaciones', ico: '⚑'},
     {id: 'reagendar', et: 'Por reagendar', ico: '↻'},
     {id: 'cotizador', et: 'Cotizador', ico: '€'},
@@ -215,8 +219,8 @@ function rutaActual() {
 const K_MENU = 'zw.crm.menuSimple';
 const MENU_CORTO = {
   captador: ['inicio', 'agenda', 'captaciones', 'clientes', 'operaciones', 'parte', 'tramites', 'avisar', 'perfil'],
-  comercial: ['inicio', 'agenda', 'visitas', 'clientes', 'visor', 'cotizador', 'operaciones', 'calinstalaciones', 'calfechas', 'parte', 'avisar', 'perfil'],
-  otro: ['inicio', 'tablero', 'incidencias', 'agenda', 'visitas', 'clientes', 'operaciones', 'calinstalaciones', 'calfechas', 'gantt', 'seguimiento', 'subcontratas', 'tramites', 'captaciones', 'estadisticas', 'dinero', 'perfil']
+  comercial: ['inicio', 'agenda', 'visitas', 'sinenviar', 'clientes', 'visor', 'cotizador', 'operaciones', 'calinstalaciones', 'calfechas', 'parte', 'avisar', 'perfil'],
+  otro: ['inicio', 'tablero', 'incidencias', 'agenda', 'visitas', 'sinenviar', 'clientes', 'operaciones', 'calinstalaciones', 'calfechas', 'gantt', 'seguimiento', 'subcontratas', 'tramites', 'captaciones', 'estadisticas', 'dinero', 'perfil']
 };
 const menuCorto = () => { try { return localStorage.getItem(K_MENU) === '1'; } catch (e) { return false; } };
 
