@@ -93,7 +93,7 @@ export async function vistaHoy({ir, refrescar}) {
 
     /* --- semáforo de la cartera --- */
     const propuestas = api.estado.operaciones.filter(o => (esDir || txt(o.comercial_id) === txt(yo.id)) &&
-      normal(o.estado) === 'propuesta');
+      normal(o.estado) === 'propuesta' && normal((api.estado.clientes.find(c => c.id === o.cliente_id) || {}).estado) !== 'ko');
     const diasDesde = o => {
       const segs = api.seguimientoDe(o.cliente_id) || [];
       const ultima = segs.map(s => txt(s.fecha)).sort().pop() || txt(o.fecha_propuesta) || txt(o.creado);

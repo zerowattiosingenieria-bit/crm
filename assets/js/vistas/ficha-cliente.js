@@ -92,7 +92,7 @@ export function faltaPorMeter(c, {editarContacto, editarVivienda, irA}) {
   if (!txt(c.calefaccion)) f.push(['Calefacción actual', editarVivienda]);
   if (txt(c.calefaccion) && !/sin calef|electrica|bomba/.test(normal(c.calefaccion)) && !num(c.gasto_combustible))
     f.push(['Gasto en ' + txt(c.calefaccion).toLowerCase(), editarVivienda]);
-  if (!txt(c.proxima_fecha) && !['ganado', 'perdido'].includes(normal(c.estado))) f.push(['Próximo paso con fecha', () => irA('apuntar')]);
+  if (!txt(c.proxima_fecha) && !['ganado', 'perdido', 'ko'].includes(normal(c.estado))) f.push(['Próximo paso con fecha', () => irA('apuntar')]);
   if (op && !num(op.total)) f.push(['Importe de la instalación', () => irA('instalaciones')]);
   return f;
 }

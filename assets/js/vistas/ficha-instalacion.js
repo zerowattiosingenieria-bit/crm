@@ -39,7 +39,7 @@ function fechasFase(c, o) {
 /** Barra de fases con iconos: lo hecho en lima, la fase actual resaltada. */
 function pasos(c, o) {
   const actual = faseActual(c, o);
-  const perdido = !o && ['perdido', 'frio'].includes(normal(c.estado));
+  const perdido = !o && ['perdido', 'frio', 'ko'].includes(normal(c.estado));
   const fechas = fechasFase(c, o);
   return h('div', {estilo: {display: 'grid', gridTemplateColumns: 'repeat(' + FASES.length + ', minmax(64px, 1fr))', gap: '4px', overflowX: 'auto', padding: '4px 0 2px'}},
     FASES.map(([k, et, ico], i) => {

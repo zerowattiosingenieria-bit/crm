@@ -363,7 +363,7 @@ export async function vistaClientes({ir, refrescar}) {
     poner(contenedor,
       kpis(
         kpi('Clientes', miles(lista.length), api.esDireccion() ? 'en total' : 'tuyos'),
-        kpi('En marcha', miles(lista.filter(c => !['ganado', 'perdido'].includes(txt(c.estado))).length),
+        kpi('En marcha', miles(lista.filter(c => !['ganado', 'perdido', 'ko'].includes(txt(c.estado))).length),
           'sin cerrar'),
         kpi('Ganados', miles(porEstado.ganado || 0), 'instalaciones vendidas', {estado: 'bien'}),
         kpi('Gasto medio', eur(lista.length ? suma(lista, gastoAnual) / lista.length : 0), 'energía al año'),
@@ -381,6 +381,58 @@ export async function vistaClientes({ir, refrescar}) {
 }
 
 /* ================= ficha ================= */
+/* ---------- KO (23/11/2026, Nando): el cliente no demuestra interés ----------
+   Lo ponen el comercial o dirección, siempre con motivo. Sale en «Clientes KO». */
+export const MOTIVOS_KO = [['sin_interes', 'No muestra interés'], ['no_contesta', 'No contesta / ilocalizable'], ['precio', 'Le parece caro'],
+  ['no_financia', 'No quiere o no le aprueban la financiación'], ['otra_empresa', 'Lo ha hecho con otra empresa'], ['no_apta', 'La vivienda no es apta'],
+  ['sin_fecha', 'Lo pospone sin fecha'], ['no_decide', 'No decide quien tiene que decidir'], ['otro', 'Otro motivo']];
+export const puedeKO = () => api.esDireccion() || (api.estado.usuario || {}).rol === 'comercial';
+const motivoKO = k => (MOTIVOS_KO.find(m => m[0] === k) || [k, k || 'Sin motivo'])[1];
+
+export function ponerKO(c, refrescar) {
+  const citas = api.captacionesDe(c.id).filter(k => !['venta', 'sentada', 'cancelada', 'no_sentada', 'potencial'].includes(normal(k.resultado)));
+  ventanaFormulario({
+    titulo: '✕ Poner en KO · ' + etiquetaCliente(c),
+    textoBoton: 'Poner en KO',
+    campos: [
+      {id: 'motivo', et: 'Motivo del KO', tipo: 'select', opciones: MOTIVOS_KO, requerido: true, vacio: 'Elige el motivo'},
+      {id: 'detalle', et: 'Explícalo (qué ha dicho, desde cuándo…)', tipo: 'area', filas: 4},
+      citas.length ? {id: 'cancelar_citas', et: 'Cancelar también sus ' + citas.length + (citas.length === 1 ? ' cita pendiente' : ' citas pendientes'), tipo: 'check'} : null
+    ].filter(Boolean),
+    valores: {cancelar_citas: 'si'},
+    extra: h('p.nota', 'El cliente deja de salir en la agenda, en los avisos y en los próximos pasos, y pasa al listado «Clientes KO». Se puede quitar el KO cuando quieras.'),
+    alGuardar: async d => {
+      const r = await api.pedir('marcarKO', {cliente_id: c.id, motivo: d.motivo, detalle: d.detalle, cancelar_citas: d.cancelar_citas === true || d.cancelar_citas === 'si'});
+      aviso('Cliente en KO' + (r.citas_canceladas ? ' · ' + r.citas_canceladas + ' cita(s) cancelada(s)' : ''), 'ok');
+      await refrescar();
+    }
+  });
+}
+export function quitarKO(c, refrescar) {
+  ventanaFormulario({
+    titulo: '↺ Quitar el KO · ' + etiquetaCliente(c), textoBoton: 'Quitar el KO',
+    campos: [{id: 'nota', et: '¿Por qué vuelve? (opcional)', tipo: 'area', filas: 3}],
+    extra: h('p.nota', 'El cliente vuelve al estado que tenía antes del KO. Ponle después el próximo paso con fecha.'),
+    alGuardar: async d => { await api.pedir('quitarKO', {cliente_id: c.id, nota: d.nota}); aviso('KO quitado', 'ok'); await refrescar(); }
+  });
+}
+function botonKO(c, refrescar) {
+  if (!puedeKO() || normal(c.estado) === 'ganado') return null;
+  return normal(c.estado) === 'ko'
+    ? h('button.btn', {onclick: () => quitarKO(c, refrescar), title: 'El cliente vuelve a estar en marcha'}, '↺ Quitar KO')
+    : h('button.btn', {onclick: () => ponerKO(c, refrescar), title: 'El cliente no demuestra interés: pasa al listado de clientes KO', estilo: {color: 'var(--mal, #c0392b)'}}, '✕ KO');
+}
+function bandaKO(c, refrescar) {
+  if (normal(c.estado) !== 'ko') return null;
+  return h('div', {estilo: {background: '#FBEDEA', border: '1px solid #f0c4bb', borderRadius: '10px', padding: '10px 14px', margin: '0 0 12px', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap'}},
+    h('b', {estilo: {fontSize: '18px', color: '#b23a2a'}}, 'KO'),
+    h('div', {estilo: {flex: 1, minWidth: '220px'}}, h('b', motivoKO(txt(c.ko_motivo))),
+      txt(c.ko_detalle) ? h('div', txt(c.ko_detalle)) : null,
+      h('div.nota', 'Puesto en KO el ' + fechaCorta(c.ko_fecha || c.fecha_estado) + (txt(c.ko_por) ? ' por ' + api.nombrePersona(c.ko_por) : ''))),
+    h('a', {href: '#ko'}, 'Ver todos los KO'),
+    puedeKO() ? h('button.btn.mini', {onclick: () => quitarKO(c, refrescar)}, '↺ Quitar KO') : null);
+}
+
 export async function vistaCliente({id, ir, refrescar}) {
   const c = api.cliente(id);
   if (!c) return h('.tarjeta', h('.cuerpo', h('h2', 'Este cliente no está en tu cartera'),
@@ -439,6 +491,7 @@ export async function vistaCliente({id, ir, refrescar}) {
         ? h('button.btn', {onclick: () => ir('visor/' + encodeURIComponent(c.id)), title: 'Casa en 3D con el tejado, las placas y la aerotermia'}, '⌂ Visor 3D')
         : null,
       h('button.btn', {onclick: () => ir('avisar/' + encodeURIComponent(c.id)), title: 'Avisar a dirección de un problema con este cliente'}, '⚠ Incidencia'),
+      botonKO(c, refrescar),
       h('button.btn.primario', {onclick: apuntar}, '+ Apuntar')));
 
   const tabs = [
@@ -474,6 +527,7 @@ export async function vistaCliente({id, ir, refrescar}) {
   return h('div',
     h('button.btn.plano', {estilo: {marginBottom: '8px'}, onclick: () => ir('clientes')}, '← Clientes'),
     cabecera,
+    bandaKO(c, refrescar),
     kpis(
       kpi('Instalaciones', miles(ops.length), ops.length ? api.etiquetaCatalogo('tiposOperacion', ops[0].tipo) : 'ninguna'),
       kpi('Importe', eur(total), 'IVA incluido'),

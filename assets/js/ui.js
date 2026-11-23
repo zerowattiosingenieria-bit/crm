@@ -80,7 +80,7 @@ export const marca = (texto, clase) => h('span.etiqueta' + (clase ? '.' + clase 
 const CLASES_ESTADO = {
   ganado: 'bien', legalizada: 'bien', cerrada: 'bien', instalada: 'bien', firmada: 'bien',
   cobrado: 'bien', pagado: 'bien', cobrada: 'bien', venta: 'bien', confirmada: 'bien',
-  perdido: 'mal', cancelada: 'mal', vencido: 'mal', vencida: 'mal', incobrable: 'mal', no_interesa: 'mal',
+  perdido: 'mal', ko: 'mal', cancelada: 'mal', vencido: 'mal', vencida: 'mal', incobrable: 'mal', no_interesa: 'mal',
   negociando: 'aviso', financiacion: 'aviso', frio: 'aviso', pendiente: 'aviso', parcial: 'aviso',
   recontactar: 'aviso', tramite: 'aviso',
   propuesta: 'info', cita: 'info', sentada: 'info', captado: 'info', material: 'info',

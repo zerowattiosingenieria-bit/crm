@@ -339,7 +339,7 @@ function tarjetaSePasa(ir) {
 function panelComercial({mias, r, ir, recarga}) {
   const clientes = api.estado.clientes;
   const hoy = hoyISO();
-  const activos = clientes.filter(c => !['ganado', 'perdido'].includes(normal(c.estado)));
+  const activos = clientes.filter(c => !['ganado', 'perdido', 'ko'].includes(normal(c.estado)));
   const prox = agendaProxima(ir);
   const atrasados = clientes.filter(c =>
     api.pasoPendiente(c) && txt(c.proxima_fecha) < hoy).length;

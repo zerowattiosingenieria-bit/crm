@@ -362,7 +362,7 @@ export function yaCompro(c) {
 }
 export function pasoPendiente(c) {
   if (!c || !String(c.proxima_fecha ?? '').trim()) return false;
-  if (['ganado', 'perdido'].includes(_norm(c.estado))) return false;
+  if (['ganado', 'perdido', 'ko'].includes(_norm(c.estado))) return false;
   if (_norm(c.proxima_accion) === 'sentada concertada') return false;
   return !yaCompro(c);
 }

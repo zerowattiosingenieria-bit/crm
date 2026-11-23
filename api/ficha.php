@@ -219,7 +219,7 @@ function sincronizarCaptacionCliente_(array $u, ?array $cap, ?array $cli): void 
   if ($res === 'no_sentada' && $actual === 'cita') $nuevo = 'captado';
   /* indexOf: -1 si no está (array_search devolvería false). */
   $pos = function ($e) { $i = array_search($e, ORDEN_ESTADO_, true); return $i === false ? -1 : $i; };
-  if ($nuevo !== '' && $actual !== 'perdido' && $actual !== 'ganado' &&
+  if ($nuevo !== '' && $actual !== 'perdido' && $actual !== 'ganado' && $actual !== 'ko' &&
       ($res === 'no_sentada' || $pos($nuevo) > $pos($actual))) {
     $cambios['estado'] = $nuevo;
     $cambios['fecha_estado'] = hoyISO_();

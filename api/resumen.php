@@ -117,7 +117,7 @@ function resumenPersona_(array $persona, string $desde, string $hasta, bool $con
     if (!isset($ultimoContacto[$k]) || $ultimoContacto[$k] < txt_($s['fecha'])) $ultimoContacto[$k] = txt_($s['fecha']);
   }
   $frios = array_values(array_filter($misClientes, function ($c) use ($ultimoContacto, $hoy) {
-    if (in_array(normal_($c['estado']), ['ganado', 'perdido'], true)) return false;
+    if (in_array(normal_($c['estado']), ['ganado', 'perdido', 'ko'], true)) return false;
     $ult = ($ultimoContacto[txt_($c['id'])] ?? '') ?: (txt_($c['fecha_estado']) ?: txt_($c['creado']));
     return (diasEntre_($ult, $hoy) ?? 0) > 15;
   }));
@@ -143,7 +143,7 @@ function resumenPersona_(array $persona, string $desde, string $hasta, bool $con
     'desde' => $desde, 'hasta' => $hasta,
     'periodo_objetivos' => $obj,
     'clientes' => count($misClientes),
-    'clientes_activos' => count(array_filter($misClientes, fn($c) => !in_array(normal_($c['estado']), ['ganado', 'perdido'], true))),
+    'clientes_activos' => count(array_filter($misClientes, fn($c) => !in_array(normal_($c['estado']), ['ganado', 'perdido', 'ko'], true))),
     'propuestas' => $nPropuestas,
     'ventas' => count($ganadasRango),
     'perdidas' => count(array_filter($perdidas, fn($o) => $enRango(txt_($o['modificado']) ?: txt_($o['creado'])))),
@@ -488,7 +488,7 @@ function accAlertas_(array $u, array $p): array {
 
   foreach ($clientes as $c) {
     if (txt_($c['proxima_fecha']) !== '' && txt_($c['proxima_fecha']) < $hoy &&
-        !in_array(normal_($c['estado']), ['ganado', 'perdido'], true)) {
+        !in_array(normal_($c['estado']), ['ganado', 'perdido', 'ko'], true)) {
       $avisos[] = ['tipo' => 'accion_vencida', 'nivel' => 'alto', 'cliente_id' => $c['id'],
         'texto' => $etq($c['id']) . ': "' . (txt_($c['proxima_accion']) ?: 'seguimiento') . '" venció el ' . txt_($c['proxima_fecha']) . '.'];
     }
@@ -536,7 +536,7 @@ function accAlertas_(array $u, array $p): array {
   foreach (leer_('SEGUIMIENTO') as $x) { $k = txt_($x['cliente_id']); if (isset($visibles[$k]) && txt_($x['fecha']) > ($seg[$k] ?? '')) $seg[$k] = txt_($x['fecha']); }
   foreach (leer_('PROYECTOS') as $pr) {
     $k = txt_($pr['cliente_id']); $env = substr(txt_($pr['enviado']), 0, 10);
-    if ($env === '' || !isset($visibles[$k]) || in_array(normal_($visibles[$k]['estado']), ['ganado', 'perdido', 'frio'], true)) continue;
+    if ($env === '' || !isset($visibles[$k]) || in_array(normal_($visibles[$k]['estado']), ['ganado', 'perdido', 'frio', 'ko'], true)) continue;
     $d = diasEntre_($env, $hoy) ?? 0;
     if ($d > 7 && ($seg[$k] ?? '') <= $env) $avisos[] = ['tipo' => 'propuesta_sin_llamada', 'nivel' => 'alto', 'cliente_id' => $k,
       'texto' => $etq($k) . ': proyecto enviado hace ' . $d . ' días y nadie le ha llamado después.'];
@@ -570,6 +570,10 @@ function accAlertas_(array $u, array $p): array {
 
   $orden = ['alto' => 0, 'medio' => 1, 'bajo' => 2];
   $avisos = ordenar_($avisos, fn($a, $b) => ($orden[$a['nivel']] ?? 0) <=> ($orden[$b['nivel']] ?? 0));
+  /* Los clientes en KO no generan avisos (23/11/2026). */
+  $ko = [];
+  foreach (leer_('CLIENTES') as $c) if (normal_($c['estado']) === 'ko') $ko[txt_($c['id'])] = 1;
+  if ($ko) $avisos = array_values(array_filter($avisos, fn($a) => !isset($ko[txt_($a['cliente_id'] ?? '')])));
   /* p.cliente_id: solo los de ese cliente (ficha) */
   if (txt_($p['cliente_id'] ?? '') !== '') $avisos = array_values(array_filter($avisos, fn($a) => mismo_($a['cliente_id'] ?? '', $p['cliente_id'])));
   return ['ok' => true, 'alertas' => array_slice($avisos, 0, 120)];

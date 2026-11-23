@@ -348,7 +348,7 @@ function vencidosDe_(array $u, string $hoy): array {
   if ($u['rol'] !== 'captador') {
     foreach ($clientes as $c) {
       if (txt_($c['comercial_id']) !== $id) continue;
-      if (in_array(normal_($c['estado']), ['ganado', 'perdido'], true)) continue;
+      if (in_array(normal_($c['estado']), ['ganado', 'perdido', 'ko'], true)) continue;
       /* La «Sentada concertada» automática y los que ya compraron no son seguimientos pendientes. */
       if (normal_($c['proxima_accion']) === 'sentada concertada' || yaCompro_($c)) continue;
       $f = trozo_($c['proxima_fecha'], 0, 10);

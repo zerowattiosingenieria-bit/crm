@@ -11,6 +11,7 @@ import {vistaOperaciones} from './vistas/operaciones.js';
 import {vistaCaptaciones} from './vistas/captaciones.js';
 import {vistaEstadisticas} from './vistas/estadisticas.js';
 import {vistaIncidencias, vistaAvisarIncidencia} from './vistas/incidencias.js';
+import {vistaKO} from './vistas/ko.js';
 import {vistaTramites, veTramites} from './vistas/tramites.js';
 import {vistaSubcontratas, vistaCuentasPortal} from './vistas/subcontratas.js';
 import {vistaSeguimiento} from './vistas/seguimiento.js';
@@ -56,6 +57,7 @@ const VISTAS = {
   gantt:        {titulo: 'Gantt y calendario del equipo', pinta: vistaGantt, permiso: 'gantt'},
   calfechas:    {titulo: 'Calendario FECHAS aerotermia y fotovoltaica', pinta: vistaCalFechas, permiso: 'calfechas'},
   clientes:     {titulo: 'Clientes',           pinta: vistaClientes},
+  ko:           {titulo: 'Clientes KO',        pinta: vistaKO},
   cliente:      {titulo: 'Ficha de cliente',   pinta: vistaCliente},
   operaciones:  {titulo: 'Instalaciones',      pinta: vistaOperaciones},
   captaciones:  {titulo: 'Captaciones',        pinta: vistaCaptaciones},
@@ -113,6 +115,7 @@ function menuDe(rol) {
       {id: 'parte', et: 'Parte del día', ico: '✓'},
       {grupo: 'Mis clientes'},
       {id: 'clientes', et: 'Mis clientes', ico: '☰'},
+      {id: 'ko', et: 'Clientes KO', ico: '✕'},
       {id: 'captaciones', et: 'Mis captaciones', ico: '⚑'},
       {id: 'operaciones', et: 'Sus instalaciones', ico: '⚡'},
       {id: 'tramites', et: 'CAEs y WIXER', ico: '♻'},
@@ -135,6 +138,7 @@ function menuDe(rol) {
       {id: 'parte', et: 'Parte del día', ico: '✓'},
       {grupo: 'Clientes y ventas'},
       {id: 'clientes', et: 'Mis clientes', ico: '☰'},
+      {id: 'ko', et: 'Clientes KO', ico: '✕'},
       {id: 'captaciones', et: 'Captaciones', ico: '⚑'},
       {id: 'cotizador', et: 'Cotizador', ico: '€'},
       {id: 'visor', et: 'Visor 3D', ico: '⌂'},
@@ -160,6 +164,7 @@ function menuDe(rol) {
     {id: 'incidencias', et: 'Incidencias', ico: '⚠'},
     {grupo: 'Clientes y ventas'},
     {id: 'clientes', et: 'Clientes', ico: '☰'},
+    {id: 'ko', et: 'Clientes KO', ico: '✕'},
     {id: 'visitas', et: 'Visitas de los comerciales', ico: '✔'},
     {id: 'captaciones', et: 'Captaciones', ico: '⚑'},
     {id: 'cotizador', et: 'Cotizador', ico: '€'},
