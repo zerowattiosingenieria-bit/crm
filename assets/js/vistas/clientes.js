@@ -650,9 +650,12 @@ export async function vistaCliente({id, ir, refrescar}) {
       kpi('Gasto energético', eur(gastoAnual(c)), 'al año, antes de instalar'),
       kpi('Último contacto', contactos.length ? haceDias(contactos[0].fecha) : '—',
         contactos.length ? api.etiquetaCatalogo('canales', contactos[0].canal) : 'sin apuntes'),
-      kpi('Próximo paso', txt(c.proxima_fecha) ? fechaCorta(c.proxima_fecha) : '—',
-        txt(c.proxima_accion) || 'sin definir',
-        {estado: txt(c.proxima_fecha) && txt(c.proxima_fecha) < hoyISO() ? 'mal' : null})
+      /* 23/11/2026: si el próximo paso es reagendar y el cliente tiene captador, al comercial no le llega. */
+      (api.estado.usuario || {}).rol === 'comercial' && txt(c.captador_id) && api.esLlamadaDeAgendar(c.proxima_accion)
+        ? kpi('Próximo paso', '—', 'reagendar: lo lleva ' + api.nombrePersona(c.captador_id))
+        : kpi('Próximo paso', txt(c.proxima_fecha) ? fechaCorta(c.proxima_fecha) : '—',
+          txt(c.proxima_accion) || 'sin definir',
+          {estado: txt(c.proxima_fecha) && txt(c.proxima_fecha) < hoyISO() ? 'mal' : null})
     ),
     pestanas, panel);
 }

@@ -178,7 +178,9 @@ export function panelHistorial(c, {apuntar}) {
 /* ---------- todas las citas ---------- */
 
 export function panelCitas(c, {refrescar, nuevaCita}) {
-  const citas = api.captacionesDe(c.id);
+  /* 23/11/2026: las citas pendientes de reagendar (sin fecha) son del captador; al comercial no le salen. */
+  const citas = api.captacionesDe(c.id).filter(k => !((api.estado.usuario || {}).rol === 'comercial' &&
+    normal(k.estado_cita) === 'recontactar' && !txt(k.fecha) && normal(k.resultado || 'pendiente') === 'pendiente'));
   const fila = k => h('li',
     h('.cuando', fechaLarga(k.fecha) + (txt(k.hora_cita) ? ' a las ' + k.hora_cita : '') + ' · ' +
       api.etiquetaCatalogo('estadosCita', k.estado_cita)),
