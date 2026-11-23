@@ -6,8 +6,8 @@
  * ese cliente no demuestra interés; también una pestaña para poner el motivo del KO; estos que
  * se pongan en KO se guardarán en un listado al que se podrá acceder.»
  *
- *  - Lo ponen el comercial (en sus clientes) o dirección. El captador no lo pone, pero ve en el
- *    listado los KO de sus clientes.
+ *  - Lo ponen el comercial (en sus clientes), el captador (en sus clientes, 23/11/2026) o dirección,
+ *    siempre que el cliente no haya firmado.
  *  - Siempre con motivo (de una lista) y, si se quiere, una explicación.
  *  - El cliente pasa a estado «ko»: deja de salir en agendas, avisos y próximos pasos.
  *    Opcionalmente se cancelan sus citas pendientes (con el motivo).
@@ -32,12 +32,24 @@ function koMotivoEt_(string $k): string {
 }
 
 function puedeKO_(array $u): bool {
-  return (permisos_($u)['alcance'] ?? '') === 'todo' || normal_($u['rol'] ?? '') === 'comercial';
+  return (permisos_($u)['alcance'] ?? '') === 'todo' || in_array(normal_($u['rol'] ?? ''), ['comercial', 'captador'], true);
+}
+
+/** ¿Ha firmado? Ganado, una operación firmada o más allá, con fecha de firma, o una cita con venta. */
+function clienteFirmado_(array $cli): bool {
+  if (normal_($cli['estado'] ?? '') === 'ganado') return true;
+  $vendida = ['firmada', 'tramite', 'material', 'instalacion', 'instalada', 'legalizada', 'cerrada'];
+  foreach (leer_('OPERACIONES') as $o) {
+    if (!mismo_($o['cliente_id'], $cli['id'])) continue;
+    if (in_array(normal_($o['estado'] ?? ''), $vendida, true) || txt_($o['fecha_firma'] ?? '') !== '') return true;
+  }
+  foreach (leer_('CAPTACIONES') as $k) if (mismo_($k['cliente_id'], $cli['id']) && normal_($k['resultado'] ?? '') === 'venta') return true;
+  return false;
 }
 
 /** p.cliente_id, p.motivo (clave), p.detalle, p.cancelar_citas (bool). */
 function accMarcarKO_(array $u, array $p): array {
-  if (!puedeKO_($u)) return ['ok' => false, 'error' => 'El KO lo ponen el comercial o dirección.'];
+  if (!puedeKO_($u)) return ['ok' => false, 'error' => 'El KO lo ponen el comercial, el captador o dirección.'];
   $v = clienteVisible_($u, $p['cliente_id'] ?? '');
   if (isset($v['error'])) return ['ok' => false, 'error' => $v['error']];
   $cli = $v['cliente'];
@@ -45,7 +57,7 @@ function accMarcarKO_(array $u, array $p): array {
   if (!in_array($motivo, array_column(KO_MOTIVOS, 0), true)) return ['ok' => false, 'error' => 'Elige el motivo del KO.'];
   $detalle = mb_substr(txt_($p['detalle'] ?? ''), 0, 600);
   if ($motivo === 'otro' && $detalle === '') return ['ok' => false, 'error' => 'Cuenta brevemente el motivo.'];
-  if (normal_($cli['estado']) === 'ganado') return ['ok' => false, 'error' => 'Este cliente ya ha comprado: no se puede poner en KO. Si se ha caído la operación, cancélala.'];
+  if (clienteFirmado_($cli)) return ['ok' => false, 'error' => 'Este cliente ya ha firmado: no se puede poner en KO. Si se ha caído la operación, cancélala.'];
   $previo = normal_($cli['estado']) === 'ko' ? txt_($cli['ko_estado_previo'] ?? '') : txt_($cli['estado']);
   actualizar_('CLIENTES', $cli['id'], ['estado' => 'ko', 'fecha_estado' => hoyISO_(), 'ko_motivo' => $motivo, 'ko_detalle' => $detalle,
     'ko_fecha' => ahora_(), 'ko_por' => $u['id'], 'ko_estado_previo' => $previo, 'proxima_accion' => '', 'proxima_fecha' => '',
@@ -65,7 +77,7 @@ function accMarcarKO_(array $u, array $p): array {
 }
 
 function accQuitarKO_(array $u, array $p): array {
-  if (!puedeKO_($u)) return ['ok' => false, 'error' => 'El KO lo quitan el comercial o dirección.'];
+  if (!puedeKO_($u)) return ['ok' => false, 'error' => 'El KO lo quitan el comercial, el captador o dirección.'];
   $v = clienteVisible_($u, $p['cliente_id'] ?? '');
   if (isset($v['error'])) return ['ok' => false, 'error' => $v['error']];
   $cli = $v['cliente'];

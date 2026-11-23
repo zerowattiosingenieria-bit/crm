@@ -455,7 +455,8 @@ export async function vistaClientes({ir, refrescar}) {
 export const MOTIVOS_KO = [['sin_interes', 'No muestra interés'], ['no_contesta', 'No contesta / ilocalizable'], ['precio', 'Le parece caro'],
   ['no_financia', 'No quiere o no le aprueban la financiación'], ['otra_empresa', 'Lo ha hecho con otra empresa'], ['no_apta', 'La vivienda no es apta'],
   ['sin_fecha', 'Lo pospone sin fecha'], ['no_decide', 'No decide quien tiene que decidir'], ['otro', 'Otro motivo']];
-export const puedeKO = () => api.esDireccion() || (api.estado.usuario || {}).rol === 'comercial';
+/* 23/11/2026: también el captador (en sus clientes), siempre que el cliente no haya firmado. */
+export const puedeKO = () => api.esDireccion() || ['comercial', 'captador'].includes((api.estado.usuario || {}).rol);
 const motivoKO = k => (MOTIVOS_KO.find(m => m[0] === k) || [k, k || 'Sin motivo'])[1];
 
 export function ponerKO(c, refrescar) {
@@ -486,7 +487,7 @@ export function quitarKO(c, refrescar) {
   });
 }
 function botonKO(c, refrescar) {
-  if (!puedeKO() || normal(c.estado) === 'ganado') return null;
+  if (!puedeKO() || normal(c.estado) === 'ganado' || (normal(c.estado) !== 'ko' && api.yaCompro(c))) return null;
   return normal(c.estado) === 'ko'
     ? h('button.btn', {onclick: () => quitarKO(c, refrescar), title: 'El cliente vuelve a estar en marcha'}, '↺ Quitar KO')
     : h('button.btn', {onclick: () => ponerKO(c, refrescar), title: 'El cliente no demuestra interés: pasa al listado de clientes KO', estilo: {color: 'var(--mal, #c0392b)'}}, '✕ KO');

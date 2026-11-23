@@ -59,7 +59,7 @@ export async function vistaKO({ir, refrescar}) {
     poner(arriba,
       h('div', {estilo: {display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap', margin: '0 0 12px'}},
         h('div', h('h2', {estilo: {margin: 0}}, '✕ Clientes KO'),
-          h('p.nota', {estilo: {margin: '2px 0 0'}}, 'Clientes que no demuestran interés. Los ponen en KO el comercial o dirección desde la ficha, con su motivo.'))),
+          h('p.nota', {estilo: {margin: '2px 0 0'}}, 'Clientes que no demuestran interés. Los ponen en KO el comercial, el captador o dirección desde la ficha, con su motivo, si el cliente no ha firmado.'))),
       kpis(kpi('En KO', String(l.length), l.length === todos.length ? 'en total' : 'con estos filtros, de ' + todos.length),
         kpi('Últimos 30 días', String(mes), 'puestos en KO'),
         kpi('Motivo más repetido', orden.length ? orden[0][0] : '—', orden.length ? orden[0][1] + (orden[0][1] === 1 ? ' cliente' : ' clientes') : '')),
