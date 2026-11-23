@@ -114,6 +114,8 @@ function dejarSinFecha_(array $u, array $p): array {
   if (txt_($cap['fecha']) !== '') apuntarCambioCita_($u, $cap, 'reagendada', ['fecha' => '', 'hora_cita' => '', 'motivo' => $motivo ?: 'Pendiente de reagendar']);
   actualizar_('CLIENTES', $cap['cliente_id'], ['proxima_accion' => 'Llamar para dar cita', 'proxima_fecha' => $volver,
     'modificado' => ahora_(), 'modificado_por' => $u['id']]);
+  /* 23/11/2026: queda en «Por reagendar» del captador, con quién lo pidió y por qué. */
+  actualizar_('CAPTACIONES', $cap['id'], ['reag_motivo' => '', 'reag_detalle' => mb_substr($motivo, 0, 500), 'reag_por' => $u['id'], 'reag_fecha' => ahora_()]);
   registrar_($u, 'reagendar_cita', 'CAPTACIONES', $cap['id'], $nota);
   return ['ok' => true, 'captacion' => $r['captacion'] ?? null, 'sin_fecha' => true];
 }

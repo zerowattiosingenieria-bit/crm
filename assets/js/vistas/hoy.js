@@ -82,7 +82,7 @@ export async function vistaHoy({ir, refrescar}) {
         txt(cli.telefono) ? h('a.btn.mini', {href: telHref(cli.telefono)}, '📞') : null,
         h('button.btn.mini.primario', {onclick: () => ventanaReagendar(c, refrescar)}, 'Dar fecha'),
         h('button.btn.mini', {onclick: () => ir('cliente/' + cli.id)}, 'Ficha'));
-    })), {subtitulo: 'El cliente aún no podía dar fecha. Cuando la tenga, pulsa «Dar fecha».'}));
+    })), {subtitulo: 'El cliente aún no podía dar fecha. Cuando la tenga, pulsa «Dar fecha».', acciones: h('button.btn.mini', {onclick: () => ir('reagendar')}, 'Ver todas')}));
   }
 
   if (!esCap) {

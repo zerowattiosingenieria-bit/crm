@@ -12,6 +12,7 @@ import {vistaCaptaciones} from './vistas/captaciones.js';
 import {vistaEstadisticas} from './vistas/estadisticas.js';
 import {vistaIncidencias, vistaAvisarIncidencia} from './vistas/incidencias.js';
 import {vistaKO} from './vistas/ko.js';
+import {vistaReagendar} from './vistas/reagendar.js';
 import {vistaTramites, veTramites} from './vistas/tramites.js';
 import {vistaSubcontratas, vistaCuentasPortal} from './vistas/subcontratas.js';
 import {vistaSeguimiento} from './vistas/seguimiento.js';
@@ -58,6 +59,7 @@ const VISTAS = {
   calfechas:    {titulo: 'Calendario FECHAS aerotermia y fotovoltaica', pinta: vistaCalFechas, permiso: 'calfechas'},
   clientes:     {titulo: 'Clientes',           pinta: vistaClientes},
   ko:           {titulo: 'Clientes KO',        pinta: vistaKO},
+  reagendar:    {titulo: 'Por reagendar',      pinta: vistaReagendar},
   cliente:      {titulo: 'Ficha de cliente',   pinta: vistaCliente},
   operaciones:  {titulo: 'Instalaciones',      pinta: vistaOperaciones},
   captaciones:  {titulo: 'Captaciones',        pinta: vistaCaptaciones},
@@ -117,6 +119,7 @@ function menuDe(rol) {
       {id: 'clientes', et: 'Mis clientes', ico: '☰'},
       {id: 'ko', et: 'Clientes KO', ico: '✕'},
       {id: 'captaciones', et: 'Mis captaciones', ico: '⚑'},
+      {id: 'reagendar', et: 'Por reagendar', ico: '↻'},
       {id: 'operaciones', et: 'Sus instalaciones', ico: '⚡'},
       {id: 'tramites', et: 'CAEs y WIXER', ico: '♻'},
       {id: 'estadisticas', et: 'Estadísticas del equipo', ico: '▥'},
@@ -167,6 +170,7 @@ function menuDe(rol) {
     {id: 'ko', et: 'Clientes KO', ico: '✕'},
     {id: 'visitas', et: 'Visitas de los comerciales', ico: '✔'},
     {id: 'captaciones', et: 'Captaciones', ico: '⚑'},
+    {id: 'reagendar', et: 'Por reagendar', ico: '↻'},
     {id: 'cotizador', et: 'Cotizador', ico: '€'},
     {id: 'visor', et: 'Visor 3D', ico: '⌂'},
     {id: 'mapa', et: 'Mapa', ico: '◎'},

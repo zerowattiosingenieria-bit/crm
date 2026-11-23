@@ -433,6 +433,49 @@ function bandaKO(c, refrescar) {
     puedeKO() ? h('button.btn.mini', {onclick: () => quitarKO(c, refrescar)}, '↺ Quitar KO') : null);
 }
 
+/* ---------- Reagendar (23/11/2026, Nando): lo mismo que el KO, pero la cita pasa al captador ----------
+   La cita se queda sin fecha y le sale solo al captador del cliente («Por reagendar»). Cuando le
+   pone fecha nueva, vuelve a la agenda del comercial. */
+export const MOTIVOS_REAGENDAR = [['no_puede', 'Aún no puede dar fecha'], ['anula', 'Anula la visita y la quiere otro día'], ['no_contesta', 'No contesta para confirmar'],
+  ['fuera', 'Está fuera o de viaje'], ['comercial', 'El comercial no puede ese día'], ['falta_decisor', 'Falta quien decide'], ['otro', 'Otro motivo']];
+const citaPorReagendar = c => api.captacionesDe(c.id).find(k => normal(k.estado_cita) === 'recontactar' && !txt(k.fecha) && normal(k.resultado || 'pendiente') === 'pendiente');
+
+export function ponerReagendar(c, refrescar) {
+  const cap = api.nombrePersona(c.captador_id);
+  ventanaFormulario({
+    titulo: '↻ Reagendar · ' + etiquetaCliente(c), textoBoton: 'Pasar a ' + cap + ' para reagendar',
+    campos: [
+      {id: 'motivo', et: 'Motivo', tipo: 'select', opciones: MOTIVOS_REAGENDAR, requerido: true, vacio: 'Elige el motivo'},
+      {id: 'volver_llamar', et: 'Volver a llamar el (si se sabe)', tipo: 'date'},
+      {id: 'detalle', et: 'Explícalo (qué ha dicho, qué días le vienen mejor…)', tipo: 'area', filas: 3}
+    ],
+    extra: h('p.nota', 'La cita se queda sin fecha y pasa a ' + cap + ', su captador/a, que es quien le llama para darle día. Cuando tenga fecha, vuelve a la agenda del comercial.'),
+    alGuardar: async d => {
+      const r = await api.pedir('marcarReagendar', {cliente_id: c.id, motivo: d.motivo, detalle: d.detalle, volver_llamar: d.volver_llamar});
+      aviso('Pasada a ' + (r.captador || cap) + ' para reagendar', 'ok');
+      await refrescar();
+    }
+  });
+}
+function botonReagendar(c, refrescar) {
+  if (!txt(c.captador_id) || ['ganado', 'ko', 'perdido'].includes(normal(c.estado)) || citaPorReagendar(c)) return null;
+  return h('button.btn', {onclick: () => ponerReagendar(c, refrescar), title: 'El cliente quiere otro día: la cita pasa a su captador para que le dé fecha'}, '↻ Reagendar');
+}
+function bandaReagendar(c, refrescar) {
+  const k = citaPorReagendar(c);
+  if (!k) return null;
+  const motivo = (MOTIVOS_REAGENDAR.find(m => m[0] === txt(k.reag_motivo)) || [])[1];
+  const soyCap = txt((api.estado.usuario || {}).id) === txt(k.captador_id || c.captador_id);
+  return h('div', {estilo: {background: '#FFF4DE', border: '1px solid #f1d9a6', borderRadius: '10px', padding: '10px 14px', margin: '0 0 12px', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap'}},
+    h('b', {estilo: {fontSize: '18px', color: '#9a6a00'}}, '↻'),
+    h('div', {estilo: {flex: 1, minWidth: '220px'}}, h('b', 'Pendiente de reagendar' + (motivo ? ' · ' + motivo : '')),
+      txt(k.reag_detalle) ? h('div', txt(k.reag_detalle)) : null,
+      h('div.nota', 'Lo lleva ' + api.nombrePersona(k.captador_id || c.captador_id) + (txt(k.volver_llamar) ? ' · volver a llamar el ' + fechaCorta(k.volver_llamar) : '') +
+        (txt(k.reag_fecha) ? ' · desde el ' + fechaCorta(k.reag_fecha) : ''))),
+    soyCap || api.esDireccion() ? h('button.btn.mini.primario', {onclick: () => import('./citas-cambios.js').then(m => m.ventanaReagendar(k, refrescar))}, 'Dar fecha') : null,
+    soyCap || api.esDireccion() ? h('a', {href: '#reagendar'}, 'Ver todas') : null);
+}
+
 export async function vistaCliente({id, ir, refrescar}) {
   const c = api.cliente(id);
   if (!c) return h('.tarjeta', h('.cuerpo', h('h2', 'Este cliente no está en tu cartera'),
@@ -491,6 +534,7 @@ export async function vistaCliente({id, ir, refrescar}) {
         ? h('button.btn', {onclick: () => ir('visor/' + encodeURIComponent(c.id)), title: 'Casa en 3D con el tejado, las placas y la aerotermia'}, '⌂ Visor 3D')
         : null,
       h('button.btn', {onclick: () => ir('avisar/' + encodeURIComponent(c.id)), title: 'Avisar a dirección de un problema con este cliente'}, '⚠ Incidencia'),
+      botonReagendar(c, refrescar),
       botonKO(c, refrescar),
       h('button.btn.primario', {onclick: apuntar}, '+ Apuntar')));
 
@@ -528,6 +572,7 @@ export async function vistaCliente({id, ir, refrescar}) {
     h('button.btn.plano', {estilo: {marginBottom: '8px'}, onclick: () => ir('clientes')}, '← Clientes'),
     cabecera,
     bandaKO(c, refrescar),
+    bandaReagendar(c, refrescar),
     kpis(
       kpi('Instalaciones', miles(ops.length), ops.length ? api.etiquetaCatalogo('tiposOperacion', ops[0].tipo) : 'ninguna'),
       kpi('Importe', eur(total), 'IVA incluido'),
