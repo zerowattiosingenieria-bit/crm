@@ -44,6 +44,11 @@ export const citaCancelada = k => normal(k.resultado) === 'cancelada';
 
 export function ventanaReagendar(k, refrescar) {
   const c = api.cliente(k.cliente_id) || {};
+  /* 23/11/2026: reagendar es siempre del captador. El comercial no pone fecha nueva: pasa la cita
+     al captador del cliente con el motivo, y le vuelve cuando tenga fecha. */
+  if ((api.estado.usuario || {}).rol === 'comercial' && txt(k.captador_id || c.captador_id)) {
+    return import('./clientes.js').then(m => m.ponerReagendar(c, refrescar));
+  }
   const vf = ventanaFormulario({
     titulo: (txt(k.fecha) ? 'Reagendar la cita · ' : 'Dar fecha a la cita · ') + etiquetaCliente(c),
     campos: [

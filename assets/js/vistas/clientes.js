@@ -227,6 +227,75 @@ function botonProyectoPdf(c) {
   return hueco;
 }
 
+/* ---------- Mandar el proyecto por correo (23/11/2026, Nando) ----------
+   «Un botón para mandar el proyecto por mail, que adjunte el proyecto, y que solo le salte al
+   comercial en sus borradores.» El CRM no envía nada: prepara un borrador con el PDF adjunto
+   que se abre en el correo del comercial (Outlook) para que lo revise y lo mande él. */
+const b64utf8 = t => btoa(unescape(encodeURIComponent(t)));
+const partir76 = t => t.replace(/.{1,76}/g, m => m + '\r\n');
+function emlBorrador({para, asunto, cuerpo, adjunto}) {
+  const lim = '=_zw_' + Math.random().toString(36).slice(2);
+  const nombre = adjunto.nombre || 'Proyecto.pdf';
+  return ['X-Unsent: 1', 'To: ' + para, 'Subject: =?UTF-8?B?' + b64utf8(asunto) + '?=', 'MIME-Version: 1.0',
+    'Content-Type: multipart/mixed; boundary="' + lim + '"', '', '--' + lim,
+    'Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: base64', '', partir76(b64utf8(cuerpo)),
+    '--' + lim, 'Content-Type: ' + (adjunto.mime || 'application/pdf') + '; name="=?UTF-8?B?' + b64utf8(nombre) + '?="',
+    'Content-Transfer-Encoding: base64', 'Content-Disposition: attachment; filename="=?UTF-8?B?' + b64utf8(nombre) + '?="', '',
+    partir76(adjunto.datos.replace(/\s+/g, '')), '--' + lim + '--', ''].join('\r\n');
+}
+function textoCorreoProyecto(c) {
+  const nombre = txt(c.nombre).split(/\s+/)[0] || '';
+  const ops = api.operacionesDe(c.id).filter(o => normal(o.estado) !== 'cancelada');
+  const op = ops[0];
+  const tipo = op ? (api.etiquetaCatalogo('tiposOperacion', op.tipo) || '').toLowerCase() : '';
+  const total = op ? num(op.total) : 0;
+  const cuota = op && num(op.cuota) && normal(op.forma_pago) === 'financiado' ? num(op.cuota) : (total ? Math.round(total * 0.012894 * 100) / 100 : 0);
+  const yo = api.estado.usuario || {};
+  const asunto = 'Tu proyecto de ' + (tipo || 'instalación') + (txt(c.direccion) ? ' · ' + txt(c.direccion).replace(/,.*$/, '') : '');
+  const cuerpo = 'Hola ' + nombre + ',\n\n' +
+    'Te adjunto el proyecto de tu instalación' + (tipo ? ' de ' + tipo : '') + (txt(c.direccion) ? ' en ' + txt(c.direccion).replace(/,.*$/, '') : '') + ', con todo lo que incluye, el ahorro que vas a tener y las ayudas.\n\n' +
+    (cuota ? 'Con la financiación a 10 años, la cuota queda en ' + cuota.toLocaleString('es-ES', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' € al mes, y puedes amortizar cuando quieras a coste 0 (por ejemplo, cuando lleguen las ayudas) para bajarla.\n\n' : '') +
+    'Échale un vistazo con calma y cualquier duda me dices y lo vemos.\n\n' +
+    'Un saludo,\n' + (txt(yo.nombre) || '') + '\nZero Wattios';
+  return {asunto, cuerpo};
+}
+function botonCorreoProyecto(c) {
+  const rol = (api.estado.usuario || {}).rol;
+  if (rol === 'captador') return null;
+  const hueco = h('span', {estilo: {display: 'contents'}});
+  api.proyectoDe(c.id).then(d => {
+    const pdfs = ((d && d.archivos) || []).filter(a => a.clase === 'proyecto' && (/pdf/i.test(txt(a.mime)) || /\.pdf$/i.test(txt(a.nombre))));
+    if (!pdfs.length || !hueco.isConnected) return;
+    hueco.replaceWith(h('button.btn', {title: 'Prepara un borrador de correo con el proyecto adjunto, para que lo revises y lo mandes tú', onclick: () => ventanaCorreoProyecto(c, pdfs[0])}, '✉ Proyecto por correo'));
+  }).catch(() => {});
+  return hueco;
+}
+function ventanaCorreoProyecto(c, archivo) {
+  const t = textoCorreoProyecto(c);
+  const para = h('input', {type: 'email', value: txt(c.email), placeholder: 'correo del cliente', estilo: {width: '100%'}});
+  const asunto = h('input', {value: t.asunto, estilo: {width: '100%'}});
+  const cuerpo = h('textarea', {rows: 10, estilo: {width: '100%'}}); cuerpo.value = t.cuerpo;
+  const cargarPdf = async () => { const r = await api.descargarArchivo(archivo.id); return {nombre: r.nombre || archivo.nombre, mime: r.mime || 'application/pdf', datos: r.datos}; };
+  const bajar = (contenido, nombre, tipo) => { const url = URL.createObjectURL(new Blob([contenido], {type: tipo})); const a = h('a', {href: url, download: nombre});
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 30000); };
+  const v = ventana({titulo: '✉ Proyecto por correo · ' + etiquetaCliente(c), ancha: true, cuerpo: h('div', {estilo: {display: 'grid', gap: '10px'}},
+    h('p.nota', {estilo: {margin: 0}}, 'No se envía nada desde el CRM: se te abre como borrador en tu correo, con el proyecto adjunto (' + txt(archivo.nombre) + '), para que lo revises y lo mandes tú.'),
+    h('label.campo', h('span', 'Para'), para), h('label.campo', h('span', 'Asunto'), asunto), h('label.campo', h('span', 'Texto'), cuerpo)),
+    acciones: [
+      h('button.btn', {onclick: async e => { e.currentTarget.disabled = true;
+        try { await abrirArchivo(archivo); location.href = 'mailto:' + encodeURIComponent(para.value) + '?subject=' + encodeURIComponent(asunto.value) + '&body=' + encodeURIComponent(cuerpo.value);
+          aviso('Se ha descargado el PDF: adjúntalo en el correo que se abre.', 'ok'); } catch (er) { avisoError(er); } e.currentTarget.disabled = false; }}, 'Abrir en mi correo y descargar el PDF'),
+      h('button.btn.primario', {onclick: async e => { e.currentTarget.disabled = true;
+        try {
+          if (!txt(para.value)) throw new Error('Pon el correo del cliente.');
+          const adj = await cargarPdf();
+          bajar(emlBorrador({para: para.value.trim(), asunto: asunto.value, cuerpo: cuerpo.value, adjunto: adj}), 'Borrador - ' + asunto.value.replace(/[\\/:*?"<>|]+/g, '-').slice(0, 80) + '.eml', 'message/rfc822');
+          aviso('Borrador descargado: ábrelo (doble clic) y se abre en Outlook con el proyecto adjunto, listo para revisar y enviar.', 'ok');
+          v.cerrar();
+        } catch (er) { avisoError(er); e.currentTarget.disabled = false; } }}, '✉ Crear borrador con el proyecto adjunto')
+    ]});
+}
+
 export function comentariosPorPersona(c) {
   const yo = String((api.estado.usuario || {}).id);
   const vistos = new Set();
@@ -463,7 +532,8 @@ function botonReagendar(c, refrescar) {
 }
 function bandaReagendar(c, refrescar) {
   const k = citaPorReagendar(c);
-  if (!k) return null;
+  /* Al comercial no le llegan: las reagendadas están siempre en manos del captador. */
+  if (!k || (api.estado.usuario || {}).rol === 'comercial') return null;
   const motivo = (MOTIVOS_REAGENDAR.find(m => m[0] === txt(k.reag_motivo)) || [])[1];
   const soyCap = txt((api.estado.usuario || {}).id) === txt(k.captador_id || c.captador_id);
   return h('div', {estilo: {background: '#FFF4DE', border: '1px solid #f1d9a6', borderRadius: '10px', padding: '10px 14px', margin: '0 0 12px', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap'}},
@@ -524,6 +594,7 @@ export async function vistaCliente({id, ir, refrescar}) {
         h('span.nota', c.id + ' · alta ' + fechaCorta(c.creado)))),
     h('.acciones',
       botonProyectoPdf(c),
+      botonCorreoProyecto(c),
       txt(c.telefono) ? h('a.btn', {href: telHref(c.telefono)}, '☎ Llamar') : null,
       txt(c.telefono) ? h('a.btn', {href: waHref(c.telefono), target: '_blank'}, 'WhatsApp') : null,
       txt(c.coordenadas) || txt(c.direccion)

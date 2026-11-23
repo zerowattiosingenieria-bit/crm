@@ -380,6 +380,8 @@ export async function vistaCaptaciones({ir, refrescar}) {
   function pinta() {
     const q = normal(est.texto);
     const lista = api.estado.captaciones.filter(c => {
+      /* 23/11/2026: las pendientes de reagendar están siempre en manos del captador; al comercial no le llegan. */
+      if ((api.estado.usuario || {}).rol === 'comercial' && normal(c.estado_cita) === 'recontactar' && !txt(c.fecha) && normal(c.resultado || 'pendiente') === 'pendiente') return false;
       const cli = api.cliente(c.cliente_id) || {};
       if (est.resultado && txt(c.resultado) !== est.resultado) return false;
       if (est.captador && txt(c.captador_id) !== est.captador) return false;
