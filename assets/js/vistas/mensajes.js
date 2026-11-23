@@ -51,7 +51,7 @@ function fila(m, recargar) {
   return h('div', {estilo: {border: '1px solid var(--borde, #e5e5e5)', borderRadius: '10px', padding: '10px 12px'}},
     h('div', {estilo: {display: 'flex', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', marginBottom: '6px'}},
       h('b', (TIPO[m.tipo] || m.tipo) + ' · ' + quien + (destino ? ': ' + destino : '')),
-      h('span.nota', 'Preparado ' + fechaCorta(m.creado) + (m.cliente_id ? ' · ' : ''), m.cliente_id ? h('a', {href: '#cliente/' + m.cliente_id}, 'ver ficha') : null)),
+      h('span.nota', 'Preparado ' + fechaCorta(m.creado) + (m.cliente_id ? ' · ' : ''), m.cliente_id ? h('a', {href: '#cliente/' + m.cliente_id, title: 'Abrir la ficha'}, (() => { const c = api.cliente(m.cliente_id); return c ? [txt(c.direccion), txt(c.nombre)].filter(Boolean).join(' · ') + ' ›' : 'ver ficha'; })()) : null)),
     enviadoYa ? h('p.nota', {estilo: {margin: '0 0 6px'}}, 'Aprobado ' + (m.canal === 'whatsapp' ? 'por WhatsApp' : 'para mandarlo desde tu correo') + ' el ' + fechaCorta(m.revisado) + '. ¿Ya lo has mandado?') : null,
     enviadoYa && m.canal !== 'whatsapp' ? bloqueCopiar(m.destino, m.asunto, m.cuerpo) : null,
     enviadoYa ? null : h('div', {estilo: {display: 'grid', gap: '6px'}}, asunto, cuerpo),

@@ -144,6 +144,7 @@ export async function tarjetaIncidenciasHoy(ir) {
       const [t, cls] = URG[i.urgencia] || URG.media;
       return h('li', h('span.que', marca(t, cls), ' ', h('b', i.titulo),
         h('span.nota', ' · ' + i.dias + ' d' + (i.actualizacion ? ' · ' + i.actualizacion.slice(0, 60) : ''))),
+        i.cliente_id ? h('button.btn.mini', {onclick: () => ir('cliente/' + i.cliente_id)}, 'Ficha') : null,
         h('button.btn.mini', {onclick: () => ir('incidencias')}, 'Abrir'));
     })) : h('p.nota', 'No hay incidencias abiertas.'),
     {subtitulo: c.alta ? c.alta + ' urgente' + (c.alta === 1 ? '' : 's') + (c.viejas ? ' · ' + c.viejas + ' con más de 7 días' : '') : (c.viejas ? c.viejas + ' con más de 7 días' : 'Por urgencia y fecha'),

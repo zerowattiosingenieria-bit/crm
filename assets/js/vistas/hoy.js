@@ -26,7 +26,11 @@ export async function vistaHoy({ir, refrescar}) {
   const esDir = api.esDireccion();
   const esCap = yo.rol === 'captador';
   const cliente = id => api.cliente(id) || {};
-  const nom = c => etiquetaCliente(c);
+  /* 23/11/2026: desde Inicio, cada cliente abre su ficha. */
+  const nom = c => c && c.id
+    ? h('a', {href: '#cliente/' + encodeURIComponent(c.id), title: 'Abrir la ficha', estilo: {fontWeight: 600, color: 'inherit', textDecoration: 'underline', textDecorationColor: 'var(--lima-osc, #9bd60f)', textUnderlineOffset: '3px'},
+        onclick: e => e.stopPropagation()}, etiquetaCliente(c))
+    : etiquetaCliente(c || {});
 
   const mias = api.estado.captaciones.filter(c => esDir ? true
     : esCap ? txt(c.captador_id) === txt(yo.id)
@@ -60,8 +64,10 @@ export async function vistaHoy({ir, refrescar}) {
     {subtitulo: mananaC.filter(citaSinConfirmar).length ? mananaC.filter(citaSinConfirmar).length + ' sin confirmar' : 'Todas confirmadas'}));
 
   /* --- pendientes de reagendar (04/11/2026): el cliente aún no podía dar fecha --- */
+  /* 23/11/2026: las llamadas para reagendar las hacen los captadores de sus clientes, no el comercial
+     (salvo que el cliente no tenga captador). */
   const sinFecha = vivas.filter(c => !txt(c.fecha) && normal(c.estado_cita) === 'recontactar' &&
-    normal(c.resultado || 'pendiente') === 'pendiente')
+    normal(c.resultado || 'pendiente') === 'pendiente' && !(yo.rol === 'comercial' && txt(c.captador_id)))
     .sort((a, b) => (txt(a.volver_llamar) || '9999').localeCompare(txt(b.volver_llamar) || '9999'));
   if (sinFecha.length) {
     const tocaLlamar = sinFecha.filter(c => txt(c.volver_llamar) && txt(c.volver_llamar) <= hoy).length;
@@ -124,7 +130,7 @@ export async function vistaHoy({ir, refrescar}) {
       const listos = (await api.proyectosPendientes('entregado')).proyectos || [];
       cifras.push(kpi('Propuestas para enviar', String(listos.length), 'listas del ingeniero', {estado: listos.length ? 'aviso' : 'bien'}));
       if (listos.length) bloques.push(tarjeta('Propuestas listas para enviar', h('ul.hoy-lista', listos.map(p => h('li',
-        h('span.que', txt(p.direccion || p.cliente), h('span.nota', ' · lista el ' + fechaCorta(p.entregado))),
+        h('span.que', p.cliente_id ? nom(cliente(p.cliente_id)) : txt(p.direccion || p.cliente), h('span.nota', ' · lista el ' + fechaCorta(p.entregado))),
         h('button.btn.mini.primario', {onclick: () => ir('cliente/' + p.cliente_id)}, 'Enviar'))))));
     } catch (e) { /* si no responde, no se enseña */ }
   } else {

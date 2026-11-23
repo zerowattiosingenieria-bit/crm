@@ -127,7 +127,10 @@ function resumenPersona_(array $persona, string $desde, string $hasta, bool $con
   ], $frios);
   $frios = array_slice(ordenar_($frios, fn($a, $b) => ($b['dias'] ?? 0) <=> ($a['dias'] ?? 0)), 0, 25);
 
-  $proximas = array_values(array_filter($misClientes, fn($c) => txt_($c['proxima_fecha']) !== ''));
+  /* 23/11/2026: al comercial no le salen las llamadas para reagendar de clientes con captador: las hace el captador. */
+  $soloComercial = normal_($persona['rol'] ?? '') === 'comercial';
+  $proximas = array_values(array_filter($misClientes, fn($c) => txt_($c['proxima_fecha']) !== '' && !in_array(normal_($c['estado']), ['ganado', 'perdido', 'ko'], true)
+    && !($soloComercial && normal_($c['proxima_accion']) === 'llamar para dar cita' && txt_($c['captador_id']) !== '')));
   $proximas = array_map(fn($c) => [
     'id' => $c['id'], 'nombre' => $c['nombre'], 'accion' => $c['proxima_accion'], 'fecha' => txt_($c['proxima_fecha']),
     'vencida' => txt_($c['proxima_fecha']) < $hoy, 'estado' => $c['estado']

@@ -351,6 +351,8 @@ function vencidosDe_(array $u, string $hoy): array {
       if (in_array(normal_($c['estado']), ['ganado', 'perdido', 'ko'], true)) continue;
       /* La «Sentada concertada» automática y los que ya compraron no son seguimientos pendientes. */
       if (normal_($c['proxima_accion']) === 'sentada concertada' || yaCompro_($c)) continue;
+      /* 23/11/2026: reagendar («Llamar para dar cita») es cosa del captador del cliente. */
+      if (normal_($c['proxima_accion']) === 'llamar para dar cita' && txt_($c['captador_id']) !== '') continue;
       $f = trozo_($c['proxima_fecha'], 0, 10);
       if ($f !== '' && strcmp($f, $hoy) < 0) $lista[] = ['fecha' => $f, 'tipo' => 'Seguimiento', 'nombre' => $c['nombre'],
         'texto' => txt_($c['proxima_accion']) ?: 'seguimiento'];
