@@ -102,6 +102,9 @@ function accClientesKO_(array $u, array $p): array {
  * la cita ya tiene fecha (por la agenda de citas), no como «próximo paso».
  */
 function pasoDelCaptador_(array $c): bool {
-  return txt_($c['captador_id'] ?? '') !== '' && (in_array(normal_($c['estado'] ?? ''), ['nuevo', 'captado', 'cita'], true)
-    || normal_($c['proxima_accion'] ?? '') === 'llamar para dar cita');
+  return txt_($c['captador_id'] ?? '') !== '' && esLlamadaDeAgendar_($c['proxima_accion'] ?? '');
+}
+/** «Llamar y agendar visita», «Volver a llamar para agendar», «Reagendar», «Llamar para dar cita»… */
+function esLlamadaDeAgendar_($accion): bool {
+  return (bool)preg_match('/agend|dar (la )?cita|concertar (la )?(cita|visita)/u', normal_($accion));
 }

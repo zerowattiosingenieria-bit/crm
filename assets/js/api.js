@@ -360,13 +360,15 @@ export function yaCompro(c) {
   return operacionesDe(c.id).some(o => OPERACION_VENDIDA.includes(_norm(o.estado))) ||
     captacionesDe(c.id).some(k => _norm(k.resultado) === 'venta');
 }
+/** «Llamar y agendar visita», «Volver a llamar para agendar», «Reagendar», «Llamar para dar cita»… (23/11/2026) */
+export const esLlamadaDeAgendar = a => /agend|dar (la )?cita|concertar (la )?(cita|visita)/.test(_norm(a));
 export function pasoPendiente(c) {
   if (!c || !String(c.proxima_fecha ?? '').trim()) return false;
   if (['ganado', 'perdido', 'ko'].includes(_norm(c.estado))) return false;
   if (_norm(c.proxima_accion) === 'sentada concertada') return false;
   /* 23/11/2026: «Llamar para dar cita» (reagendar) lo hace el captador del cliente, no el comercial. */
   /* Clientes de un captador sin visita hecha: agendar y reagendar es cosa del captador. */
-  if ((estado.usuario || {}).rol === 'comercial' && String(c.captador_id ?? '').trim() && (['nuevo', 'captado', 'cita'].includes(_norm(c.estado)) || _norm(c.proxima_accion) === 'llamar para dar cita')) return false;
+  if ((estado.usuario || {}).rol === 'comercial' && String(c.captador_id ?? '').trim() && esLlamadaDeAgendar(c.proxima_accion)) return false;
   return !yaCompro(c);
 }
 

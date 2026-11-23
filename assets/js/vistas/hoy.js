@@ -146,7 +146,7 @@ export async function vistaHoy({ir, refrescar}) {
     if (posible) cifras.push(kpi('Comisión en juego', eur(posible), prox.length + ' citas de los próximos 7 días si se venden'));
     /* 23/11/2026: las llamadas para agendar o reagendar de sus clientes sin visita hecha son del captador. */
     const yaEnLista = new Set(sinFecha.map(k => k.cliente_id));
-    const paraLlamar = api.estado.clientes.filter(c => txt(c.captador_id) === txt(yo.id) && (['nuevo', 'captado', 'cita'].includes(normal(c.estado)) || normal(c.proxima_accion) === 'llamar para dar cita') &&
+    const paraLlamar = api.estado.clientes.filter(c => txt(c.captador_id) === txt(yo.id) && api.esLlamadaDeAgendar(c.proxima_accion) &&
       txt(c.proxima_fecha) && txt(c.proxima_fecha) <= hoy && normal(c.proxima_accion) !== 'sentada concertada' && !yaEnLista.has(c.id))
       .sort((a, b) => txt(a.proxima_fecha).localeCompare(txt(b.proxima_fecha)));
     if (paraLlamar.length) {
@@ -156,7 +156,7 @@ export async function vistaHoy({ir, refrescar}) {
         txt(c.telefono) ? h('a.btn.mini', {href: telHref(c.telefono)}, '📞') : null,
         h('button.btn.mini.primario', {onclick: () => nuevaCita({refrescar, clienteId: c.id})}, 'Dar cita'),
         h('button.btn.mini', {onclick: () => nuevoSeguimiento(c, refrescar)}, 'Apuntar')))),
-        {subtitulo: 'Tus clientes sin visita hecha: cuando tengan fecha, le aparecen al comercial.'}));
+        {subtitulo: 'Agendar y reagendar es cosa tuya: en cuanto tengan fecha, le aparecen al comercial.'}));
     }
     if (sinAdj.length) bloques.push(tarjeta('Fichas sin adjudicar', h('ul.hoy-lista', sinAdj.map(c => h('li',
       h('span.que', nom(cliente(c.cliente_id)), h('span.nota', ' · ' + fechaCorta(c.fecha))),
