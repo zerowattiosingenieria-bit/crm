@@ -32,6 +32,7 @@ const contiene = (t, ...pal) => pal.some(p => normal(t).includes(normal(p)));
 function claveAero(o) {
   const m = txt(o.aero_modelo);
   const kw = num(o.aero_kw);
+  if (contiene(m, 'solax')) return contiene(m, 'alture', 'alt0') ? 'aero_solax_alture' : (contiene(m, 'stu3', 'trif') ? 'aero_solax_stu3' : 'aero_solax_stu1');
   if (contiene(m, 'saunier')) return 'aero_saunier_15';
   if (contiene(m, 'panasonic')) return 'aero_panasonic';
   if (kw >= 21 || contiene(m, '22')) return 'aero_22';
@@ -44,7 +45,7 @@ export function esTrifasica(o) {
   const inv = txt(o.inversor_modelo);
   if (contiene(inv, 'x3', 'trif', 'tri ')) return true;
   if (contiene(inv, 'x1', 'monof')) return false;
-  return claveAero(o) === 'aero_22';
+  return ['aero_22', 'aero_solax_stu3'].includes(claveAero(o));
 }
 
 function claveInversor(o) {
@@ -132,7 +133,14 @@ export function materialesDe(o, cat) {
     const acs = num(o.deposito_acs);
     const inercia = num(o.deposito_inercia);
     const trio = contiene(o.aero_modelo, 'trio', 'fusion', 'fusión');
-    if (trio) pon('Aerotermia', 'modulo_hidraulico_trio', 1);
+    /* SolaX (25/11/2026, oferta SeisSolar 26/17.499): exterior + unidad hidráulica integrada STN1-C03, que ya
+       lleva el depósito de ACS de 190 L, vaso de expansión y válvula de 3 vías. La puesta en marcha la hace SolaX
+       y va incluida en el precio (hay que avisar a SeisSolar con una semana de antelación). */
+    if (clave.startsWith('aero_solax')) {
+      if (clave !== 'aero_solax_alture') pon('Aerotermia', 'aero_solax_stn1_c03', 1);
+      if (acs && clave === 'aero_solax_alture') pon('Aerotermia', acs <= 160 ? 'acs_150' : (acs <= 250 ? 'acs_200' : 'acs_300'), 1);
+      if (inercia && clave === 'aero_solax_alture') pon('Aerotermia', inercia <= 120 ? 'inercia_100' : (inercia <= 170 ? 'inercia_150' : 'inercia_200'), 1);
+    } else if (trio) pon('Aerotermia', 'modulo_hidraulico_trio', 1);
     else {
       if (acs) pon('Aerotermia', acs <= 160 ? 'acs_150' : (acs <= 250 ? 'acs_200' : 'acs_300'), 1);
       if (inercia) pon('Aerotermia', inercia <= 120 ? 'inercia_100' : (inercia <= 170 ? 'inercia_150' : 'inercia_200'), 1);
