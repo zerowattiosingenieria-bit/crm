@@ -87,6 +87,10 @@ function ejecutarCron_(string $raiz = ''): array {
     if (function_exists('ticPortal_')) {
       try { $tp = ticPortal_(); if ($tp['avisos'] || $tp['escalados']) $hecho['portal'] = $tp; } catch (Throwable $e) { $hecho['portal'] = $e->getMessage(); }
     }
+    /* Gestoría: informe a Nando cuando termina cada visita (gestoria.php). */
+    if (function_exists('gestoriaInformeCron_')) {
+      try { $tg = gestoriaInformeCron_(); if ($tg) $hecho['gestoria'] = $tg; } catch (Throwable $e) { $hecho['gestoria'] = $e->getMessage(); }
+    }
     /* Seguimiento de operaciones: releer el Excel de Rubén y poner al día la copia editable. */
     if (function_exists('ticSeguimiento_')) {
       try { $ts = ticSeguimiento_(); if ($ts) $hecho['seguimiento'] = $ts; } catch (Throwable $e) { $hecho['seguimiento'] = $e->getMessage(); }

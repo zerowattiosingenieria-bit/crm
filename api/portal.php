@@ -29,7 +29,7 @@ require_once __DIR__ . '/base.php';
 require_once __DIR__ . '/google.php';
 
 const PORTAL_FIRMADAS = ['firmada', 'financiacion', 'tramite', 'material', 'instalacion', 'instalada', 'legalizada', 'cerrada'];
-const PORTAL_DIAS_SESION = ['cliente' => 30, 'contrata' => 14];
+const PORTAL_DIAS_SESION = ['cliente' => 30, 'contrata' => 14, 'gestoria' => 7];
 const PORTAL_LARGO_CLAVE = 8;
 /* Tiempos de los tickets en horas: [primera respuesta, resolución]. */
 const PORTAL_SLA = ['urgente' => [4, 24], 'media' => [24, 72], 'baja' => [72, 168]];
@@ -72,7 +72,7 @@ const PORTAL_ESCRIBEN = ['portalVisitaHecha', 'portalLlegada', 'portalFase', 'po
 /* Las direcciones que se dan (redirigen a crm.zerowattios.com/clientes/ y /contratas/). */
 const PORTAL_WEB = ['cliente' => 'https://clientes.zerowattios.com/', 'contrata' => 'https://contratas.zerowattios.com/'];
 /* Donde vive de verdad cada app (para «Ver como», que no puede perder el #). */
-const PORTAL_RUTA = ['cliente' => 'https://crm.zerowattios.com/clientes/', 'contrata' => 'https://crm.zerowattios.com/contratas/'];
+const PORTAL_RUTA = ['cliente' => 'https://crm.zerowattios.com/clientes/', 'contrata' => 'https://crm.zerowattios.com/contratas/', 'gestoria' => 'https://crm.zerowattios.com/contratas/'];
 
 /* ======================================================================
    Entrada: api.php manda aquí todo lo que empieza por «portal».
@@ -92,13 +92,17 @@ function atenderPortal_(array $p, string $accion): array {
     'portalDocsContrata' => 'portalDocsContrata_', 'portalSubirDocContrata' => 'portalSubirDocContrata_'
   ];
   $fn = $mapa[$accion] ?? null;
-  if (!$fn) return ['ok' => false, 'error' => 'Acción desconocida.'];
+  $esGest = strpos($accion, 'portalGestoria') === 0 && function_exists('atenderGestoria_');
+  if (!$fn && !$esGest) return ['ok' => false, 'error' => 'Acción desconocida.'];
   [$c, $s] = portalSesion_(txt_($p['token'] ?? ''));
   if (!$c) return ['ok' => false, 'error' => 'Tu sesión ha terminado. Vuelve a entrar.', 'sesion' => false];
   if (txt_($s['ver_como'] ?? '') !== '' && in_array($accion, PORTAL_ESCRIBEN, true)) {
     return ['ok' => false, 'error' => 'Vista previa: aquí no se puede cambiar nada.'];
   }
   $c['_vista_previa'] = txt_($s['ver_como'] ?? '') !== '';
+  /* La gestoría (25/11/2026) solo usa sus acciones, salir, inicio y cambiar la clave. */
+  if ($esGest) return atenderGestoria_($c, $p, $accion);
+  if (normal_($c['tipo']) === 'gestoria' && !in_array($accion, ['portalSalir', 'portalInicio', 'portalCambiarClave'], true)) return ['ok' => false, 'error' => 'Acción desconocida.'];
   return $fn($c, $p);
 }
 
@@ -114,7 +118,9 @@ function portalLogin_(array $p): array {
   $usuario = normal_($p['usuario'] ?? '');
   $clave = txt_($p['clave'] ?? '');
   if ($usuario === '' || $clave === '') return ['ok' => false, 'error' => $tipo === 'cliente' ? 'Escribe tu correo y tu clave.' : 'Escribe tu usuario y tu clave.'];
-  $c = buscar1_('PORTAL_CUENTAS', fn($x) => normal_($x['tipo']) === $tipo && normal_($x['usuario']) === $usuario);
+  /* Por contratas.zerowattios.com entran también las cuentas de la gestoría (25/11/2026). */
+  $tipos = $tipo === 'contrata' ? ['contrata', 'gestoria'] : [$tipo];
+  $c = buscar1_('PORTAL_CUENTAS', fn($x) => in_array(normal_($x['tipo']), $tipos, true) && normal_($x['usuario']) === $usuario);
   if ($c) {
     $quedan = portalMinutosBloqueo_($c);
     if ($quedan > 0) return ['ok' => false, 'error' => 'Demasiados intentos. Prueba de nuevo en ' . (int)ceil($quedan) . ' min.'];
@@ -135,6 +141,7 @@ function portalLogin_(array $p): array {
   actualizar_('PORTAL_CUENTAS', $c['id'], ['intentos' => 0, 'bloqueado_hasta' => '', 'ultimo_acceso' => ahora_()]);
   $token = portalAbrirSesion_($c, $p, '');
   registrar_(portalQuien_($c), 'portal_login', 'PORTAL_CUENTAS', $c['id'], $tipo);
+  if (normal_($c['tipo']) === 'gestoria' && function_exists('gestoriaApuntar_')) gestoriaApuntar_($c, 'entrada', 'Entró en la contabilidad');
   return ['ok' => true, 'token' => $token, 'cuenta' => portalPublica_($c)];
 }
 
@@ -293,6 +300,7 @@ function portalInicio_(array $c, array $p): array {
   $contacto = ['telefono' => txt_($empresa['empresa_telefono'] ?? ''), 'email' => txt_($empresa['empresa_email'] ?? ''),
                'nombre' => 'Zero Wattios'];
   $base = ['ok' => true, 'cuenta' => portalPublica_($c), 'contacto' => $contacto, 'vista_previa' => !empty($c['_vista_previa']), 'ahora' => ahora_()];
+  if (normal_($c['tipo']) === 'gestoria') return $base + portalInicioGestoria_($c);
   return normal_($c['tipo']) === 'cliente' ? $base + portalInicioCliente_($c) : $base + portalInicioContrata_($c);
 }
 
@@ -1104,14 +1112,15 @@ function accGuardarCuentaPortal_(array $u, array $p): array {
   $id = txt_($d['id'] ?? '');
   $ya = $id !== '' ? buscar1_('PORTAL_CUENTAS', fn($x) => mismo_($x['id'], $id)) : null;
   if ($id !== '' && !$ya) return ['ok' => false, 'error' => 'No existe esa cuenta.'];
-  $tipo = $ya ? normal_($ya['tipo']) : (normal_($d['tipo'] ?? '') === 'contrata' ? 'contrata' : 'cliente');
+  $tipo = $ya ? normal_($ya['tipo']) : (in_array(normal_($d['tipo'] ?? ''), ['contrata', 'gestoria'], true) ? normal_($d['tipo']) : 'cliente');
   $cambios = [];
   foreach (['nombre', 'email', 'telefono', 'empresa', 'notas'] as $k) if (array_key_exists($k, $d)) $cambios[$k] = mb_substr(txt_($d[$k]), 0, 200);
   if (array_key_exists('usuario', $d) || !$ya) {
     $usuario = $tipo === 'cliente' ? normal_($d['usuario'] ?? ($d['email'] ?? '')) : txt_($d['usuario'] ?? '');
     if ($usuario === '') return ['ok' => false, 'error' => $tipo === 'cliente' ? 'Falta el correo del cliente.' : 'Falta el nombre de usuario.'];
     if ($tipo === 'cliente' && !filter_var($usuario, FILTER_VALIDATE_EMAIL)) return ['ok' => false, 'error' => 'El usuario del cliente es su correo.'];
-    $repe = buscar1_('PORTAL_CUENTAS', fn($x) => normal_($x['tipo']) === $tipo && normal_($x['usuario']) === normal_($usuario) && !mismo_($x['id'], $id));
+    $mismos = $tipo === 'cliente' ? ['cliente'] : ['contrata', 'gestoria'];   // contratas y gestoría entran por la misma puerta
+    $repe = buscar1_('PORTAL_CUENTAS', fn($x) => in_array(normal_($x['tipo']), $mismos, true) && normal_($x['usuario']) === normal_($usuario) && !mismo_($x['id'], $id));
     if ($repe) return ['ok' => false, 'error' => 'Ya hay una cuenta con ese usuario.'];
     $cambios['usuario'] = $usuario;
     if ($tipo === 'cliente' && txt_($cambios['email'] ?? '') === '') $cambios['email'] = $usuario;

@@ -373,6 +373,8 @@ function publicoConNomina_(array $u): array {
 }
 
 function permisos_(array $u): array {
+  /* La gestoría (cuenta del portal, nunca un usuario del CRM): solo la contabilidad. */
+  if (normal_($u['rol'] ?? '') === 'gestoria') { $o = array_map(fn($v) => is_bool($v) ? false : '', PERMISOS['captador']); $o['finanzas'] = true; return $o; }
   $base = PERMISOS[(string)($u['rol'] ?? '')] ?? PERMISOS['captador'];
   $o = [];
   foreach ($base as $k => $v) $o[$k] = $v;

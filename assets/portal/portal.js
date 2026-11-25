@@ -255,7 +255,7 @@
       ? h('h1', 'Tu instalación, ', h('em', 'en tiempo real'), '.')
       : h('h1', 'Tus obras con ', h('em', 'Zero Wattios'), '.');
     const sub = h('p.sub', ES_CLIENTE ? 'Sigue cada paso, mira las fotos y ten tus documentos, manuales y facturas a mano.'
-      : 'Avisos, fichas de obra, fotos, legalizaciones y tickets en un solo sitio.');
+      : 'Avisos, fichas de obra, fotos, legalizaciones y tickets en un solo sitio. La gestoría entra aquí también con su usuario.');
     let form;
     const mal = m => { error.textContent = m; error.hidden = false; bien.hidden = true; };
     if (paso === 'login') {
@@ -380,6 +380,8 @@
       const r = await pedir('portalInicio');
       if (!r.ok) { salirLocal(); return pantallaEntrada('login', r.error || ''); }
       D = r;
+      /* Gestoría (25/11/2026): entra por contratas pero tiene su propia app (gestoria.js). */
+      if (D.gestoria) return arrancarGestoria();
       document.title = ES_CLIENTE ? 'Mi instalación · Zero Wattios' : 'Obras · ' + (D.cuenta.empresa || D.cuenta.nombre || 'Zero Wattios');
       pintar();
     } catch (e) {
@@ -387,6 +389,18 @@
       poner(app(), h('.entrada', h('img.logo', {src: '/assets/img/logo-dark-h96.png', alt: 'ZERO WATTIOS'}), h('h1', 'Sin conexión'),
         h('p.sub', e.message), h('button.btn.lima', {onclick: arrancar}, 'Reintentar')));
     }
+  }
+
+  function arrancarGestoria() {
+    const lanzar = () => window.ZWGestoria.iniciar({D, pedir, previa, h, ico, toast,
+      salir: async () => { try { await pedir('portalSalir'); } catch (e) { /* da igual */ } salirLocal(); location.hash = ''; pantallaEntrada(); },
+      cambiarClave});
+    if (window.ZWGestoria) return lanzar();
+    const sc = document.createElement('script');
+    sc.src = '/assets/portal/gestoria.js?v=1';
+    sc.onload = lanzar;
+    sc.onerror = () => poner(app(), h('.entrada', h('h1', 'Sin conexión'), h('p.sub', 'No se ha podido cargar la contabilidad.'), h('button.btn.lima', {onclick: arrancar}, 'Reintentar')));
+    document.head.appendChild(sc);
   }
 
   async function refrescar() {
@@ -397,6 +411,7 @@
 
   function pintar() {
     if (!D) return arrancar();
+    if (D.gestoria) return;   // la app de la gestoría se pinta sola
     const {v, id} = ruta();
     const enObra = !ES_CLIENTE && (v === 'obra' || v === 'visita' || v === 'docs');
     const nombre = ES_CLIENTE ? (D.cliente.nombre || D.cuenta.nombre) : (D.cuenta.empresa || D.cuenta.nombre);

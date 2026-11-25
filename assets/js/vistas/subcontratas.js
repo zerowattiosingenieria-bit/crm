@@ -367,7 +367,12 @@ export async function vistaCuentasPortal() {
 
   function editar(c, tipo) {
     tipo = c ? c.tipo : tipo;
-    const campos = tipo === 'cliente' ? [
+    const campos = tipo === 'gestoria' ? [
+      {id: 'usuario', et: 'Usuario', requerido: true, ancho: 2},
+      {id: 'empresa', et: 'Gestoría', ancho: 2},
+      {id: 'nombre', et: 'Persona de contacto', ancho: 2},
+      {id: 'email', et: 'Correo', tipo: 'email', ancho: 2}, {id: 'telefono', et: 'Teléfono', tipo: 'tel', ancho: 2}
+    ] : tipo === 'cliente' ? [
       {id: 'usuario', et: 'Correo con el que entra', tipo: 'email', requerido: true, ancho: 2},
       {id: 'cliente_id', et: 'Instalación (cliente firmado)', tipo: 'select', opciones: opcionesClientes(), requerido: true, ancho: 2},
       {id: 'nombre', et: 'Nombre que verá', ancho: 2}, {id: 'telefono', et: 'Teléfono', tipo: 'tel', ancho: 2}
@@ -384,7 +389,7 @@ export async function vistaCuentasPortal() {
       tipo === 'cliente' ? {id: 'bienvenida', et: 'Mandarle el correo de bienvenida', tipo: 'check', ancho: 1} : null,
       {id: 'notas', et: 'Notas', tipo: 'area', ancho: 4, filas: 2});
     const vals = c ? Object.assign({}, c, {activo: c.activo ? 'si' : 'no', clave: ''}) : {activo: 'si'};
-    ventanaFormulario({titulo: c ? 'Cuenta · ' + c.usuario : (tipo === 'cliente' ? 'Nueva cuenta de cliente' : 'Nueva subcontrata'), ancha: true, campos: campos.filter(Boolean), valores: vals,
+    ventanaFormulario({titulo: c ? 'Cuenta · ' + c.usuario : (tipo === 'cliente' ? 'Nueva cuenta de cliente' : tipo === 'gestoria' ? 'Nueva cuenta de gestoría' : 'Nueva subcontrata'), ancha: true, campos: campos.filter(Boolean), valores: vals,
       extra: tipo === 'cliente' ? h('p.nota', 'Correos a clientes: de momento solo salen a ' + D.correos_permitidos + '. Al resto no se le envía nada (queda apuntado en el registro).') : null,
       alGuardar: async v => {
         const cuenta = Object.assign({}, v, {tipo, activo: v.activo === 'si', bienvenida: v.bienvenida === 'si'});
@@ -406,7 +411,7 @@ export async function vistaCuentasPortal() {
   function pinta() {
     const col = tipo => [
       {clave: 'usuario', et: tipo === 'cliente' ? 'Correo' : 'Usuario', pinta: c => h('div', h('b', c.usuario), h('.nota', tipo === 'cliente' ? c.nombre : (c.empresa || c.nombre)))},
-      tipo === 'contrata' ? {clave: 'especialidad', et: 'Especialidad', valor: c => D.especialidades[c.especialidad] || ''} : {clave: 'cliente_id', et: 'Cliente', valor: c => c.cliente_id},
+      tipo === 'contrata' ? {clave: 'especialidad', et: 'Especialidad', valor: c => D.especialidades[c.especialidad] || ''} : tipo === 'gestoria' ? {clave: 'email', et: 'Correo'} : {clave: 'cliente_id', et: 'Cliente', valor: c => c.cliente_id},
       {clave: 'activo', et: 'Estado', pinta: c => h('div', marca(c.activo ? 'Activa' : 'Desactivada', c.activo ? 'bien' : 'mal'), ' ', c.tiene_clave ? '' : marca('Sin clave', 'aviso'), c.bloqueada ? marca('Bloqueada', 'mal') : '')},
       {clave: 'ultimo_acceso', et: 'Último acceso', valor: c => fh(c.ultimo_acceso)},
       {clave: 'acc', et: '', noOrden: true, pinta: c => h('div', {estilo: {display: 'flex', gap: '6px'}},
@@ -415,10 +420,19 @@ export async function vistaCuentasPortal() {
         c.bloqueada ? h('button.btn', {onclick: async () => { await api.pedir('guardarCuentaPortal', {cuenta: {id: c.id, desbloquear: true}}); aviso('Desbloqueada'); cargar(); }}, 'Desbloquear') : null)}
     ];
     const clientes = D.cuentas.filter(c => c.tipo === 'cliente');
+    const gestorias = D.cuentas.filter(c => c.tipo === 'gestoria');
+    const actividad = h('div', h('p.nota', 'Cargando lo último que ha hecho…'));
+    api.pedir('actividadGestoria').then(r => poner(actividad, (r.actividad || []).length ? tabla([
+      {clave: 'fecha', et: 'Cuándo', valor: a => fh(a.fecha)}, {clave: 'usuario', et: 'Cuenta'}, {clave: 'detalle', et: 'Qué ha visto o hecho'}
+    ], r.actividad.slice(0, 60), {}) : h('p.nota', 'Todavía no ha entrado.'))).catch(e => poner(actividad, h('p.nota', e.message)));
     const contratas = D.cuentas.filter(c => c.tipo === 'contrata');
     poner(caja,
       h('p.nota', 'Solo el superadmin ve esta pantalla. Clientes entran en ', h('b', D.webs.cliente), ' y subcontratas en ', h('b', D.webs.contrata), '. Un cliente solo entra si su proyecto está firmado.'),
       tarjeta('Subcontratas', tabla(col('contrata'), contratas, {vacio: 'Sin subcontratas.'}), {sinRelleno: true, acciones: [h('button.btn.primario', {onclick: () => editar(null, 'contrata')}, '+ Subcontrata')]}),
+      tarjeta('Gestoría', h('div', tabla(col('gestoria'), gestorias, {vacio: 'Sin cuenta de gestoría.'}),
+        h('h4', {estilo: {margin: '14px 12px 6px'}}, 'Lo último que ha visto o hecho'), actividad), {sinRelleno: true,
+        subtitulo: 'Entra por ' + D.webs.contrata + ' con su usuario y solo ve la contabilidad: facturas, Excel, banco y casados. Cada vez que entra te llega un correo con lo que ha visto y hecho.',
+        acciones: gestorias.length ? [] : [h('button.btn.primario', {onclick: () => editar(null, 'gestoria')}, '+ Gestoría')]}),
       tarjeta('Clientes', tabla(col('cliente'), clientes, {vacio: 'Sin cuentas de cliente todavía.'}), {sinRelleno: true,
         subtitulo: 'Cualquier cliente firmado puede crear su clave él mismo con «Es mi primera vez» (le llega un código a su correo).',
         acciones: [h('button.btn.primario', {onclick: () => editar(null, 'cliente')}, '+ Cliente')]}));
