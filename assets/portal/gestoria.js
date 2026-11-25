@@ -334,6 +334,11 @@
   const nifDe = f => f.tipo === 'emitida' ? f.receptor_nif : f.emisor_nif;
   const pillCasada = f => f.casada === 'si' || f.pendiente <= 0.05 ? h('span.g-pill.ok', '✓ Casada')
     : f.casada === 'parcial' ? h('span.g-pill.par', 'Parcial · faltan ' + eur0(f.pendiente)) : h('span.g-pill.no', 'Sin casar');
+  /* contra qué está casada y con qué fecha (25/11, Nando) */
+  const textoCasado = c => fe(c.fecha) + ' · ' + (c.medio === 'Banco' ? (c.cuenta || 'Banco') + ' · ' + (c.concepto || '') : c.medio) + ' · ' + eur(c.importe)
+    + (c.mov_importe != null && Math.abs(Math.abs(c.mov_importe) - c.importe) > 0.05 ? ' (de un movimiento de ' + eur(Math.abs(c.mov_importe)) + ')' : '');
+  const casadoCon = f => (f.casados || []).length ? h('div', {estilo: {fontSize: '11.5px', color: '#55594f', marginTop: '3px', lineHeight: 1.35}},
+    f.casados.map(c => h('div', {estilo: {whiteSpace: 'nowrap'}}, '↔ ' + textoCasado(c)))) : null;
 
   async function vistaFacturas(main, forzar) {
     const cuerpo = h('div', h('.g-cargando', 'Cargando facturas…'));
@@ -355,7 +360,7 @@
       const l = filtra();
       const s = k => l.reduce((a, f) => a + num(f[k]), 0);
       poner(tabla, !l.length ? h('.g-vacio', 'No hay facturas con estos filtros.') : h('.g-tabla-wrap', h('table.g-t',
-        h('thead', h('tr', ['Fecha', 'Tipo', 'Nº factura', 'Cliente / proveedor', 'NIF', 'Concepto'].map(x => h('th', x)), h('th.n', 'Base'), h('th.n', 'IVA'), h('th.n', 'IRPF'), h('th.n', 'Total'), h('th', 'Banco'), h('th', ''))),
+        h('thead', h('tr', ['Fecha', 'Tipo', 'Nº factura', 'Cliente / proveedor', 'NIF', 'Concepto'].map(x => h('th', x)), h('th.n', 'Base'), h('th.n', 'IVA'), h('th.n', 'IRPF'), h('th.n', 'Total'), h('th', 'Casada contra (fecha)'), h('th', ''))),
         h('tbody', l.map(f => h('tr', {estilo: {cursor: 'pointer'}, title: 'Pulsa para ver y descargar la factura', onclick: ev => { if (!ev.target.closest('button')) abrirFactura(f, true, () => vistaFacturas(main, true)); }},
           h('td', {estilo: {whiteSpace: 'nowrap'}}, fe(f.fecha)),
           h('td', h('span.g-pill.' + (f.tipo === 'emitida' ? 'emi' : 'rec'), f.tipo === 'emitida' ? 'Emitida' : 'Recibida')),
@@ -364,7 +369,7 @@
           h('td', {estilo: {whiteSpace: 'nowrap'}}, nifDe(f) || ''),
           h('td', {estilo: {maxWidth: '220px', fontSize: '12.5px', color: '#55594f'}}, f.categoria_nombre || f.concepto || ''),
           h('td.n', eur(f.base)), h('td.n', eur(f.iva)), h('td.n', f.irpf ? eur(f.irpf) : ''), h('td.n', h('b', eur(f.total))),
-          h('td', pillCasada(f)),
+          h('td', pillCasada(f), casadoCon(f)),
           h('td', h('.g-acc',
             f.tiene_archivo ? h('button.g-b', {title: 'Ver la factura', onclick: () => abrirFactura(f, true)}, '👁 Ver') : h('span', {estilo: {fontSize: '12px', color: '#999'}}, 'sin PDF'),
             f.tiene_archivo ? h('button.g-b', {title: 'Descargar', onclick: () => abrirFactura(f, false)}, '⤓') : null,
@@ -401,7 +406,7 @@
     const bajar = h('button.g-b.grande.lima', {disabled: true}, '⤓ Descargar factura');
     const cuerpo = h('div',
       h('div', {estilo: {display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '10px'}},
-        h('span.g-pill.' + (f.tipo === 'emitida' ? 'emi' : 'rec'), f.tipo === 'emitida' ? 'Emitida' : 'Recibida'), pillCasada(f),
+        h('span.g-pill.' + (f.tipo === 'emitida' ? 'emi' : 'rec'), f.tipo === 'emitida' ? 'Emitida' : 'Recibida'), pillCasada(f), casadoCon(f),
         h('b', eur(f.total)), h('span', {estilo: {color: '#6b6f66', fontSize: '13px'}}, 'Base ' + eur(f.base) + ' · IVA ' + eur(f.iva) + (f.irpf ? ' · IRPF ' + eur(f.irpf) : '')),
         h('span', {estilo: {flex: 1}}), bajar,
         h('button.g-b', {onclick: () => { cerrar(); casarFactura(f, despues || (() => {})); }}, f.casada === 'si' ? 'Ver casado' : 'Casar con el banco'),
@@ -461,14 +466,14 @@
       const libro = (tipo, pre) => {
         const l = fs.filter(f => f.tipo === tipo).sort((a, b) => a.fecha.localeCompare(b.fecha));
         const filas = l.map((f, i) => [pre + String(i + 1).padStart(3, '0'), f.fecha ? fdx(f.fecha) : '', f.numero, quien(f), nifDe(f), f.concepto, f.categoria_nombre,
-          f.base, f.iva_pct, f.iva, f.irpf, f.total, f.casada === 'si' || f.pendiente <= 0.05 ? 'Sí' : (f.casada === 'parcial' ? 'Parcial' : 'No'), f.pendiente, f.fecha_pago ? fdx(f.fecha_pago) : '', f.revisar]);
-        const cab = ['Nº orden', 'Fecha', 'Nº factura', tipo === 'emitida' ? 'Cliente' : 'Proveedor', 'NIF', 'Concepto', 'Cuenta de gasto', 'Base imponible', '% IVA', 'Cuota IVA', 'Retención IRPF', 'Total', 'Casada con banco', 'Pendiente', 'Fecha cobro/pago', 'Qué falta'];
+          f.base, f.iva_pct, f.iva, f.irpf, f.total, f.casada === 'si' || f.pendiente <= 0.05 ? 'Sí' : (f.casada === 'parcial' ? 'Parcial' : 'No'), f.pendiente, f.fecha_pago ? fdx(f.fecha_pago) : '', (f.casados || []).map(textoCasado).join(' | '), f.revisar]);
+        const cab = ['Nº orden', 'Fecha', 'Nº factura', tipo === 'emitida' ? 'Cliente' : 'Proveedor', 'NIF', 'Concepto', 'Cuenta de gasto', 'Base imponible', '% IVA', 'Cuota IVA', 'Retención IRPF', 'Total', 'Casada con banco', 'Pendiente', 'Fecha cobro/pago', 'Casada contra', 'Qué falta'];
         const n = filas.length + 1;
-        filas.push(['TOTAL', '', '', '', '', '', '', {f: 'SUM(H2:H' + n + ')'}, '', {f: 'SUM(J2:J' + n + ')'}, {f: 'SUM(K2:K' + n + ')'}, {f: 'SUM(L2:L' + n + ')'}, '', {f: 'SUM(N2:N' + n + ')'}, '', '']);
+        filas.push(['TOTAL', '', '', '', '', '', '', {f: 'SUM(H2:H' + n + ')'}, '', {f: 'SUM(J2:J' + n + ')'}, {f: 'SUM(K2:K' + n + ')'}, {f: 'SUM(L2:L' + n + ')'}, '', {f: 'SUM(N2:N' + n + ')'}, '', '', '']);
         const ws = XL.utils.aoa_to_sheet([cab, ...filas]);
         formato(XL, ws, [7, 9, 10, 11, 13], [1, 14]);
-        ws['!cols'] = [8, 11, 16, 34, 13, 34, 22, 14, 7, 12, 12, 14, 10, 12, 12, 40].map(w => ({wch: w}));
-        ws['!autofilter'] = {ref: 'A1:P' + n};
+        ws['!cols'] = [8, 11, 16, 34, 13, 34, 22, 14, 7, 12, 12, 14, 10, 12, 12, 60, 40].map(w => ({wch: w}));
+        ws['!autofilter'] = {ref: 'A1:Q' + n};
         return ws;
       };
       XL.utils.book_append_sheet(wb, hojaResumen(XL, rs), 'Resumen');

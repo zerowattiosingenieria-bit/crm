@@ -162,14 +162,26 @@ function gestoriaFacturaLista_(array $f, array $usado): array {
 function gestoriaFacturas_(array $c, array $p): array {
   [$d, $h] = gestoriaRango_($p);
   if (function_exists('asegurarCasados_')) asegurarCasados_();
-  $usado = [];
-  foreach (leer_('CASADOS') as $x) { $k = txt_($x['factura_doc_id']); $usado[$k] = ($usado[$k] ?? 0) + num_($x['importe']); }
+  $usado = []; $con = [];
+  /* 25/11/2026 (Nando): «a la gestoría es necesario indicarle contra qué se casa cada factura en su vista, y con qué fecha» */
+  $banco = indexar_(leer_('BANCO'));
+  $MEDIO = ['banco' => 'Banco', 'tarjeta' => 'Tarjeta', 'efectivo' => 'Efectivo (caja)', 'otro' => 'Indicado a mano'];
+  foreach (leer_('CASADOS') as $x) {
+    $k = txt_($x['factura_doc_id']); $usado[$k] = ($usado[$k] ?? 0) + num_($x['importe']);
+    $m = $banco[txt_($x['banco_id'])] ?? null; $medio = normal_($x['medio']) ?: ($m ? 'banco' : 'otro');
+    $con[$k][] = ['fecha' => $m ? txt_($m['fecha']) : txt_($x['fecha']), 'medio' => $MEDIO[$medio] ?? $medio, 'cuenta' => $m ? txt_($m['cuenta']) : '',
+      'concepto' => $m ? txt_($m['concepto']) : txt_($x['notas']), 'importe' => num_($x['importe']), 'mov_importe' => $m ? num_($m['importe']) : null, 'banco_id' => txt_($x['banco_id'])];
+  }
   $lista = [];
   foreach (leer_('FACTURAS_DOC') as $f) {
     $fe = txt_($f['fecha']);
     if ($d !== '' && strcmp($fe, $d) < 0) continue;
     if (strcmp($fe, $h) > 0) continue;
-    $lista[] = gestoriaFacturaLista_($f, $usado);
+    $it = gestoriaFacturaLista_($f, $usado);
+    $it['casados'] = $con[txt_($f['id'])] ?? [];
+    usort($it['casados'], fn($a, $b) => strcmp($a['fecha'], $b['fecha']));
+    if ($it['fecha_pago'] === '' && $it['casados']) $it['fecha_pago'] = end($it['casados'])['fecha'];
+    $lista[] = $it;
   }
   usort($lista, fn($a, $b) => strcmp($b['fecha'], $a['fecha']));
   if (empty($p['silencio'])) gestoriaApuntar_($c, 'facturas', 'Vio la lista de facturas ' . gestoriaTextoRango_($d, $h) . ' (' . count($lista) . ')');
