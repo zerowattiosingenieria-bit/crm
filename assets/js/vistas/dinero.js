@@ -15,6 +15,7 @@
 import {h, poner, txt, num, eur2, eurCorto, miles, fechaCorta, hoyISO} from '../util.js';
 import * as api from '../api.js';
 import {tarjeta, kpi, kpis, cargando} from '../ui.js';
+import {vistaLibros} from './libros.js';
 import {vistaFacturasEscaneadas, tarjetaCuadre, tarjetaBancoSinFactura, panelGestoria} from './facturas-escaneadas.js';
 import {vistaContabilidad, vistaFacturas, vistaCobros, vistaGastos, tarjetaSync} from './finanzas.js';
 import {vistaBanco} from './banco.js';
@@ -27,15 +28,17 @@ export const PESTANAS_DINERO = [
   ['cobros', '↓ Cobros'],
   ['pagos', '↑ Pagos'],
   ['banco', '▮ Banco'],
-  ['gestoria', '📦 Gestoría']
+  ['gestoria', '📦 Gestoría'],
+  ['libros', '📚 Libros contables']   /* solo superadmin (permiso libros) */
 ];
 
 export async function vistaDinero(ctx) {
-  const pest = PESTANAS_DINERO.some(p => p[0] === ctx.id) ? ctx.id : 'resumen';
+  const pestanas = PESTANAS_DINERO.filter(p => p[0] !== 'libros' || api.puede('libros'));
+  const pest = pestanas.some(p => p[0] === ctx.id) ? ctx.id : 'resumen';
   const ir = k => ctx.ir('dinero/' + k);
   const barra = h('div', {estilo: {display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '14px', position: 'sticky', top: '0', zIndex: '5',
     background: 'var(--fondo, #fff)', padding: '6px 0', borderBottom: '1px solid var(--borde, #e5e5e5)'}},
-    PESTANAS_DINERO.map(([k, et]) => h('button.btn' + (k === pest ? '.primario' : ''), {onclick: () => ir(k)}, et)));
+    pestanas.map(([k, et]) => h('button.btn' + (k === pest ? '.primario' : ''), {onclick: () => ir(k)}, et)));
   const cuerpo = h('div', cargando());
   const caja = h('div', barra, cuerpo);
   /* 21/11/2026: el periodo de las cifras se elige (1T–4T, mes 16→15, año natural o todo). */
@@ -48,6 +51,7 @@ export async function vistaDinero(ctx) {
   else if (pest === 'facturas') contenido = await facturas(ctx);
   else if (pest === 'cobros') contenido = await vistaCobros(ctx);
   else if (pest === 'pagos') contenido = await vistaGastos(ctx);
+  else if (pest === 'libros') contenido = await vistaLibros();
   else if (pest === 'banco') contenido = h('div', await tarjetaBancoSinFactura(rangoAnio, async () => ir('banco')), await vistaBanco(ctx));
   else contenido = tarjeta('Paquete para la gestoría', panelGestoria({desde: '', hasta: hoyISO()}),
     {subtitulo: 'Un PDF con los libros de facturas, el IVA y el cuadre con el banco, y un ZIP con todas las facturas originales'});
