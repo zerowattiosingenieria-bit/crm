@@ -505,8 +505,13 @@ function bloqueCasar(f, alCambiar) {
       poner(caja, titulo, h('p', {estilo: {margin: '6px 0', color: VERDE, fontWeight: '600'}}, '✓ Casada entera'), yaCasado);
       return;
     }
+    let sug = null; try { sug = f.sugerencia ? JSON.parse(f.sugerencia) : null; } catch (e) { sug = null; }
     poner(caja, titulo,
-      f.revisar ? h('p', {estilo: {margin: '4px 0', color: NARANJA}}, '⚠ ' + f.revisar) : null,
+      sug ? h('div', {estilo: {background: '#f1fadf', border: '1px solid #c9e89a', borderRadius: '10px', padding: '10px 12px', margin: '6px 0', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap'}},
+        h('span', {estilo: {flex: '1 1 260px'}}, '💡 ', sug.texto || 'Hay un movimiento que encaja.'),
+        h('button.btn.primario', {onclick: async ev => { ev.currentTarget.disabled = true; try { recargar(await api.pedir('aplicarSugerenciaCasado', {id: f.id})); aviso('Casada ✓', 'ok'); } catch (e) { aviso(e.message, 'error'); ev.currentTarget.disabled = false; } }},
+          sug.tipo === 'suplido' ? 'Aplicar: total ' + eur2(sug.total) + ' y casar' : 'Aplicar y casar')) : null,
+      f.revisar && !sug ? h('p', {estilo: {margin: '4px 0', color: NARANJA}}, '⚠ ' + f.revisar) : null,
       yaCasado,
       h('p.nota', {estilo: {margin: '6px 0 2px'}}, 'Falta por casar: ', h('b', eur2(pend)), '. Puedes casarla con uno o con varios movimientos (pagos parciales), y un movimiento puede pagar varias facturas.'),
       cand.length ? h('table.datos', h('tbody', cand.map((m, i) => h('tr',

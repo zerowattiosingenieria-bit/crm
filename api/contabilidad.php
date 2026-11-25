@@ -525,6 +525,47 @@ function subconjuntosQueSuman_(array $items, float $objetivo, int $max = 6): arr
   return $sol;
 }
 
+/** Si las soluciones solo se diferencian en qué factura de igual importe entra, se queda con las más antiguas. */
+function solucionSinAmbiguedad_(array $sol, array $cand, array $fs): array {
+  if (count($sol) < 2) return $sol;
+  $imp = []; foreach ($cand as [$id, $v]) $imp[$id] = number_format($v, 2, '.', '');
+  $firma = function ($s) use ($imp) { $a = array_map(fn($id) => $imp[$id] ?? '?', $s); sort($a); return implode('+', $a); };
+  if ($firma($sol[0]) !== $firma($sol[1])) return $sol;
+  $fecha = []; foreach ($fs as $f) $fecha[$f['id']] = txt_($f['fecha']);
+  $porImp = [];
+  foreach ($cand as [$id, $v]) $porImp[$imp[$id]][] = $id;
+  foreach ($porImp as &$l) usort($l, fn($a, $b) => strcmp($fecha[$a] ?? '', $fecha[$b] ?? '')); unset($l);
+  $cuenta = array_count_values(array_map(fn($id) => $imp[$id], $sol[0]));
+  $elegidas = [];
+  foreach ($cuenta as $v => $n) $elegidas = array_merge($elegidas, array_slice($porImp[$v], 0, $n));
+  return [$elegidas];
+}
+
+function fechaCortaTxt_($f): string { $f = txt_($f); return strlen($f) >= 10 ? substr($f, 8, 2) . '/' . substr($f, 5, 2) . '/' . substr($f, 0, 4) : $f; }
+
+/** Aplica la sugerencia de casado de una factura (lo pulsa una persona de dirección). */
+function accAplicarSugerenciaCasado_(array $u, array $p): array {
+  exigir_($u, 'finanzas');
+  asegurarCasados_();
+  $f = buscar1_('FACTURAS_DOC', fn($x) => mismo_($x['id'], $p['id'] ?? ''));
+  if (!$f) return ['ok' => false, 'error' => 'Esa factura ya no está.'];
+  $s = json_decode(txt_($f['sugerencia'] ?? ''), true);
+  if (!is_array($s) || empty($s['banco_id'])) return ['ok' => false, 'error' => 'Esta factura ya no tiene sugerencia.'];
+  $m = buscar1_('BANCO', fn($x) => mismo_($x['id'], $s['banco_id']));
+  if (!$m || restoMovimiento_($m) <= TOLERANCIA_CASAR) return ['ok' => false, 'error' => 'Ese movimiento ya está casado con otra cosa.'];
+  if (($s['tipo'] ?? '') === 'suplido') {
+    $nota = trim(txt_($f['notas']) . ' · Total corregido ' . date('d/m') . ': el PDF suma ' . number_format(num_($s['diferencia']), 2, ',', '.') . ' € de tasas o suplidos sin IVA (' .
+      number_format(num_($f['total']), 2, ',', '.') . ' → ' . number_format(num_($s['total']), 2, ',', '.') . ' €)', ' ·');
+    $f = actualizar_('FACTURAS_DOC', $f['id'], ['total' => redondear_(num_($s['total']), 2), 'notas' => $nota, 'modificado' => ahora_(), 'modificado_por' => $u['id']]);
+  }
+  $err = casarTrozo_($u, $f, 'banco', $m['id'], 0, '', 'Sugerencia aceptada (' . ($s['tipo'] ?? '') . ')');
+  if ($err !== '') return ['ok' => false, 'error' => $err];
+  actualizar_('FACTURAS_DOC', $f['id'], ['sugerencia' => '', 'revisar' => '']);
+  $r = recalcularCasada_($u, $f['id']);
+  registrar_($u, 'aplicar_sugerencia_casado', 'FACTURAS_DOC', $f['id'], ($s['tipo'] ?? '') . ' ' . $m['id']);
+  return ['ok' => true, 'factura' => facturaDocLigera_($r)];
+}
+
 /**
  * Intenta casar todo lo pendiente:
  *  1) factura ↔ movimiento con el mismo importe (si es único o el más cercano en fecha);
@@ -539,11 +580,32 @@ function accAutoCasar_(array $u, array $p): array {
   $banco = leer_('BANCO');
   $ignorar = '/traspaso|n[oó]mina|seg\.?\s*social|tgss|aeat|agencia tributaria|hacienda|impuesto|pr[eé]stamo|liquidaci[oó]n/i';
   $pendientes = function () { $t = leer_('CASADOS'); return array_values(array_filter(leer_('FACTURAS_DOC'), fn($f) => num_($f['total']) != 0 && restoFactura_($f, $t) > TOLERANCIA_CASAR)); };
-  $libres = function () use ($banco, $ignorar) { $t = leer_('CASADOS'); $o = [];
-    foreach ($banco as $m) { if (conceptoSinFactura_($m) !== '') continue;
+  $libres = function () use ($ignorar) { $t = leer_('CASADOS'); $o = [];
+    foreach (leer_('BANCO') as $m) { if (conceptoSinFactura_($m) !== '') continue;
       $r = restoMovimiento_($m, $t); if ($r > TOLERANCIA_CASAR) $o[] = $m + ['_resto' => $r]; } return $o; };
   $dias = fn($a, $b) => (int)round((strtotime($b) - strtotime($a)) / 86400);
   $signoOk = fn($f, $m) => num_($m['importe']) * (txt_($f['tipo']) === 'emitida' ? 1 : -1) > 0;
+
+  $res['devoluciones'] = 0; $res['unicas'] = 0; $res['sugerencias'] = 0;
+  /* 0) 25/11/2026 (Nando: «esfuérzate más en casar facturas»): un cargo y su devolución (mismo importe, signo
+     contrario, mismo concepto, pocos días) se anulan entre sí: no llevan factura. */
+  $ms0 = $libres();
+  foreach ($ms0 as $i => $a) {
+    if (num_($a['importe']) >= 0 || abs($a['_resto'] - abs(num_($a['importe']))) > TOLERANCIA_CASAR) continue;
+    foreach ($ms0 as $j => $b) {
+      if ($i === $j || num_($b['importe']) <= 0 || abs(abs(num_($b['importe'])) - abs(num_($a['importe']))) > TOLERANCIA_CASAR) continue;
+      if (abs($b['_resto'] - abs(num_($b['importe']))) > TOLERANCIA_CASAR) continue;
+      if (abs($dias(txt_($a['fecha']), txt_($b['fecha']))) > 7) continue;
+      $ka = substr(preg_replace('/[^a-z0-9]/', '', normal_($a['concepto'])), 0, 12); $kb = substr(preg_replace('/[^a-z0-9]/', '', normal_($b['concepto'])), 0, 12);
+      if ($ka === '' || $ka !== $kb) continue;
+      $ya = buscar1_('BANCO', fn($x) => mismo_($x['id'], $a['id'])); $yb = buscar1_('BANCO', fn($x) => mismo_($x['id'], $b['id']));
+      if (!$ya || !$yb || txt_($ya['sin_factura'] ?? '') !== '' || txt_($yb['sin_factura'] ?? '') !== '') continue;
+      actualizar_('BANCO', $a['id'], ['sin_factura' => 'si', 'nota_factura' => 'Devuelto: se anula con ' . $b['id'] . ' (' . txt_($b['fecha']) . ')']);
+      actualizar_('BANCO', $b['id'], ['sin_factura' => 'si', 'nota_factura' => 'Devolución de ' . $a['id'] . ' (' . txt_($a['fecha']) . ')']);
+      $ms0[$i]['_resto'] = 0; $ms0[$j]['_resto'] = 0; $res['devoluciones'] += 2;
+      break;
+    }
+  }
 
   /* 1) mismo importe: emparejar por cercanía de fecha, nombre primero */
   $fs = $pendientes(); $ms = $libres(); $pares = [];
@@ -569,6 +631,24 @@ function accAutoCasar_(array $u, array $p): array {
     }
   }
 
+  /* 1b) mismo importe sin el nombre en el banco (p. ej. «PAGO PRESUPUESTO» que adelanta una factura posterior):
+     solo si ese movimiento es el único con ese importe para esa factura y esa factura la única para ese movimiento. */
+  $fs = $pendientes(); $ms = $libres(); $t = leer_('CASADOS');
+  $porF = []; $porM = [];
+  foreach ($fs as $f) {
+    $pend = restoFactura_($f, $t); $fe = txt_($f['fecha']) ?: hoyISO_();
+    foreach ($ms as $m) {
+      if (!$signoOk($f, $m) || abs($m['_resto'] - $pend) > TOLERANCIA_CASAR) continue;
+      $d = $dias($fe, txt_($m['fecha'])); if ($d < -100 || $d > 150) continue;
+      $porF[$f['id']][] = $m; $porM[$m['id']][] = $f;
+    }
+  }
+  foreach ($porF as $fid => $lm) {
+    if (count($lm) !== 1 || count($porM[$lm[0]['id']] ?? []) !== 1) continue;
+    $f = $porM[$lm[0]['id']][0];
+    if (casarTrozo_($u, $f, 'banco', $lm[0]['id'], 0, '', 'Casado automático: mismo importe, único posible') === '') { recalcularCasada_($u, $f['id']); $res['unicas']++; }
+  }
+
   /* 2) un movimiento → varias facturas de la misma contraparte */
   $fs = $pendientes(); $t = leer_('CASADOS');
   foreach ($libres() as $m) {
@@ -581,6 +661,7 @@ function accAutoCasar_(array $u, array $p): array {
     }
     if (count($cand) < 2) continue;
     $sol = subconjuntosQueSuman_($cand, $m['_resto']);
+    $sol = solucionSinAmbiguedad_($sol, $cand, $fs);
     if (count($sol) !== 1 || count($sol[0]) < 2) continue;
     $elegidas = array_values(array_filter($fs, fn($f) => in_array($f['id'], $sol[0], true)));
     repartirCasado_($u, $elegidas, [$m], 'banco', 'Casado automático: una transferencia para ' . count($elegidas) . ' facturas');
@@ -611,6 +692,60 @@ function accAutoCasar_(array $u, array $p): array {
     if ((txt_($f['tipo']) === 'emitida' && txt_($f['factura_id']) === '') || (txt_($f['tipo']) !== 'emitida' && txt_($f['gasto_id']) === '')) enlazarFacturaDrive_($f);
   }
 
+  /* 4) sugerencias para confirmar con un clic (no se cambia nada solo):
+     - «suplido»: el PDF suma además tasas o suplidos sin IVA que no entraron en el total leído (CITE: 306,88 + 183,12
+       de tasas de Industria = 490,00); el PDF contiene el importe del pago y la diferencia.
+     - «mismo importe lejos»: un único movimiento con el mismo importe, pero a más de 100–150 días. */
+  $t = leer_('CASADOS'); $libresS = $libres(); $usadosS = [];
+  $fmt = fn($x) => [number_format($x, 2, ',', '.'), number_format($x, 2, ',', ''), number_format($x, 2, '.', '')];
+  $pendS = $pendientes();
+  /* primero todas las parejas posibles «suplido», y se reparten por cercanía de fecha (cada pago, una factura) */
+  $parejas = [];
+  foreach ($pendS as $f) {
+    $resto = restoFactura_($f, $t); $fe = txt_($f['fecha']) ?: hoyISO_();
+    $texto = ' ' . preg_replace('/\s+/', ' ', txt_($f['texto'])) . ' ';
+    if (trim($texto) === '') continue;
+    $clave = claveContraparte_($f);
+    $pref = preg_match('/^([a-z]{3,})/', normal_(txt_($f['numero'])), $mm) ? $mm[1] : '';
+    $esta = fn($x) => (bool)array_filter($fmt($x), fn($s) => strpos($texto, $s) !== false);
+    foreach ($libresS as $m) {
+      if (!$signoOk($f, $m)) continue;
+      $imp = $m['_resto']; $dif = redondear_($imp - $resto, 2);
+      if ($dif <= 1) continue;
+      $d = $dias($fe, txt_($m['fecha'])); if ($d < -60 || $d > 90) continue;
+      $nombra = nombraContraparte_(txt_($m['concepto']), $clave) || ($pref !== '' && strpos(normal_($m['concepto']), $pref) !== false);
+      if ($nombra && $esta($imp) && $esta($dif)) $parejas[] = [$f, $m, $dif, abs($d) + ($d < 0 ? 5 : 0)];
+    }
+  }
+  usort($parejas, fn($a, $b) => $a[3] <=> $b[3]);
+  $sugs = [];
+  foreach ($parejas as [$f, $m, $dif]) {
+    if (isset($sugs[$f['id']]) || isset($usadosS[$m['id']])) continue;
+    $usadosS[$m['id']] = 1;
+    $sugs[$f['id']] = ['tipo' => 'suplido', 'banco_id' => $m['id'], 'total' => redondear_(num_($f['total']) + $dif, 2), 'diferencia' => $dif,
+      'texto' => 'El PDF suma ' . number_format($dif, 2, ',', '.') . ' € más (tasas o suplidos sin IVA): total real ' . number_format(num_($f['total']) + $dif, 2, ',', '.') .
+        ' €, que es justo el pago del ' . fechaCortaTxt_($m['fecha']) . ' («' . trozo_(txt_($m['concepto']), 0, 40) . '»).'];
+  }
+  /* después, «mismo importe lejos»: un único movimiento libre con ese importe en todo el año */
+  foreach ($pendS as $f) {
+    if (isset($sugs[$f['id']])) continue;
+    $resto = restoFactura_($f, $t); $fe = txt_($f['fecha']) ?: hoyISO_();
+    $mismos = array_values(array_filter($libresS, fn($m) => !isset($usadosS[$m['id']]) && $signoOk($f, $m) && abs($m['_resto'] - $resto) <= TOLERANCIA_CASAR &&
+      abs($dias($fe, txt_($m['fecha']))) <= 400));
+    $otras = $mismos ? array_filter($pendS, fn($g) => $g['id'] !== $f['id'] && $signoOk($g, $mismos[0]) && abs(restoFactura_($g, $t) - $resto) <= TOLERANCIA_CASAR) : [1];
+    if (count($mismos) === 1 && !$otras) {
+      $m = $mismos[0]; $usadosS[$m['id']] = 1;
+      $sugs[$f['id']] = ['tipo' => 'mismo_importe', 'banco_id' => $m['id'], 'total' => num_($f['total']), 'diferencia' => 0,
+        'texto' => 'Único movimiento con el mismo importe: ' . fechaCortaTxt_($m['fecha']) . ' («' . trozo_(txt_($m['concepto']), 0, 40) . '»), a ' . abs($dias($fe, txt_($m['fecha']))) . ' días de la factura.'];
+    }
+  }
+  foreach ($pendS as $f) {
+    $nuevo = isset($sugs[$f['id']]) ? aJson_($sugs[$f['id']]) : '';
+    if (txt_($f['sugerencia'] ?? '') !== $nuevo) actualizar_('FACTURAS_DOC', $f['id'], ['sugerencia' => $nuevo]);
+  }
+  $res['sugerencias'] = count($sugs);
+  foreach (leer_('FACTURAS_DOC') as $f) if (txt_($f['sugerencia'] ?? '') !== '' && restoFactura_($f, $t) <= TOLERANCIA_CASAR) actualizar_('FACTURAS_DOC', $f['id'], ['sugerencia' => '']);
+
   /* motivo de lo que queda */
   $t = leer_('CASADOS'); $libresAhora = $libres(); $marcadas = 0;
   foreach (leer_('FACTURAS_DOC') as $f) {
@@ -625,7 +760,9 @@ function accAutoCasar_(array $u, array $p): array {
       elseif (nombraContraparte_(txt_($m['concepto']), $clave)) $nombre++;
     }
     $quien = txt_($f['tipo']) === 'emitida' ? 'cobro' : 'pago';
-    if (num_($f['total']) == 0) $motivo = 'Sin importe: no se ha podido leer el total. Ponlo a mano y cásala.';
+    $sg = json_decode(txt_($f['sugerencia'] ?? ''), true);
+    if (is_array($sg) && !empty($sg['texto'])) $motivo = '💡 ' . $sg['texto'] . ' Pulsa «Aplicar sugerencia».';
+    elseif (num_($f['total']) == 0) $motivo = 'Sin importe: no se ha podido leer el total. Ponlo a mano y cásala.';
     elseif (txt_($f['casada']) === 'parcial') $motivo = 'Casada en parte: faltan ' . number_format($resto, 2, ',', '.') . ' €' . ($nombre ? ' (hay ' . $nombre . ' movimientos de la misma contraparte)' : '');
     elseif ($mismo > 1) $motivo = 'Hay ' . $mismo . ' movimientos con el mismo importe: elige cuál es.';
     elseif ($mismo === 1) $motivo = 'Un movimiento con el mismo importe pero lejos en fecha o sin el nombre: confírmalo.';
