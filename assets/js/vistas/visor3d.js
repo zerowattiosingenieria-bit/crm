@@ -21,6 +21,7 @@
 import {h, poner, txt, num, normal} from '../util.js';
 import * as api from '../api.js';
 import {aviso} from '../ui.js';
+import {INVERSORES_SOLAX, AERO_SOLAX} from '../equipos.js';
 
 /* ---------- catálogo técnico (lo que montamos) ---------- */
 const PANELES = [
@@ -37,7 +38,8 @@ const INVERSORES = [
   {id: 'x3h5', n: 'SolaX X3 Hybrid 5 kW (trifásico)', kw: 5, fase: 'tri'},
   {id: 'x3h10', n: 'SolaX X3 Hybrid 10 kW (trifásico)', kw: 10, fase: 'tri'},
   {id: 'x3h15', n: 'SolaX X3 Hybrid 15 kW (trifásico)', kw: 15, fase: 'tri'},
-  {id: 'deye10', n: 'Deye 10 kW', kw: 10, fase: 'mono'}
+  {id: 'deye10', n: 'Deye 10 kW', kw: 10, fase: 'mono'},
+  ...INVERSORES_SOLAX.map(i => ({id: i.id, n: i.n + ' ' + String(i.kw).replace('.', ',') + ' kW' + (i.tri ? ' (trif.)' : ''), kw: i.kw, fase: i.tri ? 'tri' : 'mono'}))   /* gama SolaX actual */
 ];
 const AEROS = [
   {id: 'no', n: 'Sin aerotermia'},
@@ -47,6 +49,7 @@ const AEROS = [
   {id: 'htt19', n: 'Domusa Dual Clima HTT 19 kW (trif.)', kw: 19, d: [1.10, 1.38, 0.45]},
   {id: 'htt22', n: 'Domusa Dual Clima HTT 22 kW (trif.)', kw: 22, d: [1.10, 1.38, 0.45]},
   {id: 'ecpro16', n: 'Domusa Dual Clima EC PRO 16 kW (trif.)', kw: 16, d: [1.10, 1.38, 0.45]},
+  ...AERO_SOLAX.map(a => ({id: a.id, n: a.n, kw: a.kw, d: a.d})),   /* 25/11/2026: aerotermia SolaX */
   {id: 'sd15', n: 'Saunier Duval Genia Air 15 kW', kw: 15, d: [1.10, 1.10, 0.46]},
   {id: 'pana', n: 'Panasonic Aquarea', kw: 12, d: [1.00, 0.96, 0.40]}
 ];

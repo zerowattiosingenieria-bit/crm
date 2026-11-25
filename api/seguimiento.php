@@ -67,7 +67,7 @@ const SEG_DOCUMENTACION = [
   'memoria'      => ['memoria', 'Memoria / proyecto', 'Memoria', ''],
   'cove'         => ['cove', 'COVE', 'COVE', ''],
   'caes'         => ['documentacion caes', 'Documentación CAEs', 'CAEs', ''],
-  'domusa'       => ['puesta en marcha domusa', 'Puesta en marcha Domusa (Abraham)', 'P. marcha', 'aero'],
+  'domusa'       => ['puesta en marcha domusa', 'Puesta en marcha aerotermia (Abraham)', 'P. marcha', 'aero'],
   'resena'       => ['encuesta de calidad', 'Encuesta de calidad / reseña', 'Reseña', '']
 ];
 

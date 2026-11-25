@@ -139,7 +139,8 @@ export function materialesDe(o, cat) {
     }
     pon('Aerotermia', 'kit_hidraulico', 1);
     pon('Aerotermia', 'termostato', 1);
-    if (clave.startsWith('aero_1') || clave === 'aero_22') pon('Aerotermia', 'easy_connect', 1);
+    /* Easy Connect es de Domusa; la SolaX Thermal trae su wifi y app (25/11/2026). Su coste va por los mismos escalones de kW hasta tener facturas de SolaX. */
+    if ((clave.startsWith('aero_1') || clave === 'aero_22') && !contiene(o.aero_modelo, 'solax')) pon('Aerotermia', 'easy_connect', 1);
     pon('Mano de obra', 'mo_aero', 1);
     pon('Mano de obra', 'mo_aero_electricidad', 1);
     pon('Legalización', 'cite', 1);

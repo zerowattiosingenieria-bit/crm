@@ -19,21 +19,17 @@ import {h, poner, txt, num, normal} from '../util.js';
 import * as api from '../api.js';
 import {aviso} from '../ui.js';
 import {catalogoCostes, materialesDe} from '../materiales.js';
+import {INVERSORES_SOLAX, BATERIAS_SOLAX, AERO_SOLAX, inversorRecomendado, comprobarEquipo, aeroRecomendada, kwTarifaAero} from '../equipos.js';
 import {utm30, geocodificar, edificiosCatastro, area, dentro, rectanguloMinimo, factor, nombreAz} from './visor3d.js';
 
 const eur = n => Math.round(n || 0).toLocaleString('es-ES') + ' €';
 const pct = n => (Math.round((n || 0) * 1000) / 10).toLocaleString('es-ES') + ' %';
 const IVA = 1.21;
 const COEF_10 = 0.012894;            // Finlight, 10 años (sin mostrar condiciones al cliente)
-const INVERSORES = [
-  {id: 'auto', n: 'Automático según potencia'},
-  {id: 'x1h6', n: 'SolaX X1 Hybrid 6 kW', kw: 6, tri: false, ficha: 'inv_x1'},
-  {id: 'x1v10', n: 'SolaX X1-VAST 10 kW', kw: 10, tri: false, ficha: 'kit_625'},
-  {id: 'x3h5', n: 'SolaX X3 Hybrid 5 kW (trifásico)', kw: 5, tri: true, ficha: 'inv_x3'},
-  {id: 'x3h10', n: 'SolaX X3 Hybrid 10 kW (trifásico)', kw: 10, tri: true, ficha: 'inv_x3'},
-  {id: 'x3h15', n: 'SolaX X3 Hybrid 15 kW (trifásico)', kw: 15, tri: true, ficha: 'inv_x3'},
-  {id: 'deye10', n: 'Deye 10 kW', kw: 10, tri: false, ficha: 'inv_deye'}
-];
+/* 25/11/2026: gama actual de SolaX (equipos.js) + Deye. */
+const INVERSORES = [{id: 'auto', n: 'Automático según potencia'}]
+  .concat(INVERSORES_SOLAX.map(i => ({id: i.id, n: i.n + ' · ' + String(i.kw).replace('.', ',') + ' kW' + (i.tri ? ' (trif.)' : '') + ' · hasta ' + i.pvMax + ' kWp', kw: i.kw, tri: i.tri, ficha: i.tri ? 'inv_x3' : (i.serie === 'X1-VAST' ? 'kit_625' : 'inv_x1'), url: i.url, cat: i})))
+  .concat([{id: 'deye10', n: 'Deye 10 kW', kw: 10, tri: false, ficha: 'inv_deye'}]);
 /* Manuales en las webs oficiales de los fabricantes (SolaX, Deye, Domusa). */
 const MANUALES = {
   x1v10: 'https://uk.solaxpower.com/uploads/file/x1-vast-series-user-manual-en.pdf',
@@ -98,7 +94,7 @@ export async function vistaCotizador({id}) {
     personas: cli ? num(cli.personas) || 4 : 4, luzMes: cli ? num(cli.gasto_luz_mes) || 120 : 120,
     combustible: cli ? num(cli.gasto_combustible) || 2000 : 2000,
     suelo: false, quiereFv: true, quiereAero: true, panel: 625, nPan: 0, aero: 0, baterias: 0, cargador: false,
-    acs: 200, inercia: 100, distancia: false, trifasico: false, margenObj: null, inversor: 'auto', maquina: 'ht', aio: 'aio190', modCargador: 'hac7'
+    acs: 200, inercia: 100, distancia: false, trifasico: false, margenObj: null, inversor: 'auto', maquina: 'ht', aio: 'aio190', modCargador: 'hac7', bateria: 'T58', marcaAero: 'Domusa', solaxAero: 'auto'
   };
 
   const entrada = h('input#cotdir', {type: 'text', placeholder: 'Calle, número, municipio',
@@ -187,9 +183,10 @@ export async function vistaCotizador({id}) {
   }
 
   function inversorElegido(kwp) {
-    if (E.inversor !== 'auto') return INVERSORES.find(i => i.id === E.inversor);
-    const l = INVERSORES.filter(i => i.kw && i.tri === !!E.trifasico && i.id !== 'deye10');
-    return l.find(i => i.kw >= kwp / 1.25) || l[l.length - 1];
+    const elegido = E.inversor !== 'auto' && INVERSORES.find(i => i.id === E.inversor);
+    if (elegido) return elegido;   /* ids antiguos (x1h6, x3h10…) caen en automático */
+    const r = inversorRecomendado(kwp, E.trifasico);
+    return INVERSORES.find(i => i.id === r.id);
   }
   function cuenta() {
     const T = tarifas(), pan = PANELES.find(p => p.w === E.panel);
@@ -197,9 +194,19 @@ export async function vistaCotizador({id}) {
     const lineas = [];
     const inv = n ? inversorElegido(kwp) : null;
     if (n) lineas.push({k: 'fv', concepto: `Fotovoltaica ${n} × ${pan.n} (${kwp.toLocaleString('es-ES', {maximumFractionDigits: 2})} kWp) · inversor ${inv.n}`, precio: precioFv(n, T)});
-    if (E.quiereFv && E.baterias) lineas.push({k: 'bat', concepto: `Baterías ${E.baterias} × 5,8 kWh`, precio: E.baterias * T.bateria});
+    const bat = BATERIAS_SOLAX.find(b => b.id === E.bateria) || BATERIAS_SOLAX[0];
+    const kwhBat = E.quiereFv && E.baterias ? Math.round(E.baterias * bat.kwh * 100) / 100 : 0;
+    /* la tarifa de batería va por módulo de 5,8 kWh: otros módulos, en proporción a sus kWh */
+    if (E.quiereFv && E.baterias) lineas.push({k: 'bat', concepto: `Batería ${bat.n}: ${E.baterias} × ${String(bat.kwh).replace('.', ',')} kWh = ${kwhBat.toLocaleString('es-ES')} kWh`, precio: Math.round(T.bateria * kwhBat / 5.8 / 10) * 10});
+    const revision = n ? comprobarEquipo({inversor: inv && inv.cat, bateria: E.baterias ? bat : null, modulos: E.baterias, kwp}) : {avisos: []};
+    const aeroSx = E.quiereAero && E.marcaAero === 'SolaX' ? (E.solaxAero === 'auto' ? aeroRecomendada(E.aeroKwNec || E.aero, E.trifasico, 'SolaX')
+      : (() => { const a = AERO_SOLAX.find(x => x.id === E.solaxAero) || AERO_SOLAX[0]; return {equipo: a, unidades: 1, kw: a.kw, modelo: a.n}; })()) : null;
     if (E.cargador) lineas.push({k: 'carg', concepto: (CARGADORES.find(x => x.id === E.modCargador) || CARGADORES[0]).n, precio: T.cargador});
-    if (E.quiereAero) {
+    if (E.quiereAero && aeroSx) {
+      lineas.push({k: 'aero', concepto: `${aeroSx.modelo} · ACS ${E.acs} L · ${E.inercia ? 'inercia ' + E.inercia + ' L' : 'sin inercia'}`, precio: T.aero[kwTarifaAero(aeroSx.kw * aeroSx.unidades)]});
+      if (E.acs > 200 || E.inercia > 100) lineas.push({k: 'sup1', concepto: `Suplemento depósitos mayores (ACS ${E.acs} L / inercia ${E.inercia} L)`, precio: T.suplemento * (E.acs >= 500 ? 2 : 1)});
+      if (E.distancia) lineas.push({k: 'sup2', concepto: 'Suplemento distancias (caldera / unidad exterior)', precio: T.suplemento});
+    } else if (E.quiereAero) {
       const maq = MAQUINAS.find(m => m.id === E.maquina), aio = E.maquina === 'aio' ? AIO.find(a => a.id === E.aio) : null;
       lineas.push({k: 'aero', concepto: `${maq.n} ${E.aero} kW · ${aio ? aio.n : 'ACS ' + E.acs + ' L'} · ${E.inercia ? 'inercia ' + E.inercia + ' L' : 'sin inercia'}`, precio: T.aero[E.aero]});
       if ((!aio && E.acs > 200) || E.inercia > 100) lineas.push({k: 'sup1', concepto: `Suplemento depósitos mayores (ACS ${E.acs} L / inercia ${E.inercia} L)`, precio: T.suplemento * (E.acs >= 500 ? 2 : 1)});
@@ -208,16 +215,16 @@ export async function vistaCotizador({id}) {
     const pvp = lineas.reduce((s, l) => s + l.precio, 0);
     // operación "de mentira" para el catálogo de costes (mismas reglas que Materiales y costes)
     const op = {tipo: n && E.quiereAero ? 'fv_aero' : n ? 'fv' : E.quiereAero ? 'aero' : '', paneles_num: n, panel_wp: pan.w,
-      inversor_modelo: inv ? inv.n : '', inversor_kw: inv ? inv.kw : 0, bateria_kwh: E.quiereFv ? E.baterias * 5.8 : 0,
-      cargador_modelo: E.cargador ? (CARGADORES.find(x => x.id === E.modCargador) || CARGADORES[0]).n.replace('X3-HAC', 'X3 HAC') : '', aero_kw: E.quiereAero ? E.aero : 0,
-      aero_modelo: E.quiereAero ? 'Domusa ' + (E.maquina === 'aio' ? 'Fusion all in one ' : E.maquina === 'htt' ? 'HTT ' : E.maquina === 'ecpro' ? 'EC PRO ' : 'HT ') + E.aero : '',
+      inversor_modelo: inv ? (inv.cat ? inv.cat.n : inv.n) : '', inversor_kw: inv ? inv.kw : 0, bateria_kwh: kwhBat, bateria_modelo: E.baterias ? bat.n : '',
+      cargador_modelo: E.cargador ? (CARGADORES.find(x => x.id === E.modCargador) || CARGADORES[0]).n.replace('X3-HAC', 'X3 HAC') : '', aero_kw: E.quiereAero ? (aeroSx ? aeroSx.kw * aeroSx.unidades : E.aero) : 0,
+      aero_modelo: aeroSx ? aeroSx.modelo : E.quiereAero ? 'Domusa ' + (E.maquina === 'aio' ? 'Fusion all in one ' : E.maquina === 'htt' ? 'HTT ' : E.maquina === 'ecpro' ? 'EC PRO ' : 'HT ') + E.aero : '',
       deposito_acs: E.quiereAero && E.maquina !== 'aio' ? E.acs : 0, deposito_inercia: E.quiereAero ? E.inercia : 0, tejado: ''};
     const mat = dir ? materialesDe(op, cat) : null;
     // ayudas y ahorro orientativos
     const kwh = kwp * 1650 * factor(30, E.techo ? E.techo.az : 0);
     const ahorroFv = kwh * (0.55 * 0.17 + 0.45 * 0.06);
     const ahorroAero = E.quiereAero ? E.combustible * 0.6 : 0;
-    return {T, lineas, pvp, op, mat, kwp, kwh, ahorro: ahorroFv + ahorroAero, n, pan, inv};
+    return {T, lineas, pvp, op, mat, kwp, kwh, ahorro: ahorroFv + ahorroAero, n, pan, inv, bat, kwhBat, revision, aeroSx};
   }
 
   function pinta() {
@@ -243,17 +250,26 @@ export async function vistaCotizador({id}) {
         campo('Nº paneles', numero(E.nPan, v => { E.nPan = Math.max(0, Math.round(v)); }, 'cotnpan', {min: 0, max: 80, step: 2}))),
       campo('Inversor', (() => { const s = h('select#cotinv', INVERSORES.map(i => h('option', {value: i.id}, i.n))); s.value = E.inversor;
         s.addEventListener('change', () => { E.inversor = s.value; const i = INVERSORES.find(x => x.id === s.value); if (i && i.kw) E.trifasico = i.tri; pinta(); }); return s; })()),
-      h('.cot-fila', campo('Baterías 5,8 kWh', numero(E.baterias, v => { E.baterias = Math.max(0, Math.round(v)); }, 'cotbat', {min: 0, max: 6})),
-        chk(casilla(E.cargador, v => { E.cargador = v; }, 'cotcarg'), 'Cargador VE')),
+      h('.cot-fila', campo('Batería', (() => { const s = h('select#cotbatmod', BATERIAS_SOLAX.map(b => h('option', {value: b.id}, b.n + ' · ' + String(b.kwh).replace('.', ',') + ' kWh/módulo'))); s.value = E.bateria;
+          s.addEventListener('change', () => { E.bateria = s.value; pinta(); }); return s; })()),
+        campo('Módulos', numero(E.baterias, v => { E.baterias = Math.max(0, Math.round(v)); }, 'cotbat', {min: 0, max: 13}))),
+      c.revision && c.revision.avisos.length ? h('div', {estilo: {background: '#fff4e5', border: '1px solid #f5c37a', borderRadius: '8px', padding: '6px 10px', fontSize: '12.5px'}},
+        c.revision.avisos.map(a => h('div', '⚠ ' + a))) : (c.n ? h('p.nota', {estilo: {margin: '2px 0'}}, '✓ Inversor y batería dentro de lo que dicen los manuales de SolaX' + (c.kwhBat ? ' · ' + c.kwhBat.toLocaleString('es-ES') + ' kWh (' + (Math.round(E.baterias * c.bat.util * 10) / 10).toLocaleString('es-ES') + ' útiles)' : '')) : null),
+      chk(casilla(E.cargador, v => { E.cargador = v; }, 'cotcarg'), 'Cargador VE'),
       E.cargador ? campo('Modelo de cargador', (() => { const s = h('select#cotmodcarg', CARGADORES.map(x => h('option', {value: x.id}, x.n))); s.value = E.modCargador;
         s.addEventListener('change', () => { E.modCargador = s.value; if (s.value !== 'hac7') E.trifasico = true; pinta(); }); return s; })()) : null,
       h('h4', 'Aerotermia'),
       chk(casilla(E.quiereAero, v => { E.quiereAero = v; }, 'cotaero'), 'Incluir aerotermia'),
-      campo('Máquina', (() => { const s = h('select#cotmaq', MAQUINAS.map(m => h('option', {value: m.id}, m.n))); s.value = E.maquina;
+      campo('Marca', (() => { const s = h('select#cotmarca', [['Domusa', 'Domusa'], ['SolaX', 'SolaX (Thermal R290 / Alture)']].map(([v, t]) => h('option', {value: v}, t))); s.value = E.marcaAero;
+        s.addEventListener('change', () => { E.marcaAero = s.value; pinta(); }); return s; })()),
+      E.marcaAero === 'SolaX' ? campo('Modelo SolaX', (() => { const s = h('select#cotsolaxaero', [h('option', {value: 'auto'}, 'Automático según potencia' + (c.aeroSx ? ' → ' + c.aeroSx.modelo : ''))]
+          .concat(AERO_SOLAX.filter(a => a.serie === 'SolaX Alture' || a.tri === !!E.trifasico).map(a => h('option', {value: a.id}, a.n + (a.scop35 ? ' · SCOP ' + String(a.scop35).replace('.', ',') : ''))))); s.value = E.solaxAero;
+        s.addEventListener('change', () => { E.solaxAero = s.value; pinta(); }); return s; })()) : null,
+      E.marcaAero === 'SolaX' ? null : campo('Máquina', (() => { const s = h('select#cotmaq', MAQUINAS.map(m => h('option', {value: m.id}, m.n))); s.value = E.maquina;
         s.addEventListener('change', () => { E.maquina = s.value; if (s.value === 'htt') E.trifasico = true; pinta(); }); return s; })()),
-      E.maquina === 'aio' ? campo('Modelo All in One', (() => { const s = h('select#cotaio', AIO.map(a => h('option', {value: a.id}, a.n))); s.value = E.aio;
+      E.marcaAero !== 'SolaX' && E.maquina === 'aio' ? campo('Modelo All in One', (() => { const s = h('select#cotaio', AIO.map(a => h('option', {value: a.id}, a.n))); s.value = E.aio;
         s.addEventListener('change', () => { E.aio = s.value; pinta(); }); return s; })()) : null,
-      campo('Potencia', (() => { const s = h('select#cotkw', [12, 16, 19, 22].map(k => h('option', {value: k}, k + ' kW' + (k === 22 ? ' (solo trifásica)' : ''))));
+      campo(E.marcaAero === 'SolaX' ? 'Potencia que pide la casa' : 'Potencia', (() => { const s = h('select#cotkw', [12, 16, 19, 22].map(k => h('option', {value: k}, k + ' kW' + (k === 22 ? ' (solo trifásica)' : ''))));
         s.value = E.aero; s.addEventListener('change', () => { E.aero = +s.value; if (E.aero === 22) E.trifasico = true; pinta(); }); return s; })()),
       h('.cot-fila',
         campo('Depósito ACS', (() => { const s = h('select#cotacs', [150, 200, 300, 500].map(l => h('option', {value: l}, l + ' L'))); s.value = E.acs;
@@ -349,12 +365,13 @@ export async function vistaCotizador({id}) {
       else if (c.pan.w === 590) l.push(['Paneles Risen 590 W', 'panel_590', null]);
       else l.push([c.pan.n, null, null]);
       const inv = c.inv || {};
-      l.push(['Inversor ' + (inv.n || ''), inv.ficha || null, MANUALES[inv.id === 'x1v10' ? 'x1v10' : inv.ficha] || null]);
-      if (inv.id === 'x1v10' || c.pan.w >= 600) l.push(['Kit SolaX X1-VAST + Hanersun 625 W + batería', 'kit_625', null]);
-      if (E.baterias) l.push(['Baterías SolaX T58', null, MANUALES.bateria]);
+      l.push(['Inversor ' + (inv.cat ? inv.cat.n : inv.n || ''), inv.ficha || null, inv.url || MANUALES[inv.ficha] || null]);
+      if ((inv.cat && inv.cat.serie === 'X1-VAST') || c.pan.w >= 600) l.push(['Kit SolaX X1-VAST + Hanersun 625 W + batería', 'kit_625', null]);
+      if (E.baterias) l.push([c.bat.n + ' × ' + E.baterias, null, c.bat.url]);
     }
     if (E.cargador) l.push([(CARGADORES.find(x => x.id === E.modCargador) || CARGADORES[0]).n, null, MANUALES.cargador]);
-    if (E.quiereAero) l.push([(MAQUINAS.find(m => m.id === E.maquina) || {}).n || 'Aerotermia Domusa', 'aero_domusa', MANUALES.domusa]);
+    if (E.quiereAero && c.aeroSx) l.push([c.aeroSx.modelo, null, c.aeroSx.equipo.url]);
+    else if (E.quiereAero) l.push([(MAQUINAS.find(m => m.id === E.maquina) || {}).n || 'Aerotermia Domusa', 'aero_domusa', MANUALES.domusa]);
     if (!l.length) return null;
     return h('.cot-fichas', h('b', 'Documentación del producto propuesto'),
       h('table.cot-tabla', l.map(([nombre, k, manual]) => h('tr', h('td', nombre), h('td.num',
@@ -383,7 +400,7 @@ export async function vistaCotizador({id}) {
   }
   async function guardar(c, precio, cuota, irpf) {
     const estadoGuardado = {}; ['m2', 'anyo', 'plantas', 'personas', 'luzMes', 'combustible', 'suelo', 'quiereFv', 'quiereAero', 'panel', 'nPan',
-      'aero', 'baterias', 'cargador', 'acs', 'inercia', 'distancia', 'trifasico', 'techo', 'catastro', 'inversor', 'maquina', 'aio', 'modCargador'].forEach(k => { estadoGuardado[k] = E[k]; });
+      'aero', 'baterias', 'cargador', 'acs', 'inercia', 'distancia', 'trifasico', 'techo', 'catastro', 'inversor', 'maquina', 'aio', 'modCargador', 'bateria', 'marcaAero', 'solaxAero'].forEach(k => { estadoGuardado[k] = E[k]; });
     try {
       const r = await api.guardarCotizacion({cliente_id: cli.id, total: Math.round(precio), resumen: texto(c, precio, cuota, irpf),
         datos: {direccion: txt(entrada.value), estado: estadoGuardado, lineas: c.lineas, kwp: c.kwp, cuota: Math.round(cuota)}});

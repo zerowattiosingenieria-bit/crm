@@ -25,6 +25,8 @@
 
 import {h, poner, txt, num, fechaCorta, hoyISO} from '../util.js';
 import * as api from '../api.js';
+import {INVERSORES_SOLAX, BATERIAS_SOLAX, aeroRecomendada, comprobarEquipo, buscarInversor, buscarBateria, inversorRecomendado} from '../equipos.js';
+const inversorSugerido = (kwp, tri) => { const i = inversorRecomendado(kwp, tri); return i.n + ' (' + String(i.kw).replace('.', ',') + ' kW, hasta ' + i.pvMax + ' kWp)'; };
 import {tarjeta, formulario, marca, aviso, avisoError, confirmar, cargando, ventana} from '../ui.js';
 import {gastoAnual} from './clientes.js';
 
@@ -105,7 +107,7 @@ const LIMITES = {
   potenciaContratada: [1.15, 45], gastoLuzMes: [0, 1500], gastoCombAnio: [0, 20000],
   consumo: [0, 40000], ibiAnual: [0, 5000], factorSust: [0, 100], coberturaFV: [0, 95],
   acsL: [0, 1000], inerciaL: [0, 1000], distDep: [0, 40], distExt: [0, 100], placas: [0, 60],
-  numInversores: [0, 10], bateriaModulos: [0, 12], precioAero: [0, 60000], precioFV: [0, 60000],
+  numInversores: [0, 10], bateriaModulos: [0, 13], precioAero: [0, 60000], precioFV: [0, 60000],
   precioBateria: [0, 40000], precioCargador: [0, 20000], cae: [0, 6000], reserva: [0, 10000]
 };
 
@@ -120,7 +122,7 @@ const VACIA = {
   gastoLuzMes: 110, gastoCombAnio: 1800, consumo: 6000, ibiAnual: 0, factorSust: 0, coberturaFV: 60,
   acsL: 0, modulo: 'trio', inerciaL: 0, distDep: 1.5, distExt: 8,
   placas: 0, tipoPlaca: '', numInversores: 1, inversor: '', tejado: 'teja',
-  bateriaModulos: 0, bateriaModelo: '',
+  bateriaModulos: 0, bateriaModelo: '', aeroMarca: 'Domusa',
   precioAero: 0, precioFV: 0, precioBateria: 0, precioCargador: 0, cae: 0, tramoIrpf: '60',
   reserva: 0, mensualidades: 120, slot: '', garantiaAero: 10, garantiaFV: 15, campana: 'regular',
   estado: 'propuesta', fechaDecision: '', observaciones: '', motivoNo: ''
@@ -253,9 +255,12 @@ const SECCIONES = [
        si va con dos máquinas de 12 kW o con una de 19 kW. */
     {id: 'aeroMono', et: 'Casa monofásica: la de 22 kW solo es trifásica. Por defecto 19 kW; ¿o dos de 12 kW?', tipo: 'select', ancho: 2,
      vacio: false, opciones: [['19', 'Una máquina de 19 kW'], ['2x12', 'Dos máquinas de 12 kW (cascada)']],
-     solo: f => conA(f) && f.suministro === 'mono' && num(f.m2) > 350},
+     solo: f => conA(f) && f.aeroMarca !== 'SolaX' && f.suministro === 'mono' && num(f.m2) > 350},
+    /* 25/11/2026 (Nando): desde ahora la aerotermia va con Domusa o con SolaX */
+    {id: 'aeroMarca', et: 'Marca de aerotermia', tipo: 'select', vacio: false, solo: conA,
+     opciones: [['Domusa', 'Domusa (Dual Clima)'], ['SolaX', 'SolaX (Thermal R290 / Alture)']]},
     {id: 'potenciaContratada', et: 'Potencia contratada (kW)', tipo: 'numero', paso: '0.01'},
-    {id: 'ec', et: 'Módulo wifi Easy Connect', tipo: 'select', vacio: false, opciones: SI_NO, solo: conA},
+    {id: 'ec', et: 'Módulo wifi Easy Connect', tipo: 'select', vacio: false, opciones: SI_NO, solo: f => conA(f) && f.aeroMarca !== 'SolaX'},
     {id: 'refrig', et: 'Refrigeración', tipo: 'select', vacio: false, opciones: SI_NO, solo: conA}
   ]},
   {titulo: '4 · Gastos actuales', nota: 'Son los números que sostienen la venta: no los estimes, pide la factura.', campos: [
@@ -271,7 +276,7 @@ const SECCIONES = [
   {titulo: '5 · ACS, inercia y tramos', solo: f => f.aero === 'si', campos: [
     {id: 'acsL', et: 'Capacidad de ACS (L, 0 = automático)', tipo: 'numero',
      ayuda: '200 L hasta 6 personas, 300 L a partir de 7.'},
-    {id: 'modulo', et: 'Acumulación ACS', tipo: 'select', vacio: false,
+    {id: 'modulo', et: 'Acumulación ACS', tipo: 'select', vacio: false, solo: f => f.aeroMarca !== 'SolaX',
      opciones: [['trio', 'Fusion HT Trio'], ['sanit', 'Sanit + inercia']]},
     {id: 'inerciaL', et: 'Depósito de inercia (L)', tipo: 'numero'},
     {id: 'distDep', et: 'Metros de caldera a depósitos', tipo: 'numero', paso: '0.5'},
@@ -281,11 +286,14 @@ const SECCIONES = [
     {id: 'placas', et: 'Nº de placas', tipo: 'numero'},
     {id: 'tipoPlaca', et: 'Tipo de placa', pista: 'Ej. 580 Wp full black'},
     {id: 'numInversores', et: 'Nº de inversores', tipo: 'numero'},
-    {id: 'inversor', et: 'Inversor (marca, modelo, kW)'},
+    {id: 'inversor', et: 'Inversor (marca, modelo, kW)', tipo: 'select', vacio: true, ancho: 2,
+     opciones: INVERSORES_SOLAX.map(i => [i.n + ' ' + String(i.kw).replace('.', ',') + ' kW', i.n + ' · ' + String(i.kw).replace('.', ',') + ' kW' + (i.tri ? ' trif.' : ' mono') + ' · hasta ' + i.pvMax + ' kWp']).concat([['Deye 10 kW', 'Deye 10 kW']]),
+     ayuda: 'Gama SolaX actual. Si lo dejas vacío, la ficha te propone uno según los kWp.'},
     {id: 'tejado', et: 'Tipo de tejado', tipo: 'select', vacio: false,
      opciones: [['teja', 'Teja'], ['pizarra', 'Pizarra'], ['chapa', 'Chapa'], ['plana', 'Plana'], ['suelo', 'Suelo']]},
-    {id: 'bateriaModulos', et: 'Módulos de batería (5,3 kWh c/u)', tipo: 'numero', solo: f => f.bateria === 'si'},
-    {id: 'bateriaModelo', et: 'Modelo de batería', solo: f => f.bateria === 'si'}
+    {id: 'bateriaModelo', et: 'Modelo de batería', tipo: 'select', vacio: false, solo: f => f.bateria === 'si',
+     opciones: BATERIAS_SOLAX.map(b => [b.n, b.n + ' · ' + String(b.kwh).replace('.', ',') + ' kWh/módulo'])},
+    {id: 'bateriaModulos', et: 'Módulos de batería', tipo: 'numero', solo: f => f.bateria === 'si'}
   ]},
   {titulo: '7 · Oferta y financiación', nota: 'Precios con IVA incluido. Deducción de IRPF siempre al 60 %.', campos: [
     {id: 'precioAero', et: 'Precio aerotermia (€)', tipo: 'euro', solo: f => f.aero === 'si'},
@@ -350,12 +358,16 @@ export function calcular(fEntrada) {
   const acs = f.acsL || (f.personas <= 6 ? 200 : 300);
   const ht = f.suministro === 'tri' ? 'HTT' : 'HT';
   const gama = ht + (f.ec === 'si' ? ' EC' : '') + ' PRO';
-  const unidades = cascada ? 2 : 1;
-  const modelo = (cascada ? '2 × ' : '') + 'Dual Clima ' + kw + ' ' + gama;
+  let modelo = (cascada ? '2 × ' : '') + 'Dual Clima ' + kw + ' ' + gama;
+  let kwF = kw, unidadesF = cascada ? 2 : 1, gamaF = gama;
+  if (f.aeroMarca === 'SolaX') {   /* SolaX Thermal R290: 8–16 kW mono o trifásica; más de 16 kW, dos en cascada; ≤ 6 kW, Alture */
+    const rec = aeroRecomendada(f.m2 > 0 && f.m2 <= 90 ? 6 : kwTarifa, f.suministro === 'tri', 'SolaX');   /* mismos escalones que la tarifa (por m²) */
+    modelo = rec.modelo; kwF = rec.kw; unidadesF = rec.unidades; gamaF = rec.equipo.serie;
+  }
   const separador = f.emisor !== 'suelo';
   const tanque = !f.inerciaL ? 'Sin depósito de inercia' : (separador ? 'BTS ' : 'BT ') + f.inerciaL;
   const acsCat = [150, 200, 300].indexOf(acs) !== -1;
-  const acumulador = acsCat
+  const acumulador = f.aeroMarca === 'SolaX' ? 'Depósito ACS ' + acs + ' L' : acsCat
     ? (f.modulo === 'trio' ? 'Fusion HT Trio ' + acs : 'Sanit ' + acs)
     : 'Acumulador ACS ' + acs + ' L (fuera de catálogo Fusion)';
   const tejadoTxt = {teja: 'Cubierta de teja inclinada', pizarra: 'Cubierta de pizarra',
@@ -377,7 +389,8 @@ export function calcular(fEntrada) {
   const conBat = conFV && f.bateria === 'si';
   const conCar = f.cargador === 'si';
   const modulosBat = conBat ? (Number(f.bateriaModulos) || 0) : 0;
-  const kwhBat = Math.round(modulosBat * KWH_MODULO_BATERIA * 10) / 10;
+  const batCat = buscarBateria(f.bateriaModelo);
+  const kwhBat = Math.round(modulosBat * (batCat && batCat.id !== 'T58' ? batCat.util : KWH_MODULO_BATERIA) * 10) / 10;
   const precioBatSug = modulosBat * PRECIO_MODULO_BATERIA;
   const precioAero = conAero ? f.precioAero : 0;
   const precioFV = conFV ? f.precioFV : 0;
@@ -431,8 +444,10 @@ export function calcular(fEntrada) {
   const wp = (String(f.tipoPlaca).match(/(\d{3})\s*W/i) || [])[1];
   const kwp = conFV && f.placas && wp ? Math.round(f.placas * Number(wp) / 10) / 100 : 0;
 
-  return {f, conAero, conFV, conBat, conCar, kw, cascada, monoSin22, eleccionMono, unidades, demanda, acs, acsCat, acumulador,
-    modelo, gama, tanque, separador, tejadoTxt, factor, luzAnio, combAnio, actual, futuro, ahorro, ahorroMes,
+  const kwpFicha = (Number(f.placas) || 0) * (parseFloat(String(f.tipoPlaca).match(/(\d{3})\s*w/i)?.[1] || '0') || 0) / 1000;
+  const revisionEquipo = conFV ? comprobarEquipo({inversor: f.inversor, bateria: conBat ? f.bateriaModelo : null, modulos: modulosBat, kwp: kwpFicha}) : {avisos: []};
+  return {f, conAero, conFV, conBat, conCar, kw: kwF, cascada: unidadesF > 1, monoSin22: f.aeroMarca === 'SolaX' ? false : monoSin22, eleccionMono, unidades: unidadesF, demanda, acs, acsCat, acumulador, revisionEquipo, kwpFicha,
+    modelo, gama: gamaF, tanque, separador, tejadoTxt, factor, luzAnio, combAnio, actual, futuro, ahorro, ahorroMes,
     modulosBat, kwhBat, precioBatSug, precioAero, precioFV, precioBat, precioCar, inversion,
     tramo, baseIrpf, baseAeroIrpf, baseFVIrpf, deduccionAero, deduccionFV, deduccion, muni, ibiMun, ibiTotal, cae, ayudas, facturado,
     costeReal, retorno, meses, coef, reserva, finAero, finFV, finBat, finCar, cuota, cuota10, esfuerzo,
@@ -457,6 +472,8 @@ export function avisosFicha(fEntrada, r) {
   else if (!mun.pct) W(r.muni + ': no hay bonificación de IBI cargada. Consulta la ordenanza fiscal del ayuntamiento antes de prometer nada.');
   else if (!mun.ok) W('La bonificación de IBI de ' + r.muni + ' NO está verificada contra la ordenanza vigente. Compruébala en la web del ayuntamiento antes de ponerla por escrito en la propuesta.');
   else if (mun.nota) I(r.muni + ': ' + mun.nota);
+  (r.revisionEquipo ? r.revisionEquipo.avisos : []).forEach(t => W('Equipo SolaX: ' + t));
+  if (r.conFV && !f.inversor && r.kwpFicha) I('Inversor recomendado para ' + String(Math.round(r.kwpFicha * 100) / 100).replace('.', ',') + ' kWp: ' + inversorSugerido(r.kwpFicha, f.suministro === 'tri') + '.');
   if (!f.cups) W('Falta el CUPS. Está en la factura de la luz y hace falta para la legalización.');
 
   if (r.conAero && r.eleccionMono === '2x12') I('Monofásica: dos Dual Clima de 12 kW en cascada (24 kW en total) en lugar de la de 22 kW, que solo es trifásica. Revisa la potencia contratada y el precio con el técnico.');

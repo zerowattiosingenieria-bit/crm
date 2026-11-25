@@ -194,6 +194,8 @@ export function formulario(campos, valores = {}) {
     if (campo.tipo === 'select') {
       control = h('select', {id: 'c_' + campo.id},
         (campo.vacio !== false ? [h('option', {value: ''}, campo.vacio || '—')] : []).concat(
+          /* un valor guardado que ya no está en la lista (p. ej. un inversor antiguo) se conserva */
+          v != null && String(v) !== '' && !(campo.opciones || []).some(o => String(Array.isArray(o) ? o[0] : o) === String(v)) ? [h('option', {value: v, selected: true}, v + ' (actual)')] : [],
           (campo.opciones || []).map(o => {
             const [val, et] = Array.isArray(o) ? o : [o, o];
             return h('option', {value: val, selected: String(val) === String(v ?? '')}, et);
