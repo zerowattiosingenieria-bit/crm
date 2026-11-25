@@ -62,7 +62,7 @@ export async function vistaImpuestos() {
         h('div', {estilo: {overflowX: 'auto'}}, h('table.tabla', {estilo: {fontSize: '12.5px'}},
           h('thead', h('tr', h('th', 'Fecha'), h('th', 'Proveedor'), h('th.num', 'Base'), h('th.num', 'IVA'), h('th.num', 'Total'), h('th', 'Qué pasa'))),
           h('tbody', rev.map(f => h('tr', h('td', fechaCorta(f.fecha)), h('td', f.emisor, h('div.nota', f.id + ' · ' + f.archivo)), h('td.num', eur2(f.base)), h('td.num', eur2(f.iva)), h('td.num', eur2(f.total)), h('td', f.motivo)))))))) : null,
-      g.fernando.length ? h('div', {estilo: {marginTop: '12px'}}, h('h4', {estilo: {margin: '0 0 8px'}}, 'Fernando García Santos (autónomo)'), g.fernando.map(filaModelo)) : null));
+      null));
   });
   poner(caja, bloques.length ? bloques : tarjeta('Impuestos', h('.vacio', 'Todavía no hay modelos guardados.')));
   return caja;

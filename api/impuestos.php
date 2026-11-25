@@ -5,7 +5,7 @@
  * «Te paso los costes, las nóminas, el libro de facturas expedidas y los modelos 303, 111, 115 y 130
  *  para que los tengas en cuenta en el CRM. A todo esto podemos acceder Rubén, superadmin, Fernando y Nando.»
  *
- * Guarda cada modelo presentado (de la empresa o de Fernando como autónomo) con sus casillas clave y el PDF
+ * Guarda cada modelo presentado por Zero Wattios (los personales de los socios no entran) con sus casillas clave y el PDF
  * (en la carpeta «IMPUESTOS · CRM ZERO WATTIOS» del Drive) y lo cuadra contra lo que hay en el CRM:
  *   · 303: IVA devengado frente a las facturas emitidas del trimestre y soportado frente a las recibidas.
  *   · 111: rendimientos del trabajo y retenciones frente a las nóminas del trimestre.
@@ -81,7 +81,7 @@ function revisarIvaTrimestre_(int $anio, string $periodo): array {
 
 function accImpuestos_(array $u, array $p): array {
   exigir_($u, 'vistagestoria');
-  $l = leer_('MODELOS_FISCALES');
+  $l = array_values(array_filter(leer_('MODELOS_FISCALES'), fn($m) => txt_($m['titular']) === 'empresa'));
   usort($l, fn($a, $b) => strcmp(txt_($b['ejercicio']) . txt_($b['periodo']), txt_($a['ejercicio']) . txt_($a['periodo'])) ?: strcmp(txt_($a['titular']) . txt_($a['modelo']), txt_($b['titular']) . txt_($b['modelo'])));
   $trims = [];
   $o = array_map(function ($m) use (&$trims) {
@@ -99,7 +99,9 @@ function accImpuestos_(array $u, array $p): array {
 function accGuardarModeloFiscal_(array $u, array $p): array {
   exigir_($u, 'vistagestoria');
   $d = is_array($p['modelo'] ?? null) ? $p['modelo'] : [];
-  $titular = in_array(txt_($d['titular'] ?? ''), ['empresa', 'fernando'], true) ? txt_($d['titular']) : 'empresa';
+  /* Solo modelos de la empresa: los personales de los socios no entran en el CRM (26/11/2026, Nando). */
+  if (txt_($d['titular'] ?? 'empresa') !== 'empresa') return ['ok' => false, 'error' => 'En el CRM solo van los modelos de Zero Wattios.'];
+  $titular = 'empresa';
   $modelo = preg_replace('/\D/', '', txt_($d['modelo'] ?? ''));
   $ej = (int)($d['ejercicio'] ?? 0); $per = strtoupper(txt_($d['periodo'] ?? ''));
   if (!$modelo || $ej < 2020 || !preg_match('/^([1-4]T|0A|\d{2})$/', $per)) return ['ok' => false, 'error' => 'Falta el modelo, el ejercicio o el periodo (1T…4T).'];
@@ -117,6 +119,15 @@ function accGuardarModeloFiscal_(array $u, array $p): array {
   $r = $ex ? actualizar_('MODELOS_FISCALES', $ex['id'], $datos) : insertar_('MODELOS_FISCALES', unir_(['creado' => ahora_(), 'creado_por' => $u['id']], $datos));
   registrar_($u, 'modelo_fiscal', 'MODELOS_FISCALES', $r['id'] ?? '', $titular . ' ' . $modelo . ' ' . $per . ' ' . $ej);
   return ['ok' => true, 'modelo' => $r];
+}
+
+function accBorrarModeloFiscal_(array $u, array $p): array {
+  exigir_($u, 'vistagestoria');
+  $m = buscar1_('MODELOS_FISCALES', fn($x) => mismo_($x['id'], $p['id'] ?? ''));
+  if (!$m) return ['ok' => false, 'error' => 'No existe ese modelo.'];
+  borrar_('MODELOS_FISCALES', $m['id']);
+  registrar_($u, 'borrar_modelo_fiscal', 'MODELOS_FISCALES', $m['id'], txt_($m['titular']) . ' ' . txt_($m['modelo']) . ' ' . txt_($m['periodo']));
+  return ['ok' => true];
 }
 
 function accArchivoModeloFiscal_(array $u, array $p): array {
