@@ -360,6 +360,38 @@ function trimestre() {
   return {desde: `${a}-${String(q * 3 + 1).padStart(2, '0')}-01`, hasta: hoy};
 }
 
+/* 25/11/2026: casados que propone el CRM y confirma dirección con un clic (tasas del PDF, mismo importe…). Sale arriba
+   de la lista, sea cual sea el periodo elegido. */
+async function tarjetaSugerencias(alAcabar) {
+  let fs = [];
+  try { fs = ((await api.pedir('facturasDoc', {desde: '', hasta: ''})).facturas || []).filter(x => x.sugerencia && x.casada !== 'si'); } catch (e) { return null; }
+  if (!fs.length) return null;
+  const sg = x => { try { return JSON.parse(x.sugerencia); } catch (e) { return {}; } };
+  const aplicar = async (lista, boton) => {
+    boton.disabled = true; let ok = 0; const err = [];
+    for (const x of lista) {
+      boton.textContent = 'Casando ' + (ok + err.length + 1) + ' de ' + lista.length + '…';
+      try { await api.pedir('aplicarSugerenciaCasado', {id: x.id}); ok++; } catch (e) { err.push((x.numero || x.id) + ': ' + e.message); }
+    }
+    aviso(ok + (ok === 1 ? ' factura casada' : ' facturas casadas') + (err.length ? ' · no se pudo: ' + err.join(' · ') : ''), err.length ? 'error' : 'ok');
+    alAcabar();
+  };
+  const filas = fs.sort((a, b) => String(a.fecha).localeCompare(String(b.fecha))).map(x => h('div', {estilo: {display: 'flex', gap: '10px', alignItems: 'center', padding: '8px 0', borderTop: '1px solid #e3ecd2', flexWrap: 'wrap'}},
+    h('b', {estilo: {minWidth: '84px'}}, fechaCorta(x.fecha)),
+    h('span', {estilo: {minWidth: '160px'}}, (x.tipo === 'emitida' ? (x.receptor || '') : (x.emisor || '')) + (x.numero ? ' · ' + x.numero : '')),
+    h('span', {estilo: {flex: '1 1 280px', color: '#44546f', fontSize: '13px'}}, sg(x).texto || ''),
+    h('button.btn.mini.primario', {onclick: ev => aplicar([x], ev.currentTarget)}, sg(x).tipo === 'suplido' ? 'Aplicar · ' + eur2(sg(x).total) : 'Aplicar')));
+  const todas = h('button.btn.primario', {}, '✓ Aplicar las ' + fs.length);
+  const confirmarCaja = h('span');
+  todas.onclick = () => poner(confirmarCaja, h('span', {estilo: {display: 'inline-flex', gap: '8px', alignItems: 'center', marginLeft: '8px'}},
+    '¿Casar las ' + fs.length + ' tal como se indica?',
+    h('button.btn.mini.primario', {onclick: ev => { poner(confirmarCaja); aplicar(fs, todas); }}, 'Sí, casar'),
+    h('button.btn.mini', {onclick: () => poner(confirmarCaja)}, 'No')));
+  return tarjeta('💡 Casados que propone el CRM (' + fs.length + ')', h('div',
+    h('p.nota', {estilo: {margin: '0 0 8px'}}, 'Revísalos y pulsa «Aplicar» en cada uno, o todos de golpe. En las de tasas o suplidos se corrige el total de la factura (queda anotado en sus notas) y se casa con el pago.'),
+    h('div', {estilo: {marginBottom: '8px'}}, todas, confirmarCaja), filas), {subtitulo: 'Nada se casa hasta que lo confirmes'});
+}
+
 export async function vistaFacturasEscaneadas({enHub = false} = {}) {
   const caja = h('div');
   const estado = h('.nota', {estilo: {minHeight: '20px', marginTop: '8px'}});
@@ -435,6 +467,7 @@ export async function vistaFacturasEscaneadas({enHub = false} = {}) {
       {clave: 'revisar', et: 'Qué falta', valor: x => x.casada === 'si' ? '' : (x.revisar || '')}
     ], soloSinCasar.v ? fs.filter(x => x.casada !== 'si') : fs, {alPulsar: abrir, csv: 'Facturas_escaneadas.csv', vacio: 'Aún no hay facturas escaneadas en estas fechas.'});
     poner(lista,
+      await tarjetaSugerencias(recargar),
       kpis([kpi('Facturas', String(fs.length)),
         kpi('Recibidas · base', eur2(s(rec, 'base')), 'IVA soportado ' + eur2(s(rec, 'iva'))),
         kpi('Emitidas · base', eur2(s(emi, 'base')), 'IVA repercutido ' + eur2(s(emi, 'iva'))),
