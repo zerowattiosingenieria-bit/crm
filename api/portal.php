@@ -103,7 +103,10 @@ function atenderPortal_(array $p, string $accion): array {
   /* La gestoría (25/11/2026) solo usa sus acciones, salir, inicio y cambiar la clave. */
   if ($esGest) return atenderGestoria_($c, $p, $accion);
   if (normal_($c['tipo']) === 'gestoria' && !in_array($accion, ['portalSalir', 'portalInicio', 'portalCambiarClave'], true)) return ['ok' => false, 'error' => 'Acción desconocida.'];
-  return $fn($c, $p);
+  $r = $fn($c, $p);
+  /* 25/11/2026: lo que hace cada subcontrata, para el informe a Nando (como el de la gestoría). */
+  if (normal_($c['tipo']) === 'contrata' && !empty($r['ok']) && function_exists('contrataApuntar_')) contrataApuntar_($c, $accion, $p, $r);
+  return $r;
 }
 
 /** La cuenta como «usuario» para el registro del CRM. */
@@ -142,6 +145,7 @@ function portalLogin_(array $p): array {
   $token = portalAbrirSesion_($c, $p, '');
   registrar_(portalQuien_($c), 'portal_login', 'PORTAL_CUENTAS', $c['id'], $tipo);
   if (normal_($c['tipo']) === 'gestoria' && function_exists('gestoriaApuntar_')) gestoriaApuntar_($c, 'entrada', 'Entró en la contabilidad');
+  if (normal_($c['tipo']) === 'contrata' && function_exists('gestoriaApuntar_')) gestoriaApuntar_($c, 'entrada', 'Entró en su app de obras');
   return ['ok' => true, 'token' => $token, 'cuenta' => portalPublica_($c)];
 }
 
@@ -1078,6 +1082,7 @@ function exigirSuper_(array $u): void {
   if (normal_($u['rol'] ?? '') !== 'superadmin') throw new Exception('Solo el superadmin gestiona las cuentas de clientes y subcontratas.');
 }
 function exigirDireccionPortal_(array $u): void {
+  if (!empty($GLOBALS['ZW_CONTROL_SUB'])) return;   // controlsub.php ya ha comprobado el permiso
   if ((permisos_($u)['alcance'] ?? '') !== 'todo') throw new Exception('Las obras de subcontratas son de dirección.');
 }
 
@@ -1176,6 +1181,10 @@ function accVerComoPortal_(array $u, array $p): array {
 /** Obras de subcontratas: todo lo que dirección necesita en una llamada. */
 function accObrasPortal_(array $u, array $p): array {
   exigirDireccionPortal_($u);
+  return datosObrasPortal_();
+}
+
+function datosObrasPortal_(): array {
   $clientes = indexar_(leer_('CLIENTES'));
   $cuentas = indexar_(leer_('PORTAL_CUENTAS'));
   $obras = [];

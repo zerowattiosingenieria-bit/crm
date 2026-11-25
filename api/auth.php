@@ -384,6 +384,8 @@ function permisos_(array $u): array {
   $o['gantt'] = veGantt_($u);
   /* 23/11/2026: los captadores también, pero solo con las instalaciones de sus clientes. */
   $o['calfechas'] = in_array(txt_($u['id'] ?? ''), defined('CALFECHAS_USUARIOS') ? CALFECHAS_USUARIOS : [], true) || normal_($u['rol'] ?? '') === 'captador';
+  $o['controlsub'] = in_array(txt_($u['id'] ?? ''), defined('CONTROL_SUB_USUARIOS') ? CONTROL_SUB_USUARIOS : [], true);
+  $o['vistagestoria'] = $o['controlsub'];
   $o['sinenviar'] = in_array(txt_($u['id'] ?? ''), defined('SIN_ENVIAR_USUARIOS') ? SIN_ENVIAR_USUARIOS : [], true);
   return $o;
 }

@@ -14,6 +14,8 @@ import {vistaIncidencias, vistaAvisarIncidencia} from './vistas/incidencias.js';
 import {vistaKO} from './vistas/ko.js';
 import {vistaReagendar} from './vistas/reagendar.js';
 import {vistaSinEnviar} from './vistas/sinenviar.js';
+import {vistaControlSub} from './vistas/controlsub.js';
+import {vistaVistaGestoria} from './vistas/vistagestoria.js';
 import {vistaTramites, veTramites} from './vistas/tramites.js';
 import {vistaSubcontratas, vistaCuentasPortal} from './vistas/subcontratas.js';
 import {vistaSeguimiento} from './vistas/seguimiento.js';
@@ -62,6 +64,8 @@ const VISTAS = {
   ko:           {titulo: 'Clientes KO',        pinta: vistaKO},
   reagendar:    {titulo: 'Por reagendar',      pinta: vistaReagendar},
   sinenviar:    {titulo: 'Proyectos sin enviar', pinta: vistaSinEnviar,  permiso: 'sinenviar'},
+  controlsub:   {titulo: 'Control de subcontratas', pinta: vistaControlSub, permiso: 'controlsub'},
+  vistagestoria:{titulo: 'Lo que ve la gestoría', pinta: vistaVistaGestoria, permiso: 'vistagestoria'},
   cliente:      {titulo: 'Ficha de cliente',   pinta: vistaCliente},
   operaciones:  {titulo: 'Instalaciones',      pinta: vistaOperaciones},
   captaciones:  {titulo: 'Captaciones',        pinta: vistaCaptaciones},
@@ -143,6 +147,8 @@ function menuDe(rol) {
       {id: 'agenda', et: 'Agenda', ico: '◷'},
       {id: 'visitas', et: 'Mis visitas', ico: '✔'},
       {id: 'sinenviar', et: 'Proyectos sin enviar', ico: '✉'},
+      {id: 'controlsub', et: 'Control de subcontratas', ico: '🎛'},
+      {id: 'vistagestoria', et: 'Lo que ve la gestoría', ico: '📒'},
       {id: 'parte', et: 'Parte del día', ico: '✓'},
       {grupo: 'Clientes y ventas'},
       {id: 'clientes', et: 'Mis clientes', ico: '☰'},
@@ -189,9 +195,11 @@ function menuDe(rol) {
     {id: 'gantt', et: 'Gantt y equipo', ico: '▤'},
     {id: 'seguimiento', et: 'Seguimiento de operaciones', ico: '☑'},
     {id: 'subcontratas', et: 'Obras de subcontratas', ico: '⚒'},
+    {id: 'controlsub', et: 'Control de subcontratas', ico: '🎛'},
     {id: 'tramites', et: 'CAEs y WIXER', ico: '♻'},
     {grupo: 'Dinero'},
     {id: 'dinero', et: 'Dinero', ico: '€'},
+    {id: 'vistagestoria', et: 'Lo que ve la gestoría', ico: '📒'},
     {id: 'materiales', et: 'Materiales y costes', ico: '⚙'},
     {grupo: 'Equipo'},
     {id: 'equipo', et: 'Equipo', ico: '◍'},
@@ -221,8 +229,8 @@ function rutaActual() {
 const K_MENU = 'zw.crm.menuSimple';
 const MENU_CORTO = {
   captador: ['inicio', 'agenda', 'captaciones', 'clientes', 'operaciones', 'calinstalaciones', 'parte', 'tramites', 'avisar', 'perfil'],
-  comercial: ['inicio', 'agenda', 'visitas', 'sinenviar', 'clientes', 'visor', 'cotizador', 'operaciones', 'calinstalaciones', 'calfechas', 'parte', 'avisar', 'perfil'],
-  otro: ['inicio', 'tablero', 'incidencias', 'agenda', 'visitas', 'sinenviar', 'clientes', 'operaciones', 'calinstalaciones', 'calfechas', 'gantt', 'seguimiento', 'subcontratas', 'tramites', 'captaciones', 'estadisticas', 'dinero', 'perfil']
+  comercial: ['inicio', 'agenda', 'visitas', 'sinenviar', 'controlsub', 'vistagestoria', 'clientes', 'visor', 'cotizador', 'operaciones', 'calinstalaciones', 'calfechas', 'parte', 'avisar', 'perfil'],
+  otro: ['inicio', 'tablero', 'incidencias', 'agenda', 'visitas', 'sinenviar', 'clientes', 'operaciones', 'calinstalaciones', 'calfechas', 'gantt', 'seguimiento', 'subcontratas', 'controlsub', 'tramites', 'captaciones', 'estadisticas', 'dinero', 'vistagestoria', 'perfil']
 };
 const menuCorto = () => { try { return localStorage.getItem(K_MENU) === '1'; } catch (e) { return false; } };
 

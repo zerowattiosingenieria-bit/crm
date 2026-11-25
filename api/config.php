@@ -14,6 +14,8 @@ const GANTT_GESTORES = ['U-000004'];
 const CALFECHAS_USUARIOS = ['U-000001', 'U-000003', 'U-000004'];
 /* 23/11/2026, Nando: «solo a Nando y a superadmin se le indicará por separado todos los proyectos que no se han sacado». */
 const SIN_ENVIAR_USUARIOS = ['U-000001', 'U-000004'];
+/* 25/11/2026: control de subcontratas y la vista de la gestoría, solo Nando, Fernando y el superadmin. */
+const CONTROL_SUB_USUARIOS = ['U-000001', 'U-000003', 'U-000004'];
 const NOMBRE_BASE = 'CRM · ZERO WATTIOS — Base de datos';
 const HORAS_SESION = 12;
 const MINUTOS_INACTIVIDAD = 120;

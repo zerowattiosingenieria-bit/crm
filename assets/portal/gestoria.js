@@ -13,10 +13,34 @@
   const cache = {facturas: null, banco: null, clave: ''};
   const XLSX_URL = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
   const JSZIP_URL = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+  const JSPDF_URL = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+  const AUTOTABLE_URL = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js';
   const COL = {ing: '#5E8C00', gas: '#242422', lima: '#B4FA1E', mal: '#d63b30', aviso: '#e8890c', suave: '#6b6f66'};
   const CATS = ['#5E8C00', '#242422', '#B4FA1E', '#8a8f80', '#2f6fd6', '#e8890c', '#9c6ade', '#d63b30', '#2f9e44', '#c9cbc3'];
 
   /* ---------- utilidades ---------- */
+  function hPropio(sel, props, ...hijos) {
+    const m = /^([a-z0-9]+)?((?:[.#][\w-]+)*)$/i.exec(sel) || [];
+    const el = document.createElement(m[1] || 'div');
+    (m[2] || '').replace(/([.#])([\w-]+)/g, (_, t, v) => { if (t === '.') el.classList.add(v); else el.id = v; });
+    if (props && (typeof props !== 'object' || props instanceof Node || Array.isArray(props))) { hijos.unshift(props); props = null; }
+    for (const k in props || {}) {
+      const v = props[k];
+      if (v == null || v === false) continue;
+      if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+      else if (k === 'estilo') Object.assign(el.style, v);
+      else el.setAttribute(k, v === true ? '' : v);
+    }
+    const meter = x => { if (x == null || x === false) return; if (Array.isArray(x)) return x.forEach(meter); el.appendChild(x instanceof Node ? x : document.createTextNode(String(x))); };
+    hijos.forEach(meter);
+    return el;
+  }
+  function toastPropio(msg, tipo) {
+    document.querySelectorAll('.g-toast').forEach(t => t.remove());
+    const t = hPropio('.g-toast', {estilo: {position: 'fixed', left: '50%', bottom: '24px', transform: 'translateX(-50%)', zIndex: 200, padding: '12px 18px', borderRadius: '12px', fontWeight: 700,
+      background: tipo === 'error' ? '#d63b30' : '#242422', color: tipo === 'ok' ? '#B4FA1E' : '#fff', boxShadow: '0 8px 24px rgba(0,0,0,.25)', maxWidth: '90vw'}}, msg);
+    document.body.appendChild(t); setTimeout(() => t.remove(), tipo === 'error' ? 5200 : 2800);
+  }
   const txt = v => String(v == null ? '' : v).trim();
   const num = v => Number(v) || 0;
   const eur = n => new Intl.NumberFormat('es-ES', {style: 'currency', currency: 'EUR'}).format(num(n));
@@ -111,6 +135,10 @@
     .g-hbar .nom { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .g-hbar .bar { height: 12px; background: #eef0ec; border-radius: 99px; overflow: hidden; } .g-hbar .bar i { display: block; height: 100%; border-radius: 99px; }
     .g-ayuda { background: #f1fadf; border: 1px solid #d8efb0; border-radius: 12px; padding: 10px 14px; font-size: 13.5px; margin-bottom: 14px; }
+    .g-incrm .g-cab { position: static; border-radius: 14px 14px 0 0; }
+    .g-incrm .g-main { padding-left: 0; padding-right: 0; }
+    .g-incrm .g-periodo select, .g-incrm .g-periodo input, .g-incrm .g-in, .g-incrm .g-chip, .g-incrm .g-b { width: auto !important; display: inline-block; margin: 0; }
+    .g-incrm .g-barra input, .g-incrm .g-barra select { width: auto !important; }
     .g-previa { background: #e8890c; color: #fff; text-align: center; font-weight: 700; font-size: 13px; padding: 6px; }
     `;
     document.head.appendChild(Object.assign(document.createElement('style'), {id: 'gest-css', textContent: css}));
@@ -154,30 +182,31 @@
 
   /* ---------- armazón ---------- */
   function iniciar(cfg) {
-    X = cfg; h = cfg.h; pedir = cfg.pedir; toast = cfg.toast;
-    estilos(); document.body.classList.add('gest');
-    document.title = 'Contabilidad · Zero Wattios';
+    X = cfg; h = hPropio; pedir = cfg.pedir; toast = cfg.toast || toastPropio;
+    estilos();
+    if (!cfg.contenedor) { document.body.classList.add('gest'); document.title = 'Contabilidad · Zero Wattios'; } else cfg.contenedor.classList.add('g-incrm');
     const d = new Date(); const t = Math.ceil((d.getMonth() + 1) / 3);
     /* por defecto el trimestre anterior si estamos en el primer mes del trimestre (lo normal en una gestoría), si no el actual */
     if ((d.getMonth() % 3) === 0) { const tt = t === 1 ? 4 : t - 1; ponerPeriodo('trim', t === 1 ? d.getFullYear() - 1 : d.getFullYear(), tt); }
     else ponerPeriodo('trim', d.getFullYear(), t);
-    const m = /^#g-(\w+)/.exec(location.hash); if (m && ['resumen', 'facturas', 'banco', 'subir'].includes(m[1])) est.pest = m[1];
+    const m = cfg.contenedor ? null : /^#g-(\w+)/.exec(location.hash); if (m && ['resumen', 'facturas', 'banco', 'subir'].includes(m[1])) est.pest = m[1];
     pintar();
   }
 
   const PEST = [['resumen', '📊 Resumen'], ['facturas', '🧾 Facturas'], ['banco', '🏦 Banco'], ['subir', '⬆ Subir factura']];
   function pintar() {
-    const app = document.getElementById('app');
+    const app = X.contenedor || document.getElementById('app');
     const main = h('main.g-main');
     const nombre = X.D.cuenta.empresa || X.D.cuenta.nombre || X.D.cuenta.usuario;
     poner(app,
       X.previa ? h('.g-previa', 'Vista previa (solo lectura) · ' + nombre) : null,
+      X.contenedor ? h('.g-previa', {estilo: {background: '#5E8C00'}}, 'Esto es exactamente lo que ve la gestoría. Lo que hagas aquí no sale en su informe.') : null,
       h('header.g-cab',
         h('.fila1', h('img', {src: '/assets/img/logo-dark-h96.png', alt: 'ZERO WATTIOS'}), h('span.marca', 'Contabilidad para ', h('b', nombre)),
-          h('.yo', X.previa ? null : h('button', {onclick: X.cambiarClave}, '🔑 Cambiar clave'), h('button', {onclick: X.salir}, 'Salir'))),
-        h('nav.g-pest', PEST.map(([k, et]) => h('button' + (est.pest === k ? '.activa' : ''), {onclick: () => { est.pest = k; history.replaceState(null, '', '#g-' + k); anotar('pestana', et.replace(/^\S+\s/, '')); pintar(); }}, et)))),
+          X.contenedor ? null : h('.yo', X.previa ? null : h('button', {onclick: X.cambiarClave}, '🔑 Cambiar clave'), h('button', {onclick: X.salir}, 'Salir'))),
+        h('nav.g-pest', PEST.map(([k, et]) => h('button' + (est.pest === k ? '.activa' : ''), {onclick: () => { est.pest = k; if (!X.contenedor) history.replaceState(null, '', '#g-' + k); anotar('pestana', et.replace(/^\S+\s/, '')); pintar(); }}, et)))),
       main);
-    window.scrollTo(0, 0);
+    if (!X.contenedor) window.scrollTo(0, 0);
     if (est.pest === 'facturas') vistaFacturas(main);
     else if (est.pest === 'banco') vistaBanco(main);
     else if (est.pest === 'subir') vistaSubir(main);
@@ -553,9 +582,52 @@
         h('.g-kpi', {estilo: {borderLeftColor: COL.ing}}, h('.t', 'Casados'), h('.v', String(cuenta('casado'))), h('.s', 'movimientos con su factura')),
         h('.g-kpi', {estilo: {borderLeftColor: '#c9cbc3'}}, h('.t', 'No llevan factura'), h('.v', String(cuenta('no_lleva'))), h('.s', 'nóminas, impuestos, traspasos…'))),
       h('.g-barra', chip('pendiente', 'Falta factura'), chip('casado', 'Casados'), chip('no_lleva', 'No llevan factura'), chip('todos', 'Todos'), h('span.esp'), busca,
-        h('button.g-b.grande.negro', {onclick: () => excel()}, '📗 Excel')),
+        h('button.g-b.grande.negro', {onclick: () => bancoExcel(ms)}, '📗 Banco en Excel'),
+        h('button.g-b.grande', {onclick: () => bancoPdf(ms)}, '📄 Banco en PDF')),
       tabla);
     pinta();
+  }
+
+  const ESTB_T = {casado: 'Casado', parcial: 'Casado en parte', pendiente: 'Falta factura', no_lleva: 'No lleva factura'};
+  const filaBanco = m => [fe(m.fecha), m.cuenta, m.concepto, m.importe, m.saldo == null ? '' : m.saldo, ESTB_T[m.estado] || m.estado,
+    m.facturas.map(f => (f.numero || f.id) + ' ' + f.quien).join(' | ') || m.sin_factura_nombre || '', m.nota || ''];
+  async function bancoExcel(ms) {
+    try {
+      await cargarScript(XLSX_URL);
+      const XL = window.XLSX; const wb = XL.utils.book_new();
+      const l = ms.slice().sort((a, b) => a.fecha.localeCompare(b.fecha));
+      const n = l.length + 1;
+      const ws = XL.utils.aoa_to_sheet([['Fecha', 'Cuenta', 'Concepto', 'Importe', 'Saldo', 'Estado', 'Factura / motivo', 'Nota'],
+        ...l.map(m => { const f = filaBanco(m); f[0] = fdx(m.fecha); return f; }),
+        ['TOTAL', '', 'Entradas', {f: 'SUMIF(D2:D' + n + ',">0")'}], ['', '', 'Salidas', {f: 'SUMIF(D2:D' + n + ',"<0")'}], ['', '', 'Diferencia', {f: 'SUM(D2:D' + n + ')'}]]);
+      formato(XL, ws, [3, 4], [0]);
+      ws['!cols'] = [11, 14, 55, 13, 13, 16, 40, 30].map(w => ({wch: w})); ws['!autofilter'] = {ref: 'A1:H' + n};
+      XL.utils.book_append_sheet(wb, ws, 'Movimientos del banco');
+      XL.writeFile(wb, 'ZeroWattios_banco_' + est.desde + '_' + est.hasta + '.xlsx');
+      anotar('banco_excel', est.etiqueta + ' · ' + l.length + ' movimientos');
+    } catch (e) { toast(e.message, 'error'); }
+  }
+  async function bancoPdf(ms) {
+    try {
+      await cargarScript(JSPDF_URL); await cargarScript(AUTOTABLE_URL);
+      const doc = new window.jspdf.jsPDF({orientation: 'landscape', unit: 'mm', format: 'a4'});
+      const l = ms.slice().sort((a, b) => a.fecha.localeCompare(b.fecha));
+      const ent = l.filter(m => m.importe > 0).reduce((a, m) => a + m.importe, 0), sal = l.filter(m => m.importe < 0).reduce((a, m) => a + m.importe, 0);
+      doc.setFillColor(36, 36, 34); doc.rect(0, 0, 297, 18, 'F');
+      doc.setTextColor(180, 250, 30); doc.setFontSize(13); doc.text('ZERO WATTIOS · Movimientos del banco', 12, 11.5);
+      doc.setTextColor(255, 255, 255); doc.setFontSize(9); doc.text(est.etiqueta + ' (' + fe(est.desde) + ' – ' + fe(est.hasta) + ')', 285, 11.5, {align: 'right'});
+      doc.setTextColor(36, 36, 34); doc.setFontSize(10);
+      doc.text('Entradas: ' + eur(ent) + '     Salidas: ' + eur(sal) + '     Diferencia: ' + eur(ent + sal) + '     Movimientos: ' + l.length, 12, 26);
+      doc.autoTable({startY: 30, head: [['Fecha', 'Cuenta', 'Concepto', 'Importe', 'Saldo', 'Estado', 'Factura / motivo']],
+        body: l.map(m => { const f = filaBanco(m); return [f[0], f[1], f[2], eur(f[3]), f[4] === '' ? '' : eur(f[4]), f[5], f[6]]; }),
+        styles: {fontSize: 7.5, cellPadding: 1.6}, headStyles: {fillColor: [36, 36, 34], textColor: [180, 250, 30]},
+        columnStyles: {0: {cellWidth: 18}, 1: {cellWidth: 22}, 2: {cellWidth: 92}, 3: {halign: 'right', cellWidth: 24}, 4: {halign: 'right', cellWidth: 24}, 5: {cellWidth: 26}},
+        alternateRowStyles: {fillColor: [244, 246, 243]},
+        didParseCell: d => { if (d.section === 'body' && d.column.index === 3) d.cell.styles.textColor = String(d.cell.raw).startsWith('-') ? [36, 36, 34] : [94, 140, 0]; },
+        didDrawPage: d => { doc.setFontSize(7); doc.setTextColor(120); doc.text('Zero Wattios Ingeniería, S.L. · ' + ((X.D.empresa || {}).nif || '') + ' · página ' + doc.internal.getNumberOfPages(), 12, 205); }});
+      doc.save('ZeroWattios_banco_' + est.desde + '_' + est.hasta + '.pdf');
+      anotar('banco_pdf', est.etiqueta + ' · ' + l.length + ' movimientos');
+    } catch (e) { toast(e.message, 'error'); }
   }
 
   async function casarMovimiento(m, despues) {

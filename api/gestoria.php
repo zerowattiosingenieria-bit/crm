@@ -24,7 +24,7 @@
 
 const GESTORIA_INACTIVA_MIN = 30;
 const GESTORIA_EVENTOS_LIBRES = ['excel' => 'Descargó el Excel de contabilidad', 'zip' => 'Descargó el ZIP de facturas',
-  'pdf_iva' => 'Descargó el resumen de IVA', 'pestana' => 'Abrió la pestaña'];
+  'pdf_iva' => 'Descargó el resumen de IVA', 'banco_excel' => 'Descargó los movimientos del banco en Excel', 'banco_pdf' => 'Descargó los movimientos del banco en PDF', 'pestana' => 'Abrió la pestaña'];
 
 /** El usuario con el que la gestoría usa las funciones de contabilidad. */
 function gestoriaU_(array $c): array {
@@ -35,7 +35,7 @@ function esGestoria_(array $c): bool { return normal_($c['tipo'] ?? '') === 'ges
 
 /** Apunta lo que ha visto o hecho (para el informe a Nando). */
 function gestoriaApuntar_(array $c, string $accion, string $detalle, string $ref = ''): void {
-  if (!empty($c['_vista_previa'])) return;   // el superadmin mirando «como» no cuenta
+  if (!empty($c['_vista_previa']) || !empty($c['_interno'])) return;   // el superadmin mirando «como» o Nando desde el CRM no cuentan
   try {
     insertar_('GESTORIA_ACTIVIDAD', ['fecha' => ahora_(), 'cuenta_id' => txt_($c['id']), 'usuario' => txt_($c['usuario']),
       'accion' => $accion, 'detalle' => trozo_($detalle, 0, 600), 'ref' => trozo_($ref, 0, 190), 'reportado' => '']);
@@ -315,34 +315,42 @@ function gestoriaAnotar_(array $c, array $p): array {
    El informe para Nando: al terminar cada visita de la gestoría.
    ====================================================================== */
 
-/** Lo llama el reloj (cron.php) en cada tic. */
+/** Lo llama el reloj (cron.php) en cada tic. Un correo por cuenta (gestoría o subcontrata) al terminar su visita. */
 function gestoriaInformeCron_(): array {
   $pend = array_values(array_filter(leer_('GESTORIA_ACTIVIDAD'), fn($a) => txt_($a['reportado']) === ''));
   if (!$pend) return [];
   usort($pend, fn($a, $b) => strcmp(txt_($a['fecha']), txt_($b['fecha'])));
-  $ultima = txt_(end($pend)['fecha']);
-  if (minutosDesde_($ultima) < GESTORIA_INACTIVA_MIN) return [];
-  $html = gestoriaInformeHtml_($pend);
-  $destino = txt_(config_()['gestoria_informe_a'] ?? '') ?: 'fernandogarcia@zerowattios.com';
-  $cuenta = txt_($pend[0]['usuario']) ?: 'la gestoría';
-  $fecha = substr(txt_($pend[0]['fecha']), 8, 2) . '/' . substr(txt_($pend[0]['fecha']), 5, 2);
-  correo_(['to' => $destino, 'subject' => 'Gestoría · ' . ucfirst($cuenta) . ' ha entrado el ' . $fecha . ' (' . count($pend) . ' acciones)',
-    'htmlBody' => $html, 'name' => 'CRM Zero Wattios']);
-  foreach ($pend as $a) actualizar_('GESTORIA_ACTIVIDAD', $a['id'], ['reportado' => ahora_()]);
-  return ['informe' => count($pend), 'a' => $destino];
+  $porCuenta = [];
+  foreach ($pend as $a) $porCuenta[txt_($a['cuenta_id'])][] = $a;
+  $cuentas = indexar_(leer_('PORTAL_CUENTAS'));
+  $hecho = [];
+  foreach ($porCuenta as $cid => $acts) {
+    $ultima = txt_(end($acts)['fecha']);
+    if (minutosDesde_($ultima) < GESTORIA_INACTIVA_MIN) continue;
+    $cta = $cuentas[$cid] ?? ['tipo' => 'gestoria', 'usuario' => $acts[0]['usuario']];
+    $esGest = normal_($cta['tipo'] ?? '') !== 'contrata';
+    $nombre = txt_($cta['empresa'] ?? '') ?: txt_($acts[0]['usuario']);
+    $destino = txt_(config_()[$esGest ? 'gestoria_informe_a' : 'contratas_informe_a'] ?? '') ?: 'fernandogarcia@zerowattios.com';
+    $fecha = substr(txt_($acts[0]['fecha']), 8, 2) . '/' . substr(txt_($acts[0]['fecha']), 5, 2);
+    correo_(['to' => $destino, 'subject' => ($esGest ? 'Gestoría · ' : 'Subcontrata · ') . $nombre . ' ha entrado el ' . $fecha . ' (' . count($acts) . ' acciones)',
+      'htmlBody' => gestoriaInformeHtml_($acts, $esGest, $nombre), 'name' => 'CRM Zero Wattios']);
+    foreach ($acts as $a) actualizar_('GESTORIA_ACTIVIDAD', $a['id'], ['reportado' => ahora_()]);
+    $hecho[] = ['cuenta' => $nombre, 'acciones' => count($acts)];
+  }
+  return $hecho ? ['informes' => $hecho] : [];
 }
 
-function gestoriaInformeHtml_(array $acts): string {
+function gestoriaInformeHtml_(array $acts, bool $esGest = true, string $nombre = ''): string {
   $e = fn($s) => htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
   $grupos = ['hizo' => 'Lo que ha cambiado', 'bajo' => 'Lo que se ha descargado', 'vio' => 'Lo que ha consultado', 'entrada' => 'Entradas'];
-  $de = fn($acc) => $acc === 'entrada' ? 'entrada' : (in_array($acc, ['descarga', 'excel', 'zip', 'pdf_iva'], true) ? 'bajo'
-    : (in_array($acc, ['casar', 'descasar', 'sin_factura', 'nota', 'subir'], true) ? 'hizo' : 'vio'));
+  $de = fn($acc) => $acc === 'entrada' ? 'entrada' : (in_array($acc, ['descarga', 'excel', 'zip', 'pdf_iva', 'banco_excel', 'banco_pdf', 'c_descargar'], true) ? 'bajo'
+    : (in_array($acc, ['casar', 'descasar', 'sin_factura', 'nota', 'subir'], true) || (strpos($acc, 'c_') === 0 && !in_array($acc, ['c_inicio', 'c_obra', 'c_docs'], true)) ? 'hizo' : 'vio'));
   $por = [];
   foreach ($acts as $a) $por[$de(txt_($a['accion']))][] = $a;
   $ini = txt_($acts[0]['fecha']); $fin = txt_(end($acts)['fecha']);
   $min = max(1, (int)round((strtotime($fin) - strtotime($ini)) / 60));
   $cambios = count($por['hizo'] ?? []);
-  $cuerpo = '<p style="margin:0 0 6px;font-size:15px">La gestoría <b>' . $e($acts[0]['usuario']) . '</b> ha entrado en la contabilidad.</p>' .
+  $cuerpo = '<p style="margin:0 0 6px;font-size:15px">' . ($esGest ? 'La gestoría <b>' . $e($nombre ?: $acts[0]['usuario']) . '</b> ha entrado en la contabilidad.' : 'La subcontrata <b>' . $e($nombre ?: $acts[0]['usuario']) . '</b> ha entrado en su app de obras.') . '</p>' .
     '<p style="margin:0 0 16px;color:#555">Desde las ' . substr($ini, 11, 5) . ' del ' . substr($ini, 8, 2) . '/' . substr($ini, 5, 2) .
     ' hasta las ' . substr($fin, 11, 5) . ' · unos ' . $min . ' min · ' . count($acts) . ' acciones · ' .
     ($cambios ? '<b style="color:#5E8C00">' . $cambios . ' cambios</b>' : 'sin cambios') . '</p>';
@@ -358,8 +366,8 @@ function gestoriaInformeHtml_(array $acts): string {
     foreach ($por[$k] as $a) $cuerpo .= '<tr><td style="padding:4px 8px;color:#888;white-space:nowrap;vertical-align:top">' . substr(txt_($a['fecha']), 11, 5) . '</td><td style="padding:4px 8px;border-bottom:1px solid #eee">' . $e($a['detalle']) . '</td></tr>';
     $cuerpo .= '</table>';
   }
-  $cuerpo .= '<p style="margin:18px 0 0;color:#888;font-size:12px">Los cambios quedan en el CRM con «Gestoría» en la nota. Puedes ver todo en CRM › Subcontratas › Cuentas › Gestoría.</p>';
-  return '<div style="font-family:Arial,sans-serif;max-width:680px;color:#242422"><div style="background:#242422;color:#B4FA1E;padding:12px 16px;font-weight:bold">ZERO WATTIOS · Informe de la gestoría</div><div style="padding:16px;border:1px solid #eee">' . $cuerpo . '</div></div>';
+  $cuerpo .= '<p style="margin:18px 0 0;color:#888;font-size:12px">' . ($esGest ? 'Los cambios quedan en el CRM con «Gestoría» en la nota. Puedes ver todo en CRM › Subcontratas › Cuentas › Gestoría.' : 'Míralo de un vistazo en CRM › Control de subcontratas.') . '</p>';
+  return '<div style="font-family:Arial,sans-serif;max-width:680px;color:#242422"><div style="background:#242422;color:#B4FA1E;padding:12px 16px;font-weight:bold">ZERO WATTIOS · ' . ($esGest ? 'Informe de la gestoría' : 'Informe de la subcontrata') . '</div><div style="padding:16px;border:1px solid #eee">' . $cuerpo . '</div></div>';
 }
 
 /** Para el CRM (superadmin o dirección): lo último que ha hecho la gestoría. */
@@ -368,4 +376,65 @@ function accActividadGestoria_(array $u, array $p): array {
   $l = leer_('GESTORIA_ACTIVIDAD');
   usort($l, fn($a, $b) => strcmp(txt_($b['fecha']), txt_($a['fecha'])));
   return ['ok' => true, 'actividad' => array_map(fn($a) => ['fecha' => $a['fecha'], 'usuario' => $a['usuario'], 'accion' => $a['accion'], 'detalle' => $a['detalle']], array_slice($l, 0, 200))];
+}
+
+/**
+ * La misma pantalla de la gestoría dentro del CRM (25/11/2026, Nando: «exactamente lo mismo que
+ * ven ellas»). Solo Nando, Fernando y el superadmin. p.sub = la acción portal* de la gestoría.
+ * Lo que se hace desde aquí no sale en el informe de la gestoría.
+ */
+function accVistaGestoria_(array $u, array $p): array {
+  if (empty(permisos_($u)['vistagestoria'])) throw new Exception('Esta vista es solo para Nando, Fernando y el superadmin.');
+  $sub = txt_($p['sub'] ?? '');
+  $c = ['id' => txt_($u['id']), 'usuario' => txt_($u['usuario']), 'nombre' => txt_($u['nombre']), 'empresa' => 'Zero Wattios', 'tipo' => 'gestoria', '_interno' => true];
+  if ($sub === 'portalInicio') return ['ok' => true, 'cuenta' => ['nombre' => txt_($u['nombre']), 'empresa' => 'la gestoría (vista de Zero Wattios)', 'usuario' => txt_($u['usuario'])]] + portalInicioGestoria_($c);
+  if (!isset(GESTORIA_ACCIONES[$sub])) return ['ok' => false, 'error' => 'Acción desconocida.'];
+  unset($p['sub'], $p['accion'], $p['token']);
+  $r = atenderGestoria_($c, $p, $sub);
+  if ($sub === 'portalGestoriaCasar' || $sub === 'portalGestoriaDescasar' || $sub === 'portalGestoriaSinFactura' || $sub === 'portalGestoriaSubir') {
+    registrar_($u, 'vista_gestoria_' . substr($sub, 14), 'GESTORIA', txt_($p['id'] ?? ''), '');
+  }
+  return $r;
+}
+
+/* ---------- lo que hace cada subcontrata (25/11/2026: «el mismo informe de la gestoría, de las subcontratas») ---------- */
+
+function contrataObraTexto_(string $obraId): string {
+  if ($obraId === '') return '';
+  $o = buscar1_('OBRAS', fn($x) => mismo_($x['id'], $obraId));
+  if (!$o) return '';
+  $cli = buscar1_('CLIENTES', fn($x) => mismo_($x['id'], $o['cliente_id']));
+  return trim(txt_($cli['direccion'] ?? '') . ' · ' . txt_($cli['nombre'] ?? ''), ' ·') . ' (' . (PORTAL_ESPECIALIDADES[normal_($o['especialidad'])] ?? '') . ')';
+}
+
+function contrataFase_(string $k): string {
+  foreach (PORTAL_FASES as $l) foreach ($l as $f) if ($f[0] === $k) return $f[1];
+  return $k;
+}
+
+function contrataApuntar_(array $c, string $accion, array $p, array $r): void {
+  if (!empty($c['_vista_previa'])) return;
+  $obra = contrataObraTexto_(txt_($p['obra_id'] ?? ($p['id'] ?? '')));
+  $en = $obra !== '' ? ' en ' . $obra : '';
+  switch ($accion) {
+    case 'portalInicio': gestoriaApuntar_($c, 'c_inicio', 'Consultó sus obras y avisos'); break;
+    case 'portalObra': gestoriaApuntar_($c, 'c_obra', 'Abrió la ficha de la obra ' . ($obra ?: txt_($p['id'] ?? ''))); break;
+    case 'portalLlegada': gestoriaApuntar_($c, 'c_llegada', (normal_($p['tipo'] ?? '') === 'salida' ? 'Marcó la salida' : 'Marcó la llegada') . $en); break;
+    case 'portalFase': gestoriaApuntar_($c, 'c_fase', (empty($p['hecho']) && isset($p['hecho']) ? 'Desmarcó la fase «' : 'Marcó hecha la fase «') . contrataFase_(txt_($p['clave'] ?? '')) . '»' . $en); break;
+    case 'portalAviso': gestoriaApuntar_($c, 'c_aviso', 'Marcó un aviso como hecho' . $en); break;
+    case 'portalTerminar': gestoriaApuntar_($c, 'c_terminar', 'Dio por TERMINADA la obra' . ($obra !== '' ? ' ' . $obra : '')); break;
+    case 'portalNota': gestoriaApuntar_($c, 'c_nota', 'Dejó una nota' . $en . ': «' . trozo_(txt_($p['texto'] ?? ''), 0, 200) . '»'); break;
+    case 'portalSubir': gestoriaApuntar_($c, 'c_subir', 'Subió ' . (strpos(txt_($p['mime'] ?? ''), 'image') === 0 ? 'una foto' : 'un documento') . $en . (txt_($p['fase'] ?? '') !== '' ? ' (fase ' . txt_($p['fase']) . ')' : '')); break;
+    case 'portalTicket': gestoriaApuntar_($c, 'c_ticket', 'Abrió una incidencia' . $en . ': «' . trozo_(txt_($p['titulo'] ?? '') ?: txt_($p['detalle'] ?? ''), 0, 160) . '» (' . (txt_($p['prioridad'] ?? '') ?: 'media') . ')'); break;
+    case 'portalMensaje':
+      $t = buscar1_('TICKETS', fn($x) => mismo_($x['id'], $p['ticket_id'] ?? ''));
+      gestoriaApuntar_($c, 'c_mensaje', 'Escribió en «' . txt_($t['titulo'] ?? '') . '»: «' . trozo_(txt_($p['texto'] ?? ''), 0, 200) . '»'); break;
+    case 'portalVisitaHecha': gestoriaApuntar_($c, 'c_visita', 'Marcó una visita como hecha'); break;
+    case 'portalDescargar': gestoriaApuntar_($c, 'c_descargar', 'Descargó un documento' . ($obra !== '' ? ' de ' . $obra : '')); break;
+    case 'portalDocsContrata': gestoriaApuntar_($c, 'c_docs', 'Consultó su documentación de empresa'); break;
+    case 'portalSubirDocContrata': gestoriaApuntar_($c, 'c_doc_empresa', 'Subió un documento de empresa (' . txt_($p['tipo'] ?? '') . ')'); break;
+    case 'portalMaterial': gestoriaApuntar_($c, 'c_material', 'Actualizó el material' . $en); break;
+    case 'portalSubirFactura': gestoriaApuntar_($c, 'c_factura', 'Subió una factura' . $en); break;
+    case 'portalCambiarClave': gestoriaApuntar_($c, 'c_clave', 'Cambió su clave'); break;
+  }
 }
