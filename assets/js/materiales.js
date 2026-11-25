@@ -141,10 +141,15 @@ export function materialesDe(o, cat) {
     const inercia = num(o.deposito_inercia);
     const trio = contiene(o.aero_modelo, 'trio', 'fusion', 'fusión');
     /* SolaX (25/11/2026, tarifa SeisSolar Q4 2026 y oferta 26/17.499): exterior + unidad hidráulica integrada STN1-C03, que ya
-       lleva el depósito de ACS de 190 L, vaso de expansión y válvula de 3 vías. La puesta en marcha la hace SolaX
+       lleva el depósito de ACS de 190 L, vaso de expansión y válvula de 3 vías, pero NO inercia (va aparte). La puesta en marcha la hace SolaX
        y va incluida en el precio (hay que avisar a SeisSolar con una semana de antelación). */
     if (clave.startsWith('aero_solax')) {
-      if (clave !== 'aero_solax_alture') pon('Aerotermia', clave.startsWith('aero_solax_stu3') ? 'aero_solax_stn3_c03' : 'aero_solax_stn1_c03', 1);
+      if (clave !== 'aero_solax_alture') {
+        pon('Aerotermia', clave.startsWith('aero_solax_stu3') ? 'aero_solax_stn3_c03' : 'aero_solax_stn1_c03', 1);
+        /* La unidad integrada no lleva inercia: siempre depósito aparte (Nando, 25/11/2026). */
+        const ine = inercia || 100;
+        pon('Aerotermia', ine <= 120 ? 'inercia_100' : (ine <= 170 ? 'inercia_150' : 'inercia_200'), 1, {nota: 'La SolaX no lleva inercia: depósito aparte'});
+      }
       if (acs && clave === 'aero_solax_alture') pon('Aerotermia', acs <= 160 ? 'acs_150' : (acs <= 250 ? 'acs_200' : 'acs_300'), 1);
       if (inercia && clave === 'aero_solax_alture') pon('Aerotermia', inercia <= 120 ? 'inercia_100' : (inercia <= 170 ? 'inercia_150' : 'inercia_200'), 1);
     } else if (trio) pon('Aerotermia', 'modulo_hidraulico_trio', 1);
