@@ -16,6 +16,7 @@ import {h, poner, txt, num, eur2, eurCorto, miles, fechaCorta, hoyISO} from '../
 import * as api from '../api.js';
 import {tarjeta, kpi, kpis, cargando} from '../ui.js';
 import {vistaLibros} from './libros.js';
+import {vistaImpuestos} from './impuestos.js';
 import {vistaFacturasEscaneadas, tarjetaCuadre, tarjetaBancoSinFactura, panelGestoria} from './facturas-escaneadas.js';
 import {vistaContabilidad, vistaFacturas, vistaCobros, vistaGastos, tarjetaSync} from './finanzas.js';
 import {vistaBanco} from './banco.js';
@@ -29,11 +30,12 @@ export const PESTANAS_DINERO = [
   ['pagos', '↑ Pagos'],
   ['banco', '▮ Banco'],
   ['gestoria', '📦 Gestoría'],
+  ['impuestos', '🏛️ Impuestos'],   /* Rubén, Fernando, Nando y superadmin (permiso vistagestoria) */
   ['libros', '📚 Libros contables']   /* solo superadmin (permiso libros) */
 ];
 
 export async function vistaDinero(ctx) {
-  const pestanas = PESTANAS_DINERO.filter(p => p[0] !== 'libros' || api.puede('libros'));
+  const pestanas = PESTANAS_DINERO.filter(p => (p[0] !== 'libros' || api.puede('libros')) && (p[0] !== 'impuestos' || api.puede('vistagestoria')));
   const pest = pestanas.some(p => p[0] === ctx.id) ? ctx.id : 'resumen';
   const ir = k => ctx.ir('dinero/' + k);
   const barra = h('div', {estilo: {display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '14px', position: 'sticky', top: '0', zIndex: '5',
@@ -52,6 +54,7 @@ export async function vistaDinero(ctx) {
   else if (pest === 'cobros') contenido = await vistaCobros(ctx);
   else if (pest === 'pagos') contenido = await vistaGastos(ctx);
   else if (pest === 'libros') contenido = await vistaLibros();
+  else if (pest === 'impuestos') contenido = await vistaImpuestos();
   else if (pest === 'banco') contenido = h('div', await tarjetaBancoSinFactura(rangoAnio, async () => ir('banco')), await vistaBanco(ctx));
   else contenido = tarjeta('Paquete para la gestoría', panelGestoria({desde: '', hasta: hoyISO()}),
     {subtitulo: 'Un PDF con los libros de facturas, el IVA y el cuadre con el banco, y un ZIP con todas las facturas originales'});
