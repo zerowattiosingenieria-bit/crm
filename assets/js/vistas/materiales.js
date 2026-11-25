@@ -100,7 +100,7 @@ export async function vistaMateriales({ir}) {
       h('table.tabla', h('thead', h('tr', h('th', 'Solución'), h('th.num', 'Domusa'), h('th.num', 'SolaX'), h('th.num', 'Diferencia SolaX'))),
         h('tbody', filas.map(f => h('tr', h('td', f.n), h('td.num', eur(f.d)), h('td.num', eur(f.s)),
           h('td.num', {estilo: {color: f.dif > 0 ? '#b3261e' : '#5e8c00', fontWeight: 600}}, (f.dif > 0 ? '+' : '−') + eur(Math.abs(f.dif))))))),
-      falta.length ? aviso('Faltan en el catálogo: ' + [...new Set(falta)].join(', ')) : null,
+      falta.length ? h('p.nota', {estilo: {color: '#b3261e'}}, 'Faltan en el catálogo: ' + [...new Set(falta)].join(', ')) : null,
       h('div', {estilo: {marginTop: '12px', padding: '10px 14px', background: '#f1fadf', borderLeft: '4px solid #5e8c00', borderRadius: '4px'}},
         h('b', 'Recomendación de dirección (25/11/2026): Domusa por defecto.'), ' Es más barata en las cuatro soluciones, deja más margen, la exterior funciona sola, tiene SAT en Madrid y ya la conocemos. ',
         h('b', 'SolaX solo como opción'), ' con radiadores que piden 55–65 °C y mucha demanda (mantiene 16 kW a 55 °C), clientes con fotovoltaica y baterías SolaX que quieren una sola app, o frío con fancoils. La SolaX lleva siempre depósito de inercia aparte. Antes de ofrecerla de forma habitual: descuento de SeisSolar (con un 7 % empata en all in one, con un 17 % en separados), garantía por escrito e instalación piloto.'),
