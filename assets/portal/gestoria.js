@@ -338,7 +338,7 @@
   const textoCasado = c => fe(c.fecha) + ' · ' + (c.medio === 'Banco' ? (c.cuenta || 'Banco') + ' · ' + (c.concepto || '') : c.medio) + ' · ' + eur(c.importe)
     + (c.mov_importe != null && Math.abs(Math.abs(c.mov_importe) - c.importe) > 0.05 ? ' (de un movimiento de ' + eur(Math.abs(c.mov_importe)) + ')' : '');
   const casadoCon = f => (f.casados || []).length ? h('div', {estilo: {fontSize: '11.5px', color: '#55594f', marginTop: '3px', lineHeight: 1.35}},
-    f.casados.map(c => h('div', {estilo: {whiteSpace: 'nowrap'}}, '↔ ' + textoCasado(c)))) : null;
+    f.casados.map(c => h('div', {estilo: {minWidth: '210px', maxWidth: '300px'}}, '↔ ' + textoCasado(c)))) : null;
 
   async function vistaFacturas(main, forzar) {
     const cuerpo = h('div', h('.g-cargando', 'Cargando facturas…'));
@@ -360,16 +360,17 @@
       const l = filtra();
       const s = k => l.reduce((a, f) => a + num(f[k]), 0);
       poner(tabla, !l.length ? h('.g-vacio', 'No hay facturas con estos filtros.') : h('.g-tabla-wrap', h('table.g-t',
-        h('thead', h('tr', ['Fecha', 'Tipo', 'Nº factura', 'Cliente / proveedor', 'NIF', 'Concepto'].map(x => h('th', x)), h('th.n', 'Base'), h('th.n', 'IVA'), h('th.n', 'IRPF'), h('th.n', 'Total'), h('th', 'Casada contra (fecha)'), h('th', ''))),
+        h('thead', h('tr', ['Fecha', 'Tipo', 'Nº factura', 'Cliente / proveedor'].map(x => h('th', x)), h('th', 'Casada contra (fecha)'), h('th.n', 'Total'), h('th', 'NIF'), h('th', 'Concepto'), h('th.n', 'Base'), h('th.n', 'IVA'), h('th.n', 'IRPF'), h('th', ''))),
         h('tbody', l.map(f => h('tr', {estilo: {cursor: 'pointer'}, title: 'Pulsa para ver y descargar la factura', onclick: ev => { if (!ev.target.closest('button')) abrirFactura(f, true, () => vistaFacturas(main, true)); }},
           h('td', {estilo: {whiteSpace: 'nowrap'}}, fe(f.fecha)),
           h('td', h('span.g-pill.' + (f.tipo === 'emitida' ? 'emi' : 'rec'), f.tipo === 'emitida' ? 'Emitida' : 'Recibida')),
           h('td', f.numero || '—'),
           h('td', h('b', quien(f) || '—'), f.notas && /Gestoría/.test(f.notas) ? h('div', {estilo: {fontSize: '12px', color: COL.aviso}}, '📝 Con nota') : null),
+          h('td', pillCasada(f), casadoCon(f)),
+          h('td.n', h('b', eur(f.total))),
           h('td', {estilo: {whiteSpace: 'nowrap'}}, nifDe(f) || ''),
           h('td', {estilo: {maxWidth: '220px', fontSize: '12.5px', color: '#55594f'}}, f.categoria_nombre || f.concepto || ''),
-          h('td.n', eur(f.base)), h('td.n', eur(f.iva)), h('td.n', f.irpf ? eur(f.irpf) : ''), h('td.n', h('b', eur(f.total))),
-          h('td', pillCasada(f), casadoCon(f)),
+          h('td.n', eur(f.base)), h('td.n', eur(f.iva)), h('td.n', f.irpf ? eur(f.irpf) : ''),
           h('td', h('.g-acc',
             f.tiene_archivo ? h('button.g-b', {title: 'Ver la factura', onclick: () => abrirFactura(f, true)}, '👁 Ver') : h('span', {estilo: {fontSize: '12px', color: '#999'}}, 'sin PDF'),
             f.tiene_archivo ? h('button.g-b', {title: 'Descargar', onclick: () => abrirFactura(f, false)}, '⤓') : null,

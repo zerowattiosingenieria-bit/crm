@@ -10,7 +10,7 @@ function cargarApp() {
   if (window.ZWGestoria) return Promise.resolve();
   return new Promise((ok, mal) => {
     const s = document.createElement('script');
-    s.src = '/assets/portal/gestoria.js?v=4';
+    s.src = '/assets/portal/gestoria.js?v=5';
     s.onload = ok; s.onerror = () => mal(new Error('No se ha podido cargar la vista de la gestoría.'));
     document.head.appendChild(s);
   });

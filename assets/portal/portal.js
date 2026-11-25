@@ -397,7 +397,7 @@
       cambiarClave});
     if (window.ZWGestoria) return lanzar();
     const sc = document.createElement('script');
-    sc.src = '/assets/portal/gestoria.js?v=4';
+    sc.src = '/assets/portal/gestoria.js?v=5';
     sc.onload = lanzar;
     sc.onerror = () => poner(app(), h('.entrada', h('h1', 'Sin conexión'), h('p.sub', 'No se ha podido cargar la contabilidad.'), h('button.btn.lima', {onclick: arrancar}, 'Reintentar')));
     document.head.appendChild(sc);

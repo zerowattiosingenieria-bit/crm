@@ -476,17 +476,18 @@ export function avisosFicha(fEntrada, r) {
   if (r.conFV && !f.inversor && r.kwpFicha) I('Inversor recomendado para ' + String(Math.round(r.kwpFicha * 100) / 100).replace('.', ',') + ' kWp: ' + inversorSugerido(r.kwpFicha, f.suministro === 'tri') + '.');
   if (!f.cups) W('Falta el CUPS. Está en la factura de la luz y hace falta para la legalización.');
 
-  if (r.conAero && r.eleccionMono === '2x12') I('Monofásica: dos Dual Clima de 12 kW en cascada (24 kW en total) en lugar de la de 22 kW, que solo es trifásica. Revisa la potencia contratada y el precio con el técnico.');
-  else if (r.conAero && r.eleccionMono === '19') I('Monofásica: va con una Dual Clima de 19 kW (la de 22 kW solo es trifásica). Si el cliente prefiere dos de 12 kW en cascada, cámbialo en «3 · Instalación actual».');
+  if (r.conAero && f.aeroMarca !== 'SolaX' && r.eleccionMono === '2x12') I('Monofásica: dos Dual Clima de 12 kW en cascada (24 kW en total) en lugar de la de 22 kW, que solo es trifásica. Revisa la potencia contratada y el precio con el técnico.');
+  else if (r.conAero && f.aeroMarca !== 'SolaX' && r.eleccionMono === '19') I('Monofásica: va con una Dual Clima de 19 kW (la de 22 kW solo es trifásica). Si el cliente prefiere dos de 12 kW en cascada, cámbialo en «3 · Instalación actual».');
   if (r.conAero && r.eleccionMono === '19' && f.m2 > 500) W('Más de 500 m² con una sola máquina de 19 kW: puede quedarse corta. Valora con el técnico las dos de 12 kW en cascada.');
   if (r.conAero && r.cascada && r.eleccionMono !== '2x12') W('Superficie por encima de 500 m²: cascada de dos unidades de igual potencia. La combinación final la decide el técnico.');
   if (r.conAero && f.refrig === 'si' && (f.emisor === 'rad_at' || f.emisor === 'rad_bt')) W('Los radiadores no dan frío: prever fancoils o suelo refrescante en las estancias a refrigerar.');
-  if (r.conAero && f.emisor === 'rad_at') I('Radiador tradicional a 60–75 °C: la Dual Clima HT/HTT (R290) llega a 75 °C de impulsión, no hace falta apoyo de caldera.');
+  if (r.conAero && f.aeroMarca === 'SolaX') I('SolaX Thermal R290: impulsión hasta 80 °C (vale para radiador tradicional), wifi y app propias, SG Ready para aprovechar el excedente fotovoltaico. Más de 16 kW va en cascada de dos unidades.');
+  if (r.conAero && f.aeroMarca !== 'SolaX' && f.emisor === 'rad_at') I('Radiador tradicional a 60–75 °C: la Dual Clima HT/HTT (R290) llega a 75 °C de impulsión, no hace falta apoyo de caldera.');
   if (r.conAero && Math.abs(r.demanda - r.kw) / r.kw > 0.3) W('La estimación por zona y aislamiento da ' + coma(r.demanda) + ' kW frente a los ' + r.kw + ' kW de tarifa. Revisar si procede subir o bajar un escalón.');
   if (r.conAero && f.distDep > 2) W('Son ' + String(f.distDep).replace('.', ',') + ' m de la máquina a los depósitos (más de 2 m): contar tubería, aislamiento reforzado y pérdidas de carga en el presupuesto.');
   if (r.conAero && f.distExt > 10) W('Son ' + f.distExt + ' m de los depósitos a la unidad exterior (más de 10 m): revisar sección de tubería, caudal mínimo, aislamiento a la intemperie y volumen de glicol.');
-  if (r.conAero && !r.acsCat) W(r.acs + ' L no es una capacidad de catálogo (150, 200 o 300 L): ajustar o confirmar disponibilidad antes de pedir material.');
-  if (r.conFV && r.conAero) {
+  if (r.conAero && !r.acsCat && f.aeroMarca !== 'SolaX') W(r.acs + ' L no es una capacidad de catálogo (150, 200 o 300 L): ajustar o confirmar disponibilidad antes de pedir material.');
+  if (r.conFV && r.conAero && f.aeroMarca !== 'SolaX') {
     if (f.ec === 'si') I('Dual Clima ' + (f.suministro === 'tri' ? 'HTT' : 'HT') + ' EC PRO con Easy Connect: gestión de excedente fotovoltaico integrada hacia ACS e inercia.');
     else W('Sin módulo Easy Connect la máquina va como ' + (f.suministro === 'tri' ? 'HTT' : 'HT') + ' PRO: no hay conectividad wifi ni gestión automática del excedente fotovoltaico.');
   }
