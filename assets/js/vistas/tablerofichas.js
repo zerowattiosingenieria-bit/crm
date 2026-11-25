@@ -22,6 +22,12 @@ const ET = {
   venta: ['VENTA', '#1f845a'], propuesta: ['PROPUESTA ENVIADA 📨', '#baf3db'], proyecto: ['PROYECTO HECHO 📐', '#579dff'], cancelada: ['CANCELADA', '#ae2e24'],
   pendiente_aut: ['PENDIENTE DE AUTORIZAR', '#c9372c']
 };
+/* texto blanco sobre colores oscuros */
+function oscuro(hex) { const m = /^#?([0-9a-f]{6})$/i.exec(hex || ''); if (!m) return false; const n = parseInt(m[1], 16); return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) < 150; }
+/* paleta de Trello para etiquetas nuevas */
+const PALETA = ['#4bce97', '#f5cd47', '#fea362', '#f87168', '#9f8fef', '#579dff', '#6cc3e0', '#94c748', '#e774bb', '#8590a2',
+  '#1f845a', '#946f00', '#c25100', '#c9372c', '#6e5dc6', '#0c66e4', '#227d9b', '#5b7f24', '#ae4787', '#626f86',
+  '#baf3db', '#f8e6a0', '#fedec8', '#ffd5d2', '#dfd8fd', '#cce0ff', '#c6edfb', '#d3f1a7', '#fdd0ec', '#dcdfe4'];
 const COLOR_PERSONA = ['#e774bb', '#94c748', '#946f00', '#6e5dc6', '#227d9b', '#c25100'];
 
 function estilos() {
@@ -76,7 +82,7 @@ export async function vistaTableroFichas({refrescar}) {
   const jefe = esDir || api.puede('controlsub');
   const puedeMover = jefe || rol === 'captador';
   const hoy = hoyISO();
-  const est = {y: +hoy.slice(0, 4), m: +hoy.slice(5, 7), captador: '', comercial: '', tec: '', q: ''};
+  const est = {y: +hoy.slice(0, 4), m: +hoy.slice(5, 7), captador: '', comercial: '', tec: '', q: '', et: ''};
   const caja = h('.tf');
   const colorDe = id => { const i = (api.estado.usuarios || []).findIndex(u => String(u.id) === String(id)); return COLOR_PERSONA[(i < 0 ? 0 : i) % COLOR_PERSONA.length]; };
   const ini = id => { const n = api.nombrePersona(id); return n === '—' ? '?' : n.split(/\s+/).map(x => x[0]).join('').slice(0, 2).toUpperCase(); };
@@ -87,34 +93,46 @@ export async function vistaTableroFichas({refrescar}) {
     if (est.captador && String(k.captador_id) !== est.captador) return false;
     if (est.comercial && String(k.comercial_id) !== est.comercial) return false;
     if (est.tec && !normal(k.tecnologia).includes(est.tec)) return false;
+    if (est.et && !etiquetasDe(k, api.cliente(k.cliente_id) || {}).some(e => e.id === est.et)) return false;
     if (est.q) { const c = api.cliente(k.cliente_id) || {}; if (!normal([c.direccion, c.nombre, c.telefono, c.municipio].join(' ')).includes(normal(est.q))) return false; }
     return true;
   });
 
-  function etiquetas(k, c) {
-    const l = [];
-    const t = normal(k.tecnologia);
-    if (t.includes('foto')) l.push(ET.fv);
-    if (t.includes('aero')) l.push(ET.aero);
-    if (t.includes('bater') || normal(c.notas).includes('bater')) l.push(ET.bat);
-    if (normal(k.estado_cita) === 'confirmada') l.push(ET.confirmada);
-    if (normal(k.estado_cita) === 'recontactar') l.push(ET.reagendar);
+  /* 25/11 tarde (Nando: «tengo que poder meter las etiquetas con las que trabajamos, e incluso alguna más»):
+     catálogo de etiquetas del CRM (las del Trello de visitas + las que se creen). Las ligadas al estado
+     (clave) salen solas; las demás se ponen a mano en cada ficha (k.etiquetas = ids). */
+  const catalogo = () => (api.estado.etiquetas && api.estado.etiquetas.length ? api.estado.etiquetas
+    : Object.entries(ET).map(([clave, [nombre, color]]) => ({id: 'auto-' + clave, clave, nombre, color, activa: true})));
+  const porClave = cl => catalogo().find(e => e.clave === cl);
+  function clavesAuto(k, c) {
+    const s = new Set(); const t = normal(k.tecnologia);
+    if (t.includes('foto')) s.add('fv');
+    if (t.includes('aero')) s.add('aero');
+    if (t.includes('bater') || normal(c.notas).includes('bater')) s.add('bat');
+    if (normal(k.estado_cita) === 'confirmada') s.add('confirmada');
+    if (normal(k.estado_cita) === 'recontactar') s.add('reagendar');
     const r = normal(k.resultado);
-    if (r === 'sentada') l.push(ET.sentada);
-    if (r === 'potencial') l.push(ET.potencial);
-    if (r === 'venta' || normal(c.estado) === 'ganado') l.push(ET.venta);
-    if (r === 'cancelada' || r === 'no_sentada') l.push(ET.cancelada);
-    if (normal(c.estado) === 'propuesta') l.push(ET.propuesta);
-    if (/pendiente de que .* autorice/i.test(txt(k.notas))) l.push(ET.pendiente_aut);
-    return l;
+    if (r === 'sentada') s.add('sentada');
+    if (r === 'potencial') s.add('potencial');
+    if (r === 'venta' || normal(c.estado) === 'ganado') s.add('venta');
+    if (r === 'cancelada' || r === 'no_sentada') s.add('cancelada');
+    if (normal(c.estado) === 'propuesta') s.add('propuesta');
+    if (/pendiente de que .* autorice/i.test(txt(k.notas))) s.add('pendiente_aut');
+    return s;
   }
+  const manuales = k => String(k.etiquetas || '').split(',').map(x => x.trim()).filter(Boolean);
+  function etiquetasDe(k, c) {
+    const auto = clavesAuto(k, c), man = new Set(manuales(k));
+    return catalogo().filter(e => (e.clave && auto.has(e.clave)) || man.has(e.id));
+  }
+  const etiquetas = (k, c) => etiquetasDe(k, c).map(e => [e.nombre, e.color]);
 
   function tarjeta(k) {
     const c = api.cliente(k.cliente_id) || {};
     const osc = ['#0055cc', '#1f845a', '#ae2e24', '#579dff', '#c9372c'];
     const movible = jefe || (puedeMover && !['venta', 'sentada'].includes(normal(k.resultado)));
     const el = h('.tf-t' + (movible ? '' : '.fija'), {'data-id': k.id, 'data-movible': movible ? '1' : ''},
-      h('.et', etiquetas(k, c).map(([n, col]) => h('i' + (osc.includes(col) ? '.osc' : ''), {estilo: {background: col}}, n))),
+      h('.et', etiquetas(k, c).map(([n, col]) => h('i' + (oscuro(col) ? '.osc' : ''), {estilo: {background: col}}, n))),
       h('b', c.direccion || 'Sin dirección'), h('.n', c.nombre || '', c.municipio ? ' · ' + c.municipio : ''),
       h('.pie', k.hora_cita ? h('span.hora', '🕑 ' + k.hora_cita) : null,
         c.gasto_luz_mes ? h('span', '⚡ ' + c.gasto_luz_mes + ' €/mes') : null,
@@ -159,6 +177,7 @@ export async function vistaTableroFichas({refrescar}) {
         rol !== 'captador' ? sel(est.captador, [['', 'Todos los captadores']].concat(capts.map(u => [String(u.id), u.nombre])), v => est.captador = v) : null,
         esDir ? sel(est.comercial, [['', 'Todos los comerciales']].concat(coms.map(u => [String(u.id), u.nombre])), v => est.comercial = v) : null,
         sel(est.tec, [['', 'Toda tecnología'], ['foto', 'Fotovoltaica'], ['aero', 'Aerotermia']], v => est.tec = v),
+        sel(est.et, [['', 'Todas las etiquetas']].concat(catalogo().filter(e => e.activa).map(e => [e.id, e.nombre])), v => est.et = v),
         q),
       h('.tf-ayuda', puedeMover ? '✋ Arrastra una ficha a otro día para cambiar la cita (en el móvil, mantenla pulsada y muévela). Pulsa una ficha para ver sus datos.' : 'Pulsa una ficha para ver sus datos. Las citas las mueven los captadores.'),
       tablero = h('.tf-tablero'));
@@ -247,7 +266,7 @@ export async function vistaTableroFichas({refrescar}) {
     delete datos._fila;
     Object.assign(k, {fecha: datos.fecha, estado_cita: datos.estado_cita}); pintaTablero();   // se ve al momento
     try {
-      const r = await conAutorizacion(pedir => api.guardarCaptacion(Object.assign({}, datos, pedir ? {pedir_autorizacion: true} : {})));
+      const r = await conAutorizacion(pedir => api.guardarCaptacion(Object.assign({}, datos, {_origen: 'tablero', _cambiado: aAgendar ? ['fecha', 'estado_cita'] : ['fecha']}, pedir ? {pedir_autorizacion: true} : {})));
       if (r && r.captacion) Object.assign(k, r.captacion);
       aviso(aAgendar ? 'Ficha pasada a «Por agendar»' : 'Cita movida al ' + fechaLarga(fecha), 'ok');
       if (refrescar) refrescar().then(() => pintaTablero()).catch(() => {});
@@ -274,15 +293,69 @@ export async function vistaTableroFichas({refrescar}) {
       captador_id: selc(k.captador_id, [['', '— sin captador —']].concat(usuarios.filter(u => normal(u.rol) === 'captador').map(u => [u.id, u.nombre])), {disabled: jefe ? null : true}),
       notas: h('textarea', {rows: 3, disabled: ro}, k.notas || '')
     };
-    /* etiquetas rápidas, como pulsar una etiqueta en Trello */
-    const atajos = [
-      ['CONFIRMADA 📲', '#0055cc', () => { F.estado_cita.value = 'confirmada'; }],
-      ['REAGENDAR', '#b8acf6', () => { F.estado_cita.value = 'recontactar'; F.fecha.value = ''; }],
-      ['SENTADA', '#f5cd47', () => { F.resultado.value = 'sentada'; }],
-      ['POTENCIAL ♻️', '#9dd9ee', () => { F.resultado.value = 'potencial'; }],
-      ['VENTA', '#1f845a', () => { F.resultado.value = 'venta'; }],
-      ['CANCELADA', '#ae2e24', () => { F.resultado.value = 'cancelada'; }]
-    ];
+    /* etiquetas, como el menú «Etiquetas» de una tarjeta de Trello: se marcan y desmarcan. Las ligadas al estado
+       cambian el estado de la cita; las de tecnología, la tecnología; el resto se guardan en la ficha. */
+    const ACCION = {
+      confirmada: on => { F.estado_cita.value = on ? 'confirmada' : 'pendiente'; },
+      reagendar: on => { if (on) { F.estado_cita.value = 'recontactar'; F.fecha.value = ''; } else F.estado_cita.value = 'pendiente'; },
+      sentada: on => { F.resultado.value = on ? 'sentada' : 'pendiente'; },
+      potencial: on => { F.resultado.value = on ? 'potencial' : 'pendiente'; },
+      venta: on => { F.resultado.value = on ? 'venta' : 'pendiente'; },
+      cancelada: on => { F.resultado.value = on ? 'cancelada' : 'pendiente'; }
+    };
+    const tecDe = (fv, ae) => fv && ae ? 'AEROTERMIA + FOTOVOLTAICA' : fv ? 'FOTOVOLTAICA' : ae ? 'AEROTERMIA' : '';
+    ACCION.fv = on => { const t = normal(F.tecnologia.value); F.tecnologia.value = tecDe(on, t.includes('aero')); };
+    ACCION.aero = on => { const t = normal(F.tecnologia.value); F.tecnologia.value = tecDe(t.includes('foto'), on); };
+    const man = new Set(manuales(k));
+    const vistaPrevia = () => ({...k, estado_cita: F.estado_cita.value, resultado: F.resultado.value, tecnologia: F.tecnologia.value, etiquetas: [...man].join(',')});
+    const marcada = e => etiquetasDe(vistaPrevia(), c).some(x => x.id === e.id);
+    const cajaEt = h('div', {estilo: {display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', margin: '2px 0 8px'}});
+    const chip = (e, extra = {}) => h('i', Object.assign({estilo: {background: e.color, color: oscuro(e.color) ? '#fff' : '#172b4d', fontStyle: 'normal', fontWeight: 700, fontSize: '11.5px', borderRadius: '4px', padding: '3px 9px'}}, extra), e.nombre);
+    function pintaEtiquetas() {
+      poner(cajaEt, etiquetasDe(vistaPrevia(), c).map(e => chip(e)).concat(puedeEditar ? [h('button.btn', {type: 'button', estilo: {padding: '3px 10px', fontSize: '12px'}, onclick: menuEtiquetas}, '🏷 Etiquetas')] : []));
+    }
+    function alternar(e) {
+      const on = !marcada(e);
+      if (e.clave && ACCION[e.clave]) { ACCION[e.clave](on); if (!on) man.delete(e.id); }
+      else if (on) man.add(e.id); else man.delete(e.id);
+      if (e.clave && !ACCION[e.clave]) { /* automáticas (batería, propuesta…): también se pueden poner a mano */ }
+      pintaEtiquetas();
+    }
+    /* menú de etiquetas: marcar/desmarcar, buscar, crear y (Nando, Fernando, superadmin) cambiar nombre y color */
+    function menuEtiquetas() {
+      let q = '';
+      const lista = h('div', {estilo: {display: 'grid', gap: '6px', maxHeight: '55vh', overflowY: 'auto'}});
+      const buscar = h('input', {type: 'search', placeholder: 'Buscar etiquetas…', estilo: {width: '100%', marginBottom: '8px'}});
+      const pinta = () => poner(lista, catalogo().filter(e => e.activa && (!q || normal(e.nombre).includes(normal(q)))).map(e => h('div', {estilo: {display: 'flex', gap: '8px', alignItems: 'center'}},
+        h('input', {type: 'checkbox', checked: marcada(e) ? true : null, onchange: () => { alternar(e); pinta(); }, estilo: {width: '18px', height: '18px', margin: 0}}),
+        h('div', {estilo: {flex: 1, cursor: 'pointer'}, onclick: () => { alternar(e); pinta(); }}, chip(e, {estilo: {display: 'block', background: e.color, color: oscuro(e.color) ? '#fff' : '#172b4d', fontStyle: 'normal', fontWeight: 700, fontSize: '13px', borderRadius: '4px', padding: '7px 10px'}})),
+        jefe ? h('button', {type: 'button', title: 'Cambiar nombre o color', onclick: () => editarEtiqueta(e, pinta), estilo: {border: 0, background: 'transparent', cursor: 'pointer', fontSize: '15px'}}, '✎') : null)));
+      buscar.addEventListener('input', () => { q = buscar.value; pinta(); });
+      pinta();
+      const v = ventana({titulo: '🏷 Etiquetas', cuerpo: h('div', buscar, lista,
+        jefe ? h('button.btn', {type: 'button', estilo: {marginTop: '10px', width: '100%'}, onclick: () => editarEtiqueta(null, pinta)}, '＋ Crear una etiqueta nueva') : h('p.nota', 'Para crear etiquetas nuevas, pídeselo a Nando o Fernando.')),
+        acciones: [h('button.btn.primario', {onclick: () => v.cerrar()}, 'Listo')]});
+    }
+    function editarEtiqueta(e, alAcabar) {
+      let color = e ? e.color : PALETA[0];
+      const nombre = h('input', {value: e ? e.nombre : '', placeholder: 'Nombre de la etiqueta', maxlength: 40, estilo: {width: '100%'}});
+      const muestra = h('div', {estilo: {borderRadius: '6px', padding: '10px', fontWeight: 700, textAlign: 'center', marginBottom: '10px'}});
+      const pintaMuestra = () => { muestra.style.background = color; muestra.style.color = oscuro(color) ? '#fff' : '#172b4d'; muestra.textContent = nombre.value || 'Etiqueta'; };
+      nombre.addEventListener('input', pintaMuestra);
+      const colores = h('div', {estilo: {display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '6px', margin: '10px 0'}}, PALETA.map(col => h('button', {type: 'button', title: col, onclick: () => { color = col; pintaMuestra(); }, estilo: {background: col, height: '28px', border: 0, borderRadius: '4px', cursor: 'pointer'}})));
+      pintaMuestra();
+      const guardarEt = async (extra = {}) => {
+        try {
+          const r = await api.pedir('guardarEtiqueta', Object.assign({id: e ? e.id : '', nombre: nombre.value, color}, extra));
+          api.estado.etiquetas = r.etiquetas || api.estado.etiquetas;
+          if (!e && r.etiqueta) man.add(r.etiqueta.id);
+          aviso(extra.activa === 'no' ? 'Etiqueta retirada' : 'Etiqueta guardada ✓', 'ok'); w.cerrar(); alAcabar && alAcabar(); pintaEtiquetas(); pintaTablero();
+        } catch (er) { avisoError(er); }
+      };
+      const w = ventana({titulo: e ? 'Cambiar etiqueta' : 'Crear etiqueta', cuerpo: h('div', muestra, nombre, h('p.nota', 'Color'), colores,
+        e && e.clave ? h('p.nota', 'Esta etiqueta va ligada al estado de la cita: se le puede cambiar el nombre y el color, pero no retirarla.') : null),
+        acciones: [e && !e.clave ? h('button.btn', {onclick: () => guardarEt({activa: 'no'})}, 'Retirar etiqueta') : null, h('button.btn.primario', {onclick: () => guardarEt()}, 'Guardar')].filter(Boolean)});
+    }
     const campo = (et, el, ancho) => h('label', {estilo: {display: 'grid', gap: '4px', fontSize: '12.5px', fontWeight: 700, color: '#44546f', gridColumn: ancho ? 'span ' + ancho : null}}, et, el);
     const rejilla = (...x) => h('div', {estilo: {display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '10px', marginBottom: '12px'}}, ...x);
     const titulo = (t) => h('h3', {estilo: {margin: '14px 0 8px', fontSize: '14px', display: 'flex', gap: '6px', alignItems: 'center'}}, t);
@@ -295,6 +368,8 @@ export async function vistaTableroFichas({refrescar}) {
         h('div', {estilo: {background: '#fff', border: '1px solid #dfe1e6', borderRadius: '8px', padding: '6px 10px', fontSize: '13.5px', whiteSpace: 'pre-wrap'}}, sg.nota || sg.proximo_paso || ''))))
       .concat((api.seguimientoDe(k.cliente_id) || []).length ? [] : [h('p.nota', 'Todavía no hay comentarios.')]));
     pintaComentarios();
+    ['estado_cita', 'resultado', 'tecnologia'].forEach(x => F[x].addEventListener('change', pintaEtiquetas));
+    pintaEtiquetas();
 
     const guardar = async (b) => {
       b.disabled = true;
@@ -304,19 +379,21 @@ export async function vistaTableroFichas({refrescar}) {
           if (String(F[x].value) !== String(c[x] == null ? '' : c[x])) cambiosCli[x] = F[x].value;
         });
         if (Object.keys(cambiosCli).length) {
-          const r = await api.guardarCliente(Object.assign({id: c.id}, cambiosCli));
+          const r = await api.guardarCliente(Object.assign({id: c.id, _origen: 'tablero'}, cambiosCli));
           if (r && r.cliente) Object.assign(c, r.cliente); else Object.assign(c, cambiosCli);
           if (r && r.aviso_duplicado) aviso(r.aviso_duplicado, 'error');
         }
         const nueva = Object.assign({}, k);
         delete nueva._fila;
         ['fecha', 'hora_cita', 'estado_cita', 'resultado', 'tecnologia', 'notas'].forEach(x => { nueva[x] = F[x].value; });
+        nueva.etiquetas = [...man].join(',');
         if (jefe) { nueva.comercial_id = F.comercial_id.value; nueva.captador_id = F.captador_id.value; }
         if (nueva.estado_cita === 'recontactar' && nueva.fecha) nueva.estado_cita = 'pendiente';
         if (!nueva.fecha && nueva.estado_cita !== 'no_interesa') nueva.estado_cita = 'recontactar';
-        const cambiaCita = ['fecha', 'hora_cita', 'estado_cita', 'resultado', 'tecnologia', 'notas', 'comercial_id', 'captador_id'].some(x => String(nueva[x] || '') !== String(k[x] || ''));
+        nueva._cambiado = ['fecha', 'hora_cita', 'estado_cita', 'resultado', 'tecnologia', 'notas', 'comercial_id', 'captador_id', 'etiquetas'].filter(x => String(nueva[x] || '') !== String(k[x] || ''));
+        const cambiaCita = nueva._cambiado.length > 0;
         if (cambiaCita) {
-          const r = await conAutorizacion(pd => api.guardarCaptacion(Object.assign({}, nueva, pd ? {pedir_autorizacion: true} : {})));
+          const r = await conAutorizacion(pd => api.guardarCaptacion(Object.assign({}, nueva, {_origen: 'tablero'}, pd ? {pedir_autorizacion: true} : {})));
           Object.assign(k, r && r.captacion ? r.captacion : nueva);
         }
         aviso(Object.keys(cambiosCli).length || cambiaCita ? 'Ficha guardada ✓' : 'No había cambios', 'ok');
@@ -325,9 +402,8 @@ export async function vistaTableroFichas({refrescar}) {
     };
 
     const {cerrar} = ventana({titulo: '▥ ' + (c.direccion || 'Ficha') + (c.nombre ? ' · ' + c.nombre : ''), ancha: true, cuerpo: h('div',
-      h('.et', {estilo: {display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '8px'}}, etiquetas(k, c).map(([n, col]) => h('i', {estilo: {background: col, color: ['#0055cc', '#1f845a', '#ae2e24', '#579dff', '#c9372c'].includes(col) ? '#fff' : '#172b4d', fontStyle: 'normal', fontWeight: 700, fontSize: '11px', borderRadius: '4px', padding: '2px 8px'}}, n))),
-      puedeEditar ? h('div', {estilo: {display: 'flex', flexWrap: 'wrap', gap: '6px', margin: '4px 0 6px'}}, h('span', {estilo: {fontSize: '12px', color: '#626f86', alignSelf: 'center'}}, 'Etiquetas rápidas:'),
-        atajos.map(([n, col, fn]) => h('button', {type: 'button', onclick: fn, estilo: {background: col, color: ['#0055cc', '#1f845a', '#ae2e24'].includes(col) ? '#fff' : '#172b4d', border: 0, borderRadius: '4px', padding: '4px 10px', fontSize: '11.5px', fontWeight: 800, cursor: 'pointer'}}, n))) : h('p.nota', 'Solo lectura: esta ficha es de otra persona.'),
+      h('div', {estilo: {fontSize: '12px', fontWeight: 700, color: '#44546f'}}, 'Etiquetas'), cajaEt,
+      puedeEditar ? null : h('p.nota', 'Solo lectura: esta ficha es de otra persona.'),
       titulo('📅 La cita'), rejilla(campo('Fecha', F.fecha), campo('Hora', F.hora_cita), campo('Estado de la cita', F.estado_cita), campo('Resultado', F.resultado), campo('Tecnología', F.tecnologia), campo('Comercial', F.comercial_id), campo('Captador', F.captador_id)),
       titulo('👤 El cliente'), rejilla(campo('Dirección', F.direccion, 2), campo('Nombre', F.nombre), campo('Teléfono', F.telefono), campo('Correo', F.email), campo('Municipio', F.municipio),
         campo('Luz (€/mes)', F.gasto_luz_mes), campo('Calefacción', F.calefaccion), campo('Gasto calefacción (€)', F.gasto_combustible), campo('Próximo paso', F.proxima_accion, 2), campo('Fecha próximo paso', F.proxima_fecha)),
@@ -335,7 +411,7 @@ export async function vistaTableroFichas({refrescar}) {
       titulo('💬 Comentarios y actividad'),
       puedeEditar ? h('div', {estilo: {display: 'flex', gap: '8px', alignItems: 'flex-start', marginBottom: '10px'}}, coment,
         h('button.btn', {onclick: async ev => { const b = ev.currentTarget; if (!coment.value.trim()) return; b.disabled = true;
-          try { const r = await api.guardarSeguimiento({cliente_id: k.cliente_id, nota: coment.value.trim(), canal: 'nota', origen: 'tablero'});
+          try { const r = await api.guardarSeguimiento({cliente_id: k.cliente_id, nota: coment.value.trim(), canal: 'nota', origen: 'tablero', _origen: 'tablero'});
             if (r && r.seguimiento) (api.estado.seguimiento || []).unshift(r.seguimiento); coment.value = ''; pintaComentarios(); aviso('Comentario guardado', 'ok'); }
           catch (e) { avisoError(e); } b.disabled = false; }}, 'Guardar')) : null,
       lista),
@@ -347,7 +423,7 @@ export async function vistaTableroFichas({refrescar}) {
 
   /* ---------- añadir una ficha en un día (como «Añade una tarjeta» de Trello) ---------- */
   function nuevaFicha(fecha) {
-    nuevaCaptacion(async () => { if (refrescar) await refrescar(); pintaTablero(); }, () => {}, {fecha, estado_cita: fecha ? 'pendiente' : 'recontactar'});
+    nuevaCaptacion(async () => { if (refrescar) await refrescar(); pintaTablero(); }, () => {}, {fecha, estado_cita: fecha ? 'pendiente' : 'recontactar', _origen: 'tablero'});
   }
 
   pinta();

@@ -78,6 +78,7 @@ export function nuevaCaptacion(refrescar, ir, valoresIniciales) {
           interes: d.interes, perfil: d.perfil, origen: 'captacion', comercial_id: d.comercial_id
         }
       };
+      if (valoresIniciales && valoresIniciales._origen) captacion._origen = valoresIniciales._origen;   // tablero de fichas → también a Trello
       const r = await conAutorizacion(pedir => api.guardarCaptacion(Object.assign({}, captacion, pedir ? {pedir_autorizacion: true} : {})));
       aviso(r.aviso_duplicado || 'Ficha de captación guardada.');
       await refrescar();

@@ -239,6 +239,7 @@ export async function cargarDatos() {
   estado.catalogo = d.catalogo;
   estado.config = d.config || {};
   estado.usuarios = d.usuarios || [];
+  estado.etiquetas = d.etiquetas || [];
   estado.clientes = d.clientes || [];
   estado.operaciones = d.operaciones || [];
   estado.seguimiento = d.seguimiento || [];

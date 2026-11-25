@@ -38,6 +38,7 @@ function accDatos_(array $u, array $p): array {
     'operaciones' => $operaciones,
     'seguimiento' => $seguimiento,
     'captaciones' => $captaciones,
+    'etiquetas' => function_exists('etiquetasTablero_') ? etiquetasTablero_() : [],
     'servidor' => ahora_(),
     'version' => VERSION
   ];
@@ -410,7 +411,8 @@ function guardarCaptacionSinReglas_(array $u, array $p): array {
   }
 
   $campos = ['fecha', 'hora_cita', 'estado_cita', 'tecnologia', 'comercial_id', 'resultado',
-             'fecha_resultado', 'operacion_id', 'interes', 'notas', 'volver_llamar'];
+             'fecha_resultado', 'operacion_id', 'interes', 'notas', 'volver_llamar', 'etiquetas'];
+  if (array_key_exists('etiquetas', $d)) $d['etiquetas'] = function_exists('limpiarEtiquetas_') ? limpiarEtiquetas_($d['etiquetas']) : '';
   if (txt_($d['id'] ?? '') !== '') {
     $anterior = buscar1_('CAPTACIONES', fn($x) => mismo_($x['id'], $d['id']));
     $cambios = [];

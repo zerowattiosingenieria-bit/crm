@@ -68,7 +68,7 @@ function acciones_(): array {
     'candidatosBancoFacturaDoc' => 'accCandidatosBancoFacturaDoc_', 'casarFacturaDoc' => 'accCasarFacturaDoc_',
     'descasarFacturaDoc' => 'accDescasarFacturaDoc_', 'bancoSinFactura' => 'accBancoSinFactura_',
     'driveFacturas' => 'accDriveFacturas_', 'archivoDrive' => 'accArchivoDrive_',
-    'casarLote' => 'accCasarLote_', 'dineroCliente' => 'accDineroCliente_', 'instalacionCliente' => 'accInstalacionCliente_', 'archivoDeFactura' => 'accArchivoDeFactura_', 'cuadreContable' => 'accCuadreContable_', 'casadosFacturaDoc' => 'accCasadosFacturaDoc_', 'autoCasar' => 'accAutoCasar_', 'marcarKO' => 'accMarcarKO_', 'quitarKO' => 'accQuitarKO_', 'clientesKO' => 'accClientesKO_', 'marcarReagendar' => 'accMarcarReagendar_', 'porReagendar' => 'accPorReagendar_', 'proyectosSinEnviar' => 'accProyectosSinEnviar_', 'actividadGestoria' => 'accActividadGestoria_', 'vistaGestoria' => 'accVistaGestoria_', 'controlSubcontratas' => 'accControlSubcontratas_', 'mensajeContrata' => 'accMensajeContrata_', 'instruccionesObra' => 'accInstruccionesObra_', 'ticketControl' => 'accTicketControl_',
+    'casarLote' => 'accCasarLote_', 'dineroCliente' => 'accDineroCliente_', 'instalacionCliente' => 'accInstalacionCliente_', 'archivoDeFactura' => 'accArchivoDeFactura_', 'cuadreContable' => 'accCuadreContable_', 'casadosFacturaDoc' => 'accCasadosFacturaDoc_', 'autoCasar' => 'accAutoCasar_', 'marcarKO' => 'accMarcarKO_', 'quitarKO' => 'accQuitarKO_', 'clientesKO' => 'accClientesKO_', 'marcarReagendar' => 'accMarcarReagendar_', 'porReagendar' => 'accPorReagendar_', 'proyectosSinEnviar' => 'accProyectosSinEnviar_', 'actividadGestoria' => 'accActividadGestoria_', 'vistaGestoria' => 'accVistaGestoria_', 'controlSubcontratas' => 'accControlSubcontratas_', 'mensajeContrata' => 'accMensajeContrata_', 'instruccionesObra' => 'accInstruccionesObra_', 'ticketControl' => 'accTicketControl_', 'etiquetasTablero' => 'accEtiquetasTablero_', 'guardarEtiqueta' => 'accGuardarEtiqueta_', 'trelloPendientes' => 'accTrelloPendientes_', 'trelloMarcar' => 'accTrelloMarcar_',
     'mensajesPendientes' => 'accMensajesPendientes_', 'aprobarMensaje' => 'accAprobarMensaje_', 'marcarMensaje' => 'accMarcarMensaje_', 'prepararAccesoCliente' => 'accPrepararAccesoCliente_',
     'activarFinApp' => 'accPortalActivarFin_', 'estadoAppCliente' => 'accPortalEstadoCliente_', 'docsContratas' => 'accDocsContratas_', 'validarDocContrata' => 'accValidarDocContrata_', 'verDocContrata' => 'accVerDocContrata_',
     'marcarMovimientoSinFactura' => 'accMarcarMovimientoSinFactura_', 'marcarMovimientosSinFactura' => 'accMarcarMovimientosSinFactura_', 'facturasParaMovimiento' => 'accFacturasParaMovimiento_',
@@ -203,6 +203,7 @@ function despachar_($p): array {
   $quien = is_array($GLOBALS['ZW_PETICION'] ?? null) ? ($GLOBALS['ZW_PETICION']['usuario'] ?? null) : null;
   cerrarPeticion_($r);
   guardia_($quien, $accion, $r);   // guardia.php: corta el acceso ante borrados o cambios en masa
+  if (function_exists('trelloEncolar_')) trelloEncolar_($quien, $accion, $p, $r);   // trellosync.php: lo del tablero, también a Trello
   return $r;
 }
 

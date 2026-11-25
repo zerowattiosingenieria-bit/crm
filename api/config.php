@@ -92,10 +92,12 @@ const ESQUEMA = [
   /* 20/11/2026: facturas escaneadas (PDF, imagen o foto) leídas enteras y contabilizadas (contabilidad.php). Solo dirección. */
   "FACTURAS_DOC" => ['id', 'tipo', 'numero', 'fecha', 'vencimiento', 'emisor', 'emisor_nif', 'receptor', 'receptor_nif', 'concepto', 'base', 'iva_pct', 'iva', 'irpf_pct', 'irpf', 'total', 'cliente_id', 'operacion_id', 'categoria', 'gasto_id', 'factura_id', 'estado_pago', 'fecha_pago', 'archivo_id', 'archivo_nombre', 'mime', 'miniatura', 'texto', 'lineas', 'notas', 'creado', 'creado_por', 'modificado', 'modificado_por', 'medio_pago', 'banco_id', 'casada', 'fecha_casada', 'origen', 'importe_casado', 'revisar'],
   /* 20/11/2026: cada trozo de casado factura ↔ movimiento (pagos parciales y transferencias que pagan varias facturas). */
+  "TRELLO_COLA" => ['id', 'fecha', 'usuario', 'captacion_id', 'cliente_id', 'tipo', 'detalle', 'estado', 'resultado', 'hecho'],
+  "ETIQUETAS" => ['id', 'clave', 'nombre', 'color', 'orden', 'activa', 'creado', 'creado_por'],
   "GESTORIA_ACTIVIDAD" => ['id', 'fecha', 'cuenta_id', 'usuario', 'accion', 'detalle', 'ref', 'reportado'],
   "CASADOS" => ['id', 'factura_doc_id', 'banco_id', 'importe', 'medio', 'fecha', 'notas', 'creado', 'creado_por'],
   "SEGUIMIENTO" => ['id', 'cliente_id', 'operacion_id', 'usuario_id', 'fecha', 'canal', 'nota', 'proximo_paso', 'proxima_fecha', 'estado_resultante', 'origen', 'creado'],
-  "CAPTACIONES" => ['id', 'cliente_id', 'captador_id', 'fecha', 'hora_cita', 'estado_cita', 'tecnologia', 'comercial_id', 'resultado', 'fecha_resultado', 'operacion_id', 'interes', 'notas', 'volver_llamar', 'creado', 'proyecto_creado', 'proyecto_enviado', 'reag_motivo', 'reag_detalle', 'reag_por', 'reag_fecha'],
+  "CAPTACIONES" => ['id', 'cliente_id', 'captador_id', 'fecha', 'hora_cita', 'estado_cita', 'tecnologia', 'comercial_id', 'resultado', 'fecha_resultado', 'operacion_id', 'interes', 'notas', 'volver_llamar', 'creado', 'proyecto_creado', 'proyecto_enviado', 'reag_motivo', 'reag_detalle', 'reag_por', 'reag_fecha', 'etiquetas'],
   /* 02/11/2026: cada cita reagendada o cancelada (estadísticas) y el histórico de cambios de cada lead. */
   "CITAS_CAMBIOS" => ['id', 'captacion_id', 'cliente_id', 'captador_id', 'comercial_id', 'tipo', 'fecha_antes', 'hora_antes', 'fecha_nueva', 'hora_nueva', 'motivo', 'usuario_id', 'creado'],
   "CAMBIOS" => ['id', 'fecha', 'usuario_id', 'cliente_id', 'entidad', 'entidad_id', 'campo', 'antes', 'despues'],
