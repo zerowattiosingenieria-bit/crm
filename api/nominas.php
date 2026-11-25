@@ -376,19 +376,28 @@ function accSubirNomina_(array $u, array $p): array {
   if ($objetivoId === '' || !preg_match('/^\d{4}-\d{2}$/', $periodo)) {
     return ['ok' => false, 'error' => 'Falta la persona o el periodo (aaaa-mm).'];
   }
-  if ($datos === '') return ['ok' => false, 'error' => 'No ha llegado el archivo.'];
+  /* 26/11/2026: también se puede enlazar un PDF que ya está en la carpeta de nóminas del Drive (drive_id). */
+  $driveId = txt_($p['drive_id'] ?? '');
+  if ($datos === '' && $driveId === '') return ['ok' => false, 'error' => 'No ha llegado el archivo.'];
 
   $persona = buscar1_('USUARIOS', fn($x) => mismo_($x['id'], $objetivoId));
   if (!$persona) return ['ok' => false, 'error' => 'No existe esa persona.'];
 
-  $tipo = txt_($p['tipo'] ?? '') ?: 'application/pdf';
   $nombre = 'Nomina_' . preg_replace('/\s+/u', '_', normal_($persona['usuario'])) . '_' . $periodo . '.pdf';
-  $archivo = driveSubir_(carpetaNominas_(), $nombre, $datos, $tipo);
+  if ($datos === '') {
+    $enCarpeta = array_values(array_filter(driveListar_(carpetaNominas_()), fn($a) => txt_($a['id'] ?? '') === $driveId));
+    if (!$enCarpeta) return ['ok' => false, 'error' => 'Ese archivo no está en la carpeta de nóminas del Drive.'];
+    $archivo = ['id' => $driveId];
+    $nombre = txt_($enCarpeta[0]['nombre'] ?? '') ?: $nombre;
+  } else {
+    $tipo = txt_($p['tipo'] ?? '') ?: 'application/pdf';
+    $archivo = driveSubir_(carpetaNominas_(), $nombre, $datos, $tipo);
+  }
 
   $existente = buscar1_('NOMINAS', fn($n) => mismo_($n['usuario_id'], $objetivoId) && periodoNomina_($n['periodo']) === $periodo);
 
   /* Si ya había un PDF para ese mes, el viejo se manda a la papelera. */
-  if ($existente && txt_($existente['archivo_id']) !== '') {
+  if ($existente && txt_($existente['archivo_id']) !== '' && txt_($existente['archivo_id']) !== txt_($archivo['id'] ?? '')) {
     driveBorrar_(txt_($existente['archivo_id']));
   }
 
