@@ -9,7 +9,7 @@ import {estadoLead} from './leads.js';
 import {avisoDuplicadoVivo} from './ficha-cliente.js';
 import {botonesCita, conAutorizacion} from './citas-cambios.js';
 
-function nuevaCaptacion(refrescar, ir) {
+export function nuevaCaptacion(refrescar, ir, valoresIniciales) {
   const comerciales = api.estado.usuarios
     .filter(u => ['comercial', 'admin', 'superadmin'].includes(u.rol)).map(u => [u.id, u.nombre]);
   /* 02/11/2026: ficha en 30 segundos (ubicación y Catastro) y aviso si la
@@ -59,8 +59,8 @@ function nuevaCaptacion(refrescar, ir) {
        pista: 'Cómo es, qué le mueve, quién decide…'},
       {id: 'notas', et: 'Otros datos de la puerta', tipo: 'area', ancho: 3}
     ],
-    valores: {fecha: hoyISO(), hora_cita: '17:00', estado_cita: 'confirmada',
-              tecnologia: 'AEROTERMIA', periodo_combustible: 'al año', interes: 7},
+    valores: Object.assign({fecha: hoyISO(), hora_cita: '17:00', estado_cita: 'confirmada',
+              tecnologia: 'AEROTERMIA', periodo_combustible: 'al año', interes: 7}, valoresIniciales || {}),
     alGuardar: async d => {
       /* 04/11/2026: sin fecha solo si queda «Pendiente de reagendar». */
       const sinFecha = d.estado_cita === 'recontactar' && !txt(d.fecha);

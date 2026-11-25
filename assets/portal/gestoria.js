@@ -356,7 +356,7 @@
       const s = k => l.reduce((a, f) => a + num(f[k]), 0);
       poner(tabla, !l.length ? h('.g-vacio', 'No hay facturas con estos filtros.') : h('.g-tabla-wrap', h('table.g-t',
         h('thead', h('tr', ['Fecha', 'Tipo', 'Nº factura', 'Cliente / proveedor', 'NIF', 'Concepto'].map(x => h('th', x)), h('th.n', 'Base'), h('th.n', 'IVA'), h('th.n', 'IRPF'), h('th.n', 'Total'), h('th', 'Banco'), h('th', ''))),
-        h('tbody', l.map(f => h('tr',
+        h('tbody', l.map(f => h('tr', {estilo: {cursor: 'pointer'}, title: 'Pulsa para ver y descargar la factura', onclick: ev => { if (!ev.target.closest('button')) abrirFactura(f, true, () => vistaFacturas(main, true)); }},
           h('td', {estilo: {whiteSpace: 'nowrap'}}, fe(f.fecha)),
           h('td', h('span.g-pill.' + (f.tipo === 'emitida' ? 'emi' : 'rec'), f.tipo === 'emitida' ? 'Emitida' : 'Recibida')),
           h('td', f.numero || '—'),
@@ -385,15 +385,40 @@
     pintaTabla();
   }
 
-  async function abrirFactura(f, ver) {
-    const win = ver ? window.open('', '_blank') : null;
+  /* 25/11 tarde (Nando: «cuando hago click sobre una factura no me la puedo descargar»): al pulsar una
+     factura se abre aquí mismo, con el botón grande de descargar; nada de ventanas emergentes. */
+  async function abrirFactura(f, ver, despues) {
+    const nombreArchivo = a => {
+      const ext = (a.mime || '').includes('pdf') ? 'pdf' : ((a.mime || '').includes('png') ? 'png' : 'jpg');
+      return limpio([fe(f.fecha).replace(/\//g, '-'), quien(f), f.numero].filter(Boolean).join(' ')) + '.' + ext;
+    };
+    if (!ver) {
+      try { const a = await ok(await pedir('portalGestoriaArchivo', {id: f.id})); descargar(b64aBlob(a.datos, a.mime), nombreArchivo(a)); toast('Factura descargada', 'ok'); }
+      catch (e) { toast(e.message, 'error'); }
+      return;
+    }
+    const visor = h('div', {estilo: {height: '62vh', background: '#f4f6f3', borderRadius: '12px', display: 'grid', placeItems: 'center', overflow: 'hidden'}}, h('.g-cargando', 'Abriendo la factura…'));
+    const bajar = h('button.g-b.grande.lima', {disabled: true}, '⤓ Descargar factura');
+    const cuerpo = h('div',
+      h('div', {estilo: {display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '10px'}},
+        h('span.g-pill.' + (f.tipo === 'emitida' ? 'emi' : 'rec'), f.tipo === 'emitida' ? 'Emitida' : 'Recibida'), pillCasada(f),
+        h('b', eur(f.total)), h('span', {estilo: {color: '#6b6f66', fontSize: '13px'}}, 'Base ' + eur(f.base) + ' · IVA ' + eur(f.iva) + (f.irpf ? ' · IRPF ' + eur(f.irpf) : '')),
+        h('span', {estilo: {flex: 1}}), bajar,
+        h('button.g-b', {onclick: () => { cerrar(); casarFactura(f, despues || (() => {})); }}, f.casada === 'si' ? 'Ver casado' : 'Casar con el banco'),
+        h('button.g-b', {onclick: () => { cerrar(); nota('factura', f.id, 'Factura ' + (f.numero || '') + ' · ' + (quien(f) || '')); }}, '📝 Nota')),
+      visor);
+    const cerrar = modal((f.tipo === 'emitida' ? 'Factura a ' : 'Factura de ') + (quien(f) || '—'), 'Nº ' + (f.numero || '—') + ' · ' + fe(f.fecha) + (nifDe(f) ? ' · NIF ' + nifDe(f) : ''), cuerpo);
+    const ms = document.querySelectorAll('.g-modal'), m = ms[ms.length - 1]; if (m) m.style.width = 'min(980px, 100%)';
+    if (!f.tiene_archivo) { poner(visor, h('.g-vacio', 'Esta factura no tiene archivo guardado.')); return; }
     try {
-      const a = await ok(await pedir('portalGestoriaArchivo', {id: f.id, ver: ver ? 1 : 0}));
-      const blob = b64aBlob(a.datos, a.mime);
-      if (ver && win) { win.location = URL.createObjectURL(blob); }
-      else descargar(blob, a.nombre || ('factura_' + (f.numero || f.id) + '.pdf'));
-    } catch (e) { if (win) win.close(); toast(e.message, 'error'); }
+      const a = await ok(await pedir('portalGestoriaArchivo', {id: f.id, ver: 1}));
+      const blob = b64aBlob(a.datos, a.mime); const url = URL.createObjectURL(blob);
+      bajar.disabled = false; bajar.onclick = () => { descargar(blob, nombreArchivo(a)); anotarDescarga(f); };
+      poner(visor, (a.mime || '').includes('pdf') ? h('iframe', {src: url, title: 'Factura', estilo: {width: '100%', height: '100%', border: 0, background: '#fff'}})
+        : h('img', {src: url, alt: 'Factura', estilo: {maxWidth: '100%', maxHeight: '100%', objectFit: 'contain'}}));
+    } catch (e) { poner(visor, h('.g-vacio', e.message)); }
   }
+  function anotarDescarga(f) { pedir('portalGestoriaArchivo', {id: f.id, solo_anotar: 1}).catch(() => {}); }
 
   async function zip(lista, boton) {
     const conArchivo = lista.filter(f => f.tiene_archivo);

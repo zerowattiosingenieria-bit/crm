@@ -11,6 +11,7 @@ import {h, poner, txt, normal, hoyISO, telHref, fechaLarga} from '../util.js';
 import * as api from '../api.js';
 import {ventana, aviso, avisoError} from '../ui.js';
 import {conAutorizacion} from './citas-cambios.js';
+import {nuevaCaptacion} from './captaciones.js';
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -58,6 +59,8 @@ function estilos() {
   .tf-t .av + .av { margin-left: -6px; border: 2px solid #fff; }
   .tf-fantasma { position: fixed; z-index: 9999; pointer-events: none; transform: rotate(3deg); box-shadow: 0 10px 24px rgba(0,0,0,.35); opacity: .95; width: 256px; }
   .tf-hueco { border: 2px dashed #8590a2; border-radius: 8px; min-height: 52px; background: #ffffff80; }
+  .tf-anadir { margin: 0 8px 8px; background: transparent; border: 0; border-radius: 8px; padding: 8px; text-align: left; color: #44546f; font-weight: 600; cursor: pointer; }
+  .tf-anadir:hover { background: #091e4224; color: #172b4d; }
   .tf-ayuda { background: #f1fadf; border: 1px solid #d8efb0; border-radius: 12px; padding: 8px 12px; font-size: 13px; margin-bottom: 10px; }
   @media (max-width: 700px) { .tf-lista { flex-basis: 84vw; } .tf-mes b { min-width: 110px; } }
   `;
@@ -69,7 +72,9 @@ export async function vistaTableroFichas({refrescar}) {
   const yo = api.estado.usuario || {};
   const rol = normal(yo.rol);
   const esDir = api.esDireccion();
-  const puedeMover = esDir || rol === 'captador';
+  /* 25/11 tarde (Nando: «lo de moverlos no va»): Nando, Fernando y superadmin mueven y editan todo */
+  const jefe = esDir || api.puede('controlsub');
+  const puedeMover = jefe || rol === 'captador';
   const hoy = hoyISO();
   const est = {y: +hoy.slice(0, 4), m: +hoy.slice(5, 7), captador: '', comercial: '', tec: '', q: ''};
   const caja = h('.tf');
@@ -107,7 +112,7 @@ export async function vistaTableroFichas({refrescar}) {
   function tarjeta(k) {
     const c = api.cliente(k.cliente_id) || {};
     const osc = ['#0055cc', '#1f845a', '#ae2e24', '#579dff', '#c9372c'];
-    const movible = puedeMover && !['venta', 'sentada'].includes(normal(k.resultado));
+    const movible = jefe || (puedeMover && !['venta', 'sentada'].includes(normal(k.resultado)));
     const el = h('.tf-t' + (movible ? '' : '.fija'), {'data-id': k.id, 'data-movible': movible ? '1' : ''},
       h('.et', etiquetas(k, c).map(([n, col]) => h('i' + (osc.includes(col) ? '.osc' : ''), {estilo: {background: col}}, n))),
       h('b', c.direccion || 'Sin dirección'), h('.n', c.nombre || '', c.municipio ? ' · ' + c.municipio : ''),
@@ -169,7 +174,8 @@ export async function vistaTableroFichas({refrescar}) {
       suyas.sort((a, b) => String(a.fecha + ' ' + (a.hora_cita || '99')).localeCompare(String(b.fecha + ' ' + (b.hora_cita || '99'))));
       return h('section.tf-lista' + (col.hoy ? '.hoy' : '') + (col.finde ? '.finde' : '') + (col.clave === 'agendar' ? '.agendar' : ''), {'data-col': col.clave, 'data-fecha': col.fechas[0] || ''},
         h('header', col.titulo, col.sub ? h('small', col.sub) : null, h('span', String(suyas.length))),
-        h('.tf-tarjetas', suyas.map(tarjeta)));
+        h('.tf-tarjetas', suyas.map(tarjeta)),
+        puedeMover ? h('button.tf-anadir', {onclick: () => nuevaFicha(col.clave === 'agendar' ? '' : col.fechas[0])}, '＋ Añadir una ficha') : null);
     }));
   }
 
@@ -236,7 +242,7 @@ export async function vistaTableroFichas({refrescar}) {
   async function moverFicha(k, fecha, aAgendar) {
     const antes = {fecha: k.fecha, estado_cita: k.estado_cita};
     if (!aAgendar && String(k.fecha).slice(0, 10) === fecha && normal(k.estado_cita) !== 'recontactar') return;
-    if (['venta', 'sentada'].includes(normal(k.resultado))) return aviso('Esa visita ya se hizo: no se puede mover.', 'error');
+    if (!jefe && ['venta', 'sentada'].includes(normal(k.resultado))) return aviso('Esa visita ya se hizo: no se puede mover.', 'error');
     const datos = Object.assign({}, k, aAgendar ? {fecha: '', estado_cita: 'recontactar'} : {fecha, estado_cita: normal(k.estado_cita) === 'recontactar' ? 'pendiente' : k.estado_cita});
     delete datos._fila;
     Object.assign(k, {fecha: datos.fecha, estado_cita: datos.estado_cita}); pintaTablero();   // se ve al momento
@@ -248,31 +254,100 @@ export async function vistaTableroFichas({refrescar}) {
     } catch (e) { Object.assign(k, antes); pintaTablero(); avisoError(e); }
   }
 
-  /* ---------- detalle de la ficha ---------- */
+  /* ---------- detalle de la ficha: se edita todo, como en Trello ---------- */
   function abrir(k) {
     const c = api.cliente(k.cliente_id) || {};
-    const fecha = h('input', {type: 'date', value: String(k.fecha || '').slice(0, 10)});
-    const hora = h('input', {type: 'time', value: k.hora_cita || ''});
-    const fila = (et, v) => v ? h('div', {estilo: {display: 'flex', gap: '10px', padding: '5px 0', borderBottom: '1px solid #eef1ec', fontSize: '14px'}}, h('span', {estilo: {color: '#6b6f66', minWidth: '120px'}}, et), h('b', {estilo: {fontWeight: 600}}, v)) : null;
-    const {cerrar} = ventana({titulo: c.direccion || 'Ficha', ancha: true, cuerpo: h('div',
-      h('.tf-t.fija', {estilo: {boxShadow: 'none', padding: 0, cursor: 'default'}}, h('.et', etiquetas(k, c).map(([n, col]) => h('i', {estilo: {background: col, color: ['#0055cc', '#1f845a', '#ae2e24', '#579dff', '#c9372c'].includes(col) ? '#fff' : '#172b4d'}}, n)))),
-      fila('Cliente', c.nombre), fila('Teléfono', c.telefono ? h('a', {href: telHref(c.telefono)}, c.telefono) : ''), fila('Municipio', c.municipio),
-      fila('Cita', k.fecha ? fechaLarga(String(k.fecha).slice(0, 10)) + (k.hora_cita ? ' · ' + k.hora_cita : '') : 'Por agendar'),
-      fila('Captador', k.captador_id ? api.nombrePersona(k.captador_id) : ''), fila('Comercial', k.comercial_id ? api.nombrePersona(k.comercial_id) : ''),
-      fila('Tecnología', k.tecnologia), fila('Gasto luz', c.gasto_luz_mes ? c.gasto_luz_mes + ' €/mes' : ''), fila('Calefacción', c.gasto_combustible ? c.gasto_combustible + ' €' : ''),
-      fila('Estado de la cita', api.etiquetaCatalogo('estadosCita', k.estado_cita)), fila('Resultado', api.etiquetaCatalogo('resultadosCaptacion', k.resultado)),
-      k.notas ? h('p', {estilo: {whiteSpace: 'pre-wrap', background: '#f4f6f3', borderRadius: '10px', padding: '8px 10px', fontSize: '13px'}}, k.notas) : null,
-      puedeMover && !['venta', 'sentada'].includes(normal(k.resultado)) ? h('div', {estilo: {display: 'flex', gap: '8px', alignItems: 'end', marginTop: '12px', flexWrap: 'wrap'}},
-        h('label', {estilo: {display: 'grid', gap: '4px', fontSize: '13px', fontWeight: 700}}, 'Mover al día', fecha),
-        h('label', {estilo: {display: 'grid', gap: '4px', fontSize: '13px', fontWeight: 700}}, 'Hora', hora),
-        h('button.btn.primario', {onclick: async () => {
-          const datos = Object.assign({}, k, {fecha: fecha.value, hora_cita: hora.value, estado_cita: !fecha.value ? 'recontactar' : (normal(k.estado_cita) === 'recontactar' ? 'pendiente' : k.estado_cita)});
-          delete datos._fila;
-          try { const r = await conAutorizacion(p => api.guardarCaptacion(Object.assign({}, datos, p ? {pedir_autorizacion: true} : {})));
-            Object.assign(k, r && r.captacion ? r.captacion : datos); aviso('Cita guardada', 'ok'); cerrar(); pintaTablero(); if (refrescar) refrescar().then(() => pintaTablero()).catch(() => {}); }
-          catch (e) { avisoError(e); } }}, 'Guardar'),
-        h('button.btn', {onclick: () => { cerrar(); moverFicha(k, '', true); }}, 'Pasar a «Por agendar»')) : null),
-      acciones: [h('button.btn', {onclick: () => { cerrar(); location.hash = '#cliente/' + k.cliente_id; }}, 'Abrir la ficha completa')]});
+    const puedeEditar = jefe || (rol === 'captador' && String(k.captador_id) === String(yo.id)) || (rol === 'comercial' && String(k.comercial_id) === String(yo.id));
+    const ro = puedeEditar ? null : true;
+    const inp = (v, o = {}) => h('input', Object.assign({value: v == null ? '' : v, disabled: ro}, o));
+    const selc = (v, ops, o = {}) => h('select', Object.assign({disabled: ro}, o), ops.map(([a, b]) => h('option', {value: a, selected: String(a) === String(v || '') ? true : null}, b)));
+    const usuarios = api.estado.usuarios || [];
+    const F = {
+      direccion: inp(c.direccion), nombre: inp(c.nombre), telefono: inp(c.telefono, {type: 'tel'}), email: inp(c.email, {type: 'email'}),
+      municipio: inp(c.municipio), gasto_luz_mes: inp(c.gasto_luz_mes, {type: 'number', step: '1'}), gasto_combustible: inp(c.gasto_combustible, {type: 'number', step: '1'}),
+      calefaccion: inp(c.calefaccion), proxima_accion: inp(c.proxima_accion), proxima_fecha: inp(c.proxima_fecha, {type: 'date'}),
+      fecha: inp(String(k.fecha || '').slice(0, 10), {type: 'date'}), hora_cita: inp(k.hora_cita, {type: 'time'}),
+      estado_cita: selc(k.estado_cita, api.opciones('estadosCita').length ? api.opciones('estadosCita') : [['pendiente', 'Pendiente'], ['confirmada', 'Confirmada'], ['recontactar', 'Pendiente de reagendar']]),
+      resultado: selc(k.resultado || 'pendiente', api.opciones('resultadosCaptacion').length ? api.opciones('resultadosCaptacion') : [['pendiente', 'Pendiente']]),
+      tecnologia: selc(k.tecnologia, [['', '—'], ['FOTOVOLTAICA', 'Fotovoltaica'], ['AEROTERMIA', 'Aerotermia'], ['AEROTERMIA + FOTOVOLTAICA', 'Aerotermia + fotovoltaica']].concat(k.tecnologia && !['FOTOVOLTAICA', 'AEROTERMIA', 'AEROTERMIA + FOTOVOLTAICA'].includes(k.tecnologia) ? [[k.tecnologia, k.tecnologia]] : [])),
+      comercial_id: selc(k.comercial_id, [['', '— sin comercial —']].concat(usuarios.filter(u => ['comercial', 'admin', 'superadmin'].includes(normal(u.rol))).map(u => [u.id, u.nombre])), {disabled: jefe ? null : true}),
+      captador_id: selc(k.captador_id, [['', '— sin captador —']].concat(usuarios.filter(u => normal(u.rol) === 'captador').map(u => [u.id, u.nombre])), {disabled: jefe ? null : true}),
+      notas: h('textarea', {rows: 3, disabled: ro}, k.notas || '')
+    };
+    /* etiquetas rápidas, como pulsar una etiqueta en Trello */
+    const atajos = [
+      ['CONFIRMADA 📲', '#0055cc', () => { F.estado_cita.value = 'confirmada'; }],
+      ['REAGENDAR', '#b8acf6', () => { F.estado_cita.value = 'recontactar'; F.fecha.value = ''; }],
+      ['SENTADA', '#f5cd47', () => { F.resultado.value = 'sentada'; }],
+      ['POTENCIAL ♻️', '#9dd9ee', () => { F.resultado.value = 'potencial'; }],
+      ['VENTA', '#1f845a', () => { F.resultado.value = 'venta'; }],
+      ['CANCELADA', '#ae2e24', () => { F.resultado.value = 'cancelada'; }]
+    ];
+    const campo = (et, el, ancho) => h('label', {estilo: {display: 'grid', gap: '4px', fontSize: '12.5px', fontWeight: 700, color: '#44546f', gridColumn: ancho ? 'span ' + ancho : null}}, et, el);
+    const rejilla = (...x) => h('div', {estilo: {display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '10px', marginBottom: '12px'}}, ...x);
+    const titulo = (t) => h('h3', {estilo: {margin: '14px 0 8px', fontSize: '14px', display: 'flex', gap: '6px', alignItems: 'center'}}, t);
+    /* comentarios (seguimiento del cliente), como la actividad de una tarjeta de Trello */
+    const coment = h('textarea', {rows: 2, placeholder: 'Escribe un comentario…', estilo: {width: '100%'}});
+    const lista = h('div', {estilo: {display: 'grid', gap: '8px', maxHeight: '260px', overflowY: 'auto'}});
+    const pintaComentarios = () => poner(lista, (api.seguimientoDe(k.cliente_id) || []).slice(0, 30).map(sg => h('div', {estilo: {display: 'flex', gap: '8px'}},
+      h('span.av', {estilo: {width: '28px', height: '28px', borderRadius: '50%', background: colorDe(sg.usuario_id), color: '#fff', fontSize: '11px', fontWeight: 800, display: 'grid', placeItems: 'center', flex: 'none'}}, ini(sg.usuario_id)),
+      h('div', {estilo: {flex: 1, minWidth: 0}}, h('div', {estilo: {fontSize: '12px', color: '#626f86'}}, h('b', {estilo: {color: '#172b4d'}}, api.nombrePersona(sg.usuario_id)), ' · ' + String(sg.creado || sg.fecha || '').slice(0, 16).replace('T', ' ')),
+        h('div', {estilo: {background: '#fff', border: '1px solid #dfe1e6', borderRadius: '8px', padding: '6px 10px', fontSize: '13.5px', whiteSpace: 'pre-wrap'}}, sg.nota || sg.proximo_paso || ''))))
+      .concat((api.seguimientoDe(k.cliente_id) || []).length ? [] : [h('p.nota', 'Todavía no hay comentarios.')]));
+    pintaComentarios();
+
+    const guardar = async (b) => {
+      b.disabled = true;
+      try {
+        const cambiosCli = {};
+        ['direccion', 'nombre', 'telefono', 'email', 'municipio', 'gasto_luz_mes', 'gasto_combustible', 'calefaccion', 'proxima_accion', 'proxima_fecha'].forEach(x => {
+          if (String(F[x].value) !== String(c[x] == null ? '' : c[x])) cambiosCli[x] = F[x].value;
+        });
+        if (Object.keys(cambiosCli).length) {
+          const r = await api.guardarCliente(Object.assign({id: c.id}, cambiosCli));
+          if (r && r.cliente) Object.assign(c, r.cliente); else Object.assign(c, cambiosCli);
+          if (r && r.aviso_duplicado) aviso(r.aviso_duplicado, 'error');
+        }
+        const nueva = Object.assign({}, k);
+        delete nueva._fila;
+        ['fecha', 'hora_cita', 'estado_cita', 'resultado', 'tecnologia', 'notas'].forEach(x => { nueva[x] = F[x].value; });
+        if (jefe) { nueva.comercial_id = F.comercial_id.value; nueva.captador_id = F.captador_id.value; }
+        if (nueva.estado_cita === 'recontactar' && nueva.fecha) nueva.estado_cita = 'pendiente';
+        if (!nueva.fecha && nueva.estado_cita !== 'no_interesa') nueva.estado_cita = 'recontactar';
+        const cambiaCita = ['fecha', 'hora_cita', 'estado_cita', 'resultado', 'tecnologia', 'notas', 'comercial_id', 'captador_id'].some(x => String(nueva[x] || '') !== String(k[x] || ''));
+        if (cambiaCita) {
+          const r = await conAutorizacion(pd => api.guardarCaptacion(Object.assign({}, nueva, pd ? {pedir_autorizacion: true} : {})));
+          Object.assign(k, r && r.captacion ? r.captacion : nueva);
+        }
+        aviso(Object.keys(cambiosCli).length || cambiaCita ? 'Ficha guardada ✓' : 'No había cambios', 'ok');
+        cerrar(); pintaTablero(); if (refrescar) refrescar().then(() => pintaTablero()).catch(() => {});
+      } catch (e) { avisoError(e); b.disabled = false; }
+    };
+
+    const {cerrar} = ventana({titulo: '▥ ' + (c.direccion || 'Ficha') + (c.nombre ? ' · ' + c.nombre : ''), ancha: true, cuerpo: h('div',
+      h('.et', {estilo: {display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '8px'}}, etiquetas(k, c).map(([n, col]) => h('i', {estilo: {background: col, color: ['#0055cc', '#1f845a', '#ae2e24', '#579dff', '#c9372c'].includes(col) ? '#fff' : '#172b4d', fontStyle: 'normal', fontWeight: 700, fontSize: '11px', borderRadius: '4px', padding: '2px 8px'}}, n))),
+      puedeEditar ? h('div', {estilo: {display: 'flex', flexWrap: 'wrap', gap: '6px', margin: '4px 0 6px'}}, h('span', {estilo: {fontSize: '12px', color: '#626f86', alignSelf: 'center'}}, 'Etiquetas rápidas:'),
+        atajos.map(([n, col, fn]) => h('button', {type: 'button', onclick: fn, estilo: {background: col, color: ['#0055cc', '#1f845a', '#ae2e24'].includes(col) ? '#fff' : '#172b4d', border: 0, borderRadius: '4px', padding: '4px 10px', fontSize: '11.5px', fontWeight: 800, cursor: 'pointer'}}, n))) : h('p.nota', 'Solo lectura: esta ficha es de otra persona.'),
+      titulo('📅 La cita'), rejilla(campo('Fecha', F.fecha), campo('Hora', F.hora_cita), campo('Estado de la cita', F.estado_cita), campo('Resultado', F.resultado), campo('Tecnología', F.tecnologia), campo('Comercial', F.comercial_id), campo('Captador', F.captador_id)),
+      titulo('👤 El cliente'), rejilla(campo('Dirección', F.direccion, 2), campo('Nombre', F.nombre), campo('Teléfono', F.telefono), campo('Correo', F.email), campo('Municipio', F.municipio),
+        campo('Luz (€/mes)', F.gasto_luz_mes), campo('Calefacción', F.calefaccion), campo('Gasto calefacción (€)', F.gasto_combustible), campo('Próximo paso', F.proxima_accion, 2), campo('Fecha próximo paso', F.proxima_fecha)),
+      titulo('📝 Descripción (notas de la ficha)'), F.notas,
+      titulo('💬 Comentarios y actividad'),
+      puedeEditar ? h('div', {estilo: {display: 'flex', gap: '8px', alignItems: 'flex-start', marginBottom: '10px'}}, coment,
+        h('button.btn', {onclick: async ev => { const b = ev.currentTarget; if (!coment.value.trim()) return; b.disabled = true;
+          try { const r = await api.guardarSeguimiento({cliente_id: k.cliente_id, nota: coment.value.trim(), canal: 'nota', origen: 'tablero'});
+            if (r && r.seguimiento) (api.estado.seguimiento || []).unshift(r.seguimiento); coment.value = ''; pintaComentarios(); aviso('Comentario guardado', 'ok'); }
+          catch (e) { avisoError(e); } b.disabled = false; }}, 'Guardar')) : null,
+      lista),
+      acciones: [
+        h('button.btn', {onclick: () => { cerrar(); location.hash = '#cliente/' + k.cliente_id; }}, 'Abrir la ficha completa'),
+        k.telefono || c.telefono ? h('a.btn', {href: telHref(c.telefono)}, '📞 Llamar') : null,
+        puedeEditar ? h('button.btn.primario', {onclick: ev => guardar(ev.currentTarget)}, 'Guardar cambios') : null].filter(Boolean)});
+  }
+
+  /* ---------- añadir una ficha en un día (como «Añade una tarjeta» de Trello) ---------- */
+  function nuevaFicha(fecha) {
+    nuevaCaptacion(async () => { if (refrescar) await refrescar(); pintaTablero(); }, () => {}, {fecha, estado_cita: fecha ? 'pendiente' : 'recontactar'});
   }
 
   pinta();

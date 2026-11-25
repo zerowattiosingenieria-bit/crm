@@ -177,6 +177,11 @@ function gestoriaFacturas_(array $c, array $p): array {
 }
 
 function gestoriaArchivo_(array $c, array $p): array {
+  if (!empty($p['solo_anotar'])) {   /* el visor ya tiene el archivo: solo apuntamos que lo descargó */
+    $f = buscar1_('FACTURAS_DOC', fn($x) => mismo_($x['id'], $p['id'] ?? ''));
+    if ($f) gestoriaApuntar_($c, 'descarga', 'Descargó la factura ' . gestoriaDescFactura_($f), $f['id']);
+    return ['ok' => true];
+  }
   $r = accArchivoFacturaDoc_(gestoriaU_($c), ['id' => txt_($p['id'] ?? '')]);
   if (!empty($r['ok'])) {
     $f = buscar1_('FACTURAS_DOC', fn($x) => mismo_($x['id'], $p['id'] ?? ''));
