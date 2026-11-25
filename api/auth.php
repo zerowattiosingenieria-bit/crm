@@ -385,7 +385,8 @@ function permisos_(array $u): array {
   /* 23/11/2026: los captadores también, pero solo con las instalaciones de sus clientes. */
   $o['calfechas'] = in_array(txt_($u['id'] ?? ''), defined('CALFECHAS_USUARIOS') ? CALFECHAS_USUARIOS : [], true) || normal_($u['rol'] ?? '') === 'captador';
   $o['controlsub'] = in_array(txt_($u['id'] ?? ''), defined('CONTROL_SUB_USUARIOS') ? CONTROL_SUB_USUARIOS : [], true);
-  $o['vistagestoria'] = $o['controlsub'];
+  /* 25/11/2026 (Nando): «lo que ve la gestoría» solo lo ven Fernando, Nando, el superadmin y Rubén. */
+  $o['vistagestoria'] = in_array(txt_($u['id'] ?? ''), ['U-000001', 'U-000002', 'U-000003', 'U-000004'], true);
   /* 25/11/2026: Diario, Mayor y PyG, solo el superadmin. */
   $o['libros'] = txt_($u['id'] ?? '') === 'U-000001' || normal_($u['rol'] ?? '') === 'superadmin';
   $o['sinenviar'] = in_array(txt_($u['id'] ?? ''), defined('SIN_ENVIAR_USUARIOS') ? SIN_ENVIAR_USUARIOS : [], true);

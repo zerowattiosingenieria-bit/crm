@@ -401,7 +401,7 @@ function accActividadGestoria_(array $u, array $p): array {
  * Lo que se hace desde aquí no sale en el informe de la gestoría.
  */
 function accVistaGestoria_(array $u, array $p): array {
-  if (empty(permisos_($u)['vistagestoria'])) throw new Exception('Esta vista es solo para Nando, Fernando y el superadmin.');
+  if (empty(permisos_($u)['vistagestoria'])) throw new Exception('Esta vista es solo para Nando, Fernando, Rubén y el superadmin.');
   $sub = txt_($p['sub'] ?? '');
   $c = ['id' => txt_($u['id']), 'usuario' => txt_($u['usuario']), 'nombre' => txt_($u['nombre']), 'empresa' => 'Zero Wattios', 'tipo' => 'gestoria', '_interno' => true];
   if ($sub === 'portalInicio') return ['ok' => true, 'cuenta' => ['nombre' => txt_($u['nombre']), 'empresa' => 'la gestoría (vista de Zero Wattios)', 'usuario' => txt_($u['usuario'])]] + portalInicioGestoria_($c);
