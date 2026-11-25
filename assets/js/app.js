@@ -15,6 +15,7 @@ import {vistaKO} from './vistas/ko.js';
 import {vistaReagendar} from './vistas/reagendar.js';
 import {vistaSinEnviar} from './vistas/sinenviar.js';
 import {vistaControlSub} from './vistas/controlsub.js';
+import {vistaTableroFichas} from './vistas/tablerofichas.js';
 import {vistaVistaGestoria} from './vistas/vistagestoria.js';
 import {vistaTramites, veTramites} from './vistas/tramites.js';
 import {vistaSubcontratas, vistaCuentasPortal} from './vistas/subcontratas.js';
@@ -64,6 +65,7 @@ const VISTAS = {
   ko:           {titulo: 'Clientes KO',        pinta: vistaKO},
   reagendar:    {titulo: 'Por reagendar',      pinta: vistaReagendar},
   sinenviar:    {titulo: 'Proyectos sin enviar', pinta: vistaSinEnviar,  permiso: 'sinenviar'},
+  fichas:       {titulo: 'Tablero de fichas', pinta: vistaTableroFichas},
   controlsub:   {titulo: 'Control de subcontratas', pinta: vistaControlSub, permiso: 'controlsub'},
   vistagestoria:{titulo: 'Lo que ve la gestoría', pinta: vistaVistaGestoria, permiso: 'vistagestoria'},
   cliente:      {titulo: 'Ficha de cliente',   pinta: vistaCliente},
@@ -124,6 +126,7 @@ function menuDe(rol) {
       {grupo: 'Mis clientes'},
       {id: 'clientes', et: 'Mis clientes', ico: '☰'},
       {id: 'ko', et: 'Clientes KO', ico: '✕'},
+      {id: 'fichas', et: 'Tablero de fichas', ico: '▥'},
       {id: 'captaciones', et: 'Mis captaciones', ico: '⚑'},
       {id: 'reagendar', et: 'Por reagendar', ico: '↻'},
       {id: 'operaciones', et: 'Sus instalaciones', ico: '⚡'},
@@ -154,6 +157,7 @@ function menuDe(rol) {
       {id: 'clientes', et: 'Mis clientes', ico: '☰'},
       {id: 'ko', et: 'Clientes KO', ico: '✕'},
       {id: 'captaciones', et: 'Captaciones', ico: '⚑'},
+      {id: 'fichas', et: 'Tablero de fichas', ico: '▥'},
       {id: 'cotizador', et: 'Cotizador', ico: '€'},
       {id: 'visor', et: 'Visor 3D', ico: '⌂'},
       {id: 'directorio', et: 'Directorio', ico: '🗂'},
@@ -182,6 +186,7 @@ function menuDe(rol) {
     {id: 'visitas', et: 'Visitas de los comerciales', ico: '✔'},
     {id: 'sinenviar', et: 'Proyectos sin enviar', ico: '✉'},
     {id: 'captaciones', et: 'Captaciones', ico: '⚑'},
+    {id: 'fichas', et: 'Tablero de fichas', ico: '▥'},
     {id: 'reagendar', et: 'Por reagendar', ico: '↻'},
     {id: 'cotizador', et: 'Cotizador', ico: '€'},
     {id: 'visor', et: 'Visor 3D', ico: '⌂'},
@@ -228,9 +233,9 @@ function rutaActual() {
    abajo del menú y queda guardado en ese aparato. */
 const K_MENU = 'zw.crm.menuSimple';
 const MENU_CORTO = {
-  captador: ['inicio', 'agenda', 'captaciones', 'clientes', 'operaciones', 'calinstalaciones', 'parte', 'tramites', 'avisar', 'perfil'],
+  captador: ['inicio', 'agenda', 'fichas', 'captaciones', 'clientes', 'operaciones', 'calinstalaciones', 'parte', 'tramites', 'avisar', 'perfil'],
   comercial: ['inicio', 'agenda', 'visitas', 'sinenviar', 'controlsub', 'vistagestoria', 'clientes', 'visor', 'cotizador', 'operaciones', 'calinstalaciones', 'calfechas', 'parte', 'avisar', 'perfil'],
-  otro: ['inicio', 'tablero', 'incidencias', 'agenda', 'visitas', 'sinenviar', 'clientes', 'operaciones', 'calinstalaciones', 'calfechas', 'gantt', 'seguimiento', 'subcontratas', 'controlsub', 'tramites', 'captaciones', 'estadisticas', 'dinero', 'vistagestoria', 'perfil']
+  otro: ['inicio', 'tablero', 'incidencias', 'agenda', 'visitas', 'sinenviar', 'clientes', 'operaciones', 'calinstalaciones', 'calfechas', 'gantt', 'seguimiento', 'subcontratas', 'controlsub', 'tramites', 'captaciones', 'fichas', 'estadisticas', 'dinero', 'vistagestoria', 'perfil']
 };
 const menuCorto = () => { try { return localStorage.getItem(K_MENU) === '1'; } catch (e) { return false; } };
 
