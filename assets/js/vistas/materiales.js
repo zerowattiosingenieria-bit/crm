@@ -19,7 +19,7 @@ export async function vistaMateriales({ir}) {
   const est = {vista: 'pedir', texto: ''};
   const f = filtros([
     {id: 'vista', tipo: 'select', opciones: [['pedir', 'Por pedir (firmadas, en trámite, en instalación)'],
-      ['hechas', 'Ya instaladas: estimado frente a real'], ['todas', 'Todas las vendidas'], ['bajo', 'Margen por debajo del 35 % (propuestas y en curso)'], ['catalogo', 'Catálogo de costes']]},
+      ['hechas', 'Ya instaladas: estimado frente a real'], ['todas', 'Todas las vendidas'], ['bajo', 'Margen por debajo del 35 % (propuestas y en curso)'], ['aero', 'Aerotermia 16 kW: Domusa frente a SolaX'], ['catalogo', 'Catálogo de costes']]},
     {id: 'texto', et: 'Buscar por dirección o cliente…'}
   ], v => { Object.assign(est, v); pinta(); });
 
@@ -29,6 +29,7 @@ export async function vistaMateriales({ir}) {
       return poner(contenedor, tarjeta('Materiales y costes', h('.vacio', 'Aún no hay catálogo de costes cargado.')));
     }
     if (est.vista === 'catalogo') return poner(contenedor, vistaCatalogo(cat));
+    if (est.vista === 'aero') return poner(contenedor, vistaDomusaSolax(cat));
 
     const q = normal(est.texto);
     const estados = est.vista === 'pedir' ? ESTADOS_PEDIR : (est.vista === 'hechas' ? ESTADOS_HECHAS : (est.vista === 'bajo' ? ESTADOS_VIGILAR : ESTADOS_PEDIR.concat(ESTADOS_HECHAS)));
@@ -76,6 +77,34 @@ export async function vistaMateriales({ir}) {
       tarjeta('Materiales y costes por instalación', t, {sinRelleno: true,
         subtitulo: 'Pulsa una fila para ver la lista de piezas en la ficha del cliente. Coste real = facturas apuntadas; si no hay, el estimado.',
         acciones: [h('button.btn.mini', {onclick: () => t.exportar && t.exportar()}, 'Exportar CSV')]}));
+  }
+
+  /* 25/11/2026 (Nando): comparativa Domusa frente a SolaX de 16 kW, all in one y con depósitos separados.
+     Se calcula en vivo con el catálogo de costes (sin IVA) y se enseña con IVA; el PDF completo está en Drive. */
+  function vistaDomusaSolax(cat) {
+    const c = k => num((cat[k] || {}).coste);
+    const falta = [];
+    const suma = ks => ks.reduce((t, k) => { if (!cat[k]) falta.push(k); return t + c(k); }, 0);
+    const domComun = ['dom_desgasificador', 'dom_puesta_marcha'];
+    const esc = [
+      ['All in one · monofásica', ['aero_16', 'modulo_hidraulico_trio', ...domComun], ['aero_solax_stu1_c16', 'aero_solax_stn1_c03', 'inercia_100']],
+      ['All in one · trifásica', ['aero_16_htt', 'modulo_hidraulico_trio', ...domComun], ['aero_solax_stu3_c16', 'aero_solax_stn3_c03', 'inercia_100']],
+      ['Depósitos separados · monofásica', ['aero_16', 'acs_200', 'inercia_100', 'easy_connect', 'dom_soporte_display', ...domComun], ['aero_solax_stu1_c16', 'aero_solax_stn1_c02', 'acs_200', 'inercia_100']],
+      ['Depósitos separados · trifásica', ['aero_16_htt', 'acs_200', 'inercia_100', 'easy_connect', 'dom_soporte_display', ...domComun], ['aero_solax_stu3_c16', 'aero_solax_stn3_c02', 'acs_200', 'inercia_100']]
+    ];
+    const IVA = 1.21;
+    const filas = esc.map(([n, d, s2]) => { const a = suma(d) * IVA, b = suma(s2) * IVA; return {n, d: a, s: b, dif: b - a}; });
+    const url = txt((api.estado.config || {}).comparativa_aero_url);
+    return h('div', tarjeta('Aerotermia 16 kW: Domusa frente a SolaX', h('div',
+      h('p.nota', 'Coste del equipo completo (exterior, módulo o unidad interior, depósitos, accesorios de la marca y puesta en marcha), con IVA, calculado con el catálogo de costes actual. Kit hidráulico, termostato, mano de obra y legalización son iguales en las dos marcas.'),
+      h('table.tabla', h('thead', h('tr', h('th', 'Solución'), h('th.num', 'Domusa'), h('th.num', 'SolaX'), h('th.num', 'Diferencia SolaX'))),
+        h('tbody', filas.map(f => h('tr', h('td', f.n), h('td.num', eur(f.d)), h('td.num', eur(f.s)),
+          h('td.num', {estilo: {color: f.dif > 0 ? '#b3261e' : '#5e8c00', fontWeight: 600}}, (f.dif > 0 ? '+' : '−') + eur(Math.abs(f.dif))))))),
+      falta.length ? aviso('Faltan en el catálogo: ' + [...new Set(falta)].join(', ')) : null,
+      h('div', {estilo: {marginTop: '12px', padding: '10px 14px', background: '#f1fadf', borderLeft: '4px solid #5e8c00', borderRadius: '4px'}},
+        h('b', 'Recomendación de dirección (25/11/2026): Domusa por defecto.'), ' Es más barata en las cuatro soluciones, deja más margen, la exterior funciona sola, tiene SAT en Madrid y ya la conocemos. ',
+        h('b', 'SolaX solo como opción'), ' con radiadores que piden 55–65 °C y mucha demanda (mantiene 16 kW a 55 °C), clientes con fotovoltaica y baterías SolaX que quieren una sola app, o frío con fancoils. La SolaX lleva siempre depósito de inercia aparte. Antes de ofrecerla de forma habitual: descuento de SeisSolar (con un 7 % empata en all in one, con un 17 % en separados), garantía por escrito e instalación piloto.'),
+      url ? h('p', {estilo: {marginTop: '10px'}}, h('a', {href: url, target: '_blank', rel: 'noopener'}, '📄 Comparativa completa en PDF (costes, técnica y conclusiones)')) : null)));
   }
 
   function vistaCatalogo(cat) {

@@ -262,6 +262,7 @@ export async function vistaCotizador({id}) {
       chk(casilla(E.quiereAero, v => { E.quiereAero = v; }, 'cotaero'), 'Incluir aerotermia'),
       campo('Marca', (() => { const s = h('select#cotmarca', [['Domusa', 'Domusa'], ['SolaX', 'SolaX (Thermal R290 / Alture)']].map(([v, t]) => h('option', {value: v}, t))); s.value = E.marcaAero;
         s.addEventListener('change', () => { E.marcaAero = s.value; pinta(); }); return s; })()),
+      E.marcaAero === 'SolaX' ? h('p.nota', {estilo: {margin: '2px 0 6px'}}, 'Dirección recomienda Domusa por defecto; SolaX solo con radiadores a 55–65 °C y mucha demanda, cliente con FV y baterías SolaX o frío con fancoils. Lleva depósito de inercia aparte.') : null,
       E.marcaAero === 'SolaX' ? campo('Modelo SolaX', (() => { const s = h('select#cotsolaxaero', [h('option', {value: 'auto'}, 'Automático según potencia' + (c.aeroSx ? ' → ' + c.aeroSx.modelo : ''))]
           .concat(AERO_SOLAX.filter(a => a.serie === 'SolaX Alture' || a.tri === !!E.trifasico).map(a => h('option', {value: a.id}, a.n + (a.scop35 ? ' · SCOP ' + String(a.scop35).replace('.', ',') : ''))))); s.value = E.solaxAero;
         s.addEventListener('change', () => { E.solaxAero = s.value; pinta(); }); return s; })()) : null,
