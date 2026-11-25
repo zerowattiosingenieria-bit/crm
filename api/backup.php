@@ -1,6 +1,6 @@
 <?php
 /**
- * backup.php (= 12_Backup.gs) — Copia de seguridad semanal.
+ * backup.php (= 12_Backup.gs) — Copia de seguridad (diaria desde el 25/11/2026: cron.php → copiaDiaria_).
  *
  * Todos los viernes a las 19:15 se guarda una copia completa de la base
  * de datos en una carpeta del Drive de la empresa: un JSON con todas las
@@ -40,16 +40,22 @@ function copiaSeguridad(): array {
     if ($t === 'SESIONES') continue;                    // las sesiones no se guardan
     try { $volcado['tablas'][$t] = leer_($t); } catch (Throwable $e) { $volcado['tablas'][$t] = []; }
   }
-  $json = driveSubirTexto_($carpetaId, 'CRM_ZERO_WATTIOS_' . $sello . '.json', aJson_($volcado), 'application/json');
-  $salida['archivos'][] = ['nombre' => $json['nombre'] ?? ('CRM_ZERO_WATTIOS_' . $sello . '.json'), 'id' => $json['id'] ?? '', 'tipo' => 'json'];
+  /* comprimido: el JSON ya pasa de 20 MB y el servicio de Drive tiene tope de tamaño */
+  $json = driveSubir_($carpetaId, 'CRM_ZERO_WATTIOS_' . $sello . '.json.gz', base64_encode(gzencode(aJson_($volcado), 6)), 'application/gzip');
+  unset($volcado);
+  $salida['archivos'][] = ['nombre' => $json['nombre'] ?? ('CRM_ZERO_WATTIOS_' . $sello . '.json.gz'), 'id' => $json['id'] ?? '', 'tipo' => 'json'];
 
   /* 3. Fuera lo que pase de tres meses. */
   $limite = ahoraDT_();
   $limite->modify('-' . MESES_BACKUP . ' months');
   $borrados = 0;
+  /* Se quedan: todas las de los últimos 15 días y, de antes, una por semana (la del viernes) hasta 3 meses. */
+  $quince = ahoraDT_(); $quince->modify('-15 days');
   foreach (driveListar_($carpetaId) as $f) {
     $creado = instante_($f['creado'] ?? '');
-    if ($creado && $creado < $limite) { driveBorrar_((string)($f['id'] ?? '')); $borrados++; }
+    if (!$creado) continue;
+    $viernesTarde = $creado->format('N') === '5' && (int)$creado->format('H') >= 17;
+    if ($creado < $limite || ($creado < $quince && !$viernesTarde && strpos((string)($f['nombre'] ?? ''), 'MUDANZA') === false)) { driveBorrar_((string)($f['id'] ?? '')); $borrados++; }
   }
   $salida['borrados'] = $borrados;
 

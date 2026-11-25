@@ -7,7 +7,7 @@
  * tic llegue tarde.
  *
  *   resumenSemanal()        viernes 18:00
- *   copiaSeguridad()        viernes 19:15 (+ volcado .sql.gz a Drive)
+ *   copiaDiaria_()          todos los días 03:10 y 19:15 (volcado .sql.gz + JSON comprimido a Drive)
  *   avisoPuertasSemana('')  lunes 08:00
  *   recordatoriosCRM()      todos los días 13:30 y 19:30
  *   sincronizar con GitHub  cada tic (cada 5 min)
@@ -19,7 +19,9 @@ require_once __DIR__ . '/cargar.php';
 function tareasCron_(): array {
   return [
     ['resumen_semanal', [5], '18:00', fn() => resumenSemanal()],
-    ['copia_viernes',   [5], '19:15', fn() => copiaViernes_()],
+    /* 25/11/2026 (Nando: «todas las copias al día para poder restaurar desde local»): copia todos los días */
+    ['copia_diaria',    [1, 2, 3, 4, 5, 6, 7], '03:10', fn() => copiaDiaria_()],
+    ['copia_tarde',     [1, 2, 3, 4, 5, 6, 7], '19:15', fn() => copiaDiaria_()],
     ['aviso_puertas',   [1], '08:00', fn() => avisoPuertasSemana('')],
     ['record_1330',     [1, 2, 3, 4, 5, 6, 7], '13:30', fn() => recordatoriosCRM()],
     ['record_1930',     [1, 2, 3, 4, 5, 6, 7], '19:30', fn() => recordatoriosCRM()],
@@ -35,15 +37,32 @@ function autoCasarCron_(): array {
   return accAutoCasar_(['id' => 'U-000001', 'rol' => 'superadmin', 'nombre' => 'Tarea diaria'], []);
 }
 
-/** La copia de los viernes: el JSON de siempre y además el volcado SQL. */
-function copiaViernes_(): array {
-  $r = copiaSeguridad();
+/**
+ * La copia de seguridad (dos veces al día): primero el volcado SQL comprimido (lo que se usa para
+ * restaurar), después el JSON comprimido con todas las tablas. Si algo falla, correo a Nando.
+ * Se guardan en el Drive (BACKUP CRM ZERO WATTIOS), que se sincroniza con el ordenador de Nando.
+ */
+function copiaDiaria_(): array {
+  require_once __DIR__ . '/sql.php';
+  $r = ['fecha' => ahora_()];
+  $sello = ahoraDT_()->format('Y-m-d_H-i');
+  $errores = [];
   try {
-    require_once __DIR__ . '/sql.php';
-    $sello = ahoraDT_()->format('Y-m-d_H-i');
-    $a = driveSubir_(carpetaBackup_(), 'CRM_ZERO_WATTIOS_' . $sello . '.sql.gz', base64_encode(gzencode(volcadoSql_(), 6)), 'application/gzip');
-    $r['sql'] = $a['nombre'] ?? '';
-  } catch (Throwable $e) { $r['error_sql'] = $e->getMessage(); }
+    $tmp = tempnam(sys_get_temp_dir(), 'zwsql');
+    $gz = gzopen($tmp, 'wb6');
+    volcadoSqlA_(fn($trozo) => gzwrite($gz, $trozo));
+    gzclose($gz);
+    $a = driveSubir_(carpetaBackup_(), 'CRM_ZERO_WATTIOS_' . $sello . '.sql.gz', base64_encode(file_get_contents($tmp)), 'application/gzip');
+    $r['sql'] = ($a['nombre'] ?? '') . ' · ' . round(filesize($tmp) / 1048576, 1) . ' MB';
+    @unlink($tmp);
+  } catch (Throwable $e) { $errores[] = 'SQL: ' . $e->getMessage(); }
+  try { $r['json'] = copiaSeguridad(); } catch (Throwable $e) { $errores[] = 'JSON: ' . $e->getMessage(); }
+  if ($errores) {
+    $r['errores'] = $errores;
+    try { correo_(['to' => 'fernandogarcia@zerowattios.com', 'subject' => '⚠ CRM · la copia de seguridad ha fallado',
+      'body' => "La copia de seguridad del CRM de las " . substr(ahora_(), 11, 5) . " ha fallado:\n\n" . implode("\n", $errores) . "\n\nSe vuelve a intentar en la próxima copia (03:10 y 19:15)."]); } catch (Throwable $e) { /* nada */ }
+  }
+  setProp_('ULTIMA_COPIA', aJson_($r));
   return $r;
 }
 
