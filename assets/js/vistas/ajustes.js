@@ -206,7 +206,16 @@ export async function vistaAjustes({refrescar}) {
       ['precio_fv_18_20', 'FV 18-20 paneles (€)'], ['precio_fv_22_24', 'FV 22-24 paneles (€)'],
       ['precio_aero_12', 'Aerotermia 12 kW (€)'], ['precio_aero_16', 'Aerotermia 16 kW (€)'],
       ['precio_aero_19', 'Aerotermia 19 kW (€)'], ['precio_aero_22', 'Aerotermia 22 kW (€)'],
+      ['precio_aero_saunier_15', 'Saunier Duval Max ES 15 kW (€)'],
       ['precio_bateria_modulo', 'Módulo de batería 5,3 kWh (€)'], ['precio_cargador', 'Cargador (€)']]],
+    ['Tarifa 2027 (+4 %, se aplica sola desde el 1/1/2027; vacío = 10.390 / 11.490 / 12.490 / 13.590 · 16.690 / 17.690 / 18.790 / 19.790 · 21.890 · 2.690 · 1.950 · 1.050)', [
+      ['t27_precio_fv_10_12', 'FV 10-12 paneles (€)'], ['t27_precio_fv_14_16', 'FV 14-16 paneles (€)'],
+      ['t27_precio_fv_18_20', 'FV 18-20 paneles (€)'], ['t27_precio_fv_22_24', 'FV 22-24 paneles (€)'],
+      ['t27_precio_aero_12', 'Aerotermia 12 kW (€)'], ['t27_precio_aero_16', 'Aerotermia 16 kW (€)'],
+      ['t27_precio_aero_19', 'Aerotermia 19 kW (€)'], ['t27_precio_aero_22', 'Aerotermia 22 kW (€)'],
+      ['t27_precio_aero_saunier_15', 'Saunier Duval Max ES 15 kW (€)'],
+      ['t27_precio_bateria_modulo', 'Módulo de batería 5,3 kWh (€)'], ['t27_precio_cargador', 'Cargador (€)'],
+      ['t27_precio_suplemento', 'Suplemento de aerotermia (€)']]],
     ['El correo de los viernes', [
       ['resumen_semanal', '¿Se manda el resumen semanal? (si/no)'],
       ['resumen_a', 'Mandarlo todo a un solo correo (vacío = cada uno el suyo)'],

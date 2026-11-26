@@ -55,13 +55,20 @@ const AIO = [{id: 'aio190', n: 'All in One con ACS integrado 190 L', acs: 190}, 
 const PANELES = [{w: 625, n: 'Hanersun 625 W', m2: 2.70}, {w: 590, n: 'Risen 590 W bifacial', m2: 2.58}, {w: 500, n: 'Full Black 500 W', m2: 2.22}];
 
 /* ---------- tarifas (CONFIG) ---------- */
+/* Tarifa 2027 (26/11/2026, Nando): desde el 1 de enero de 2027 los precios suben un 4 % (redondeado a …90).
+   Se guardan aparte, con el prefijo t27_, para que diciembre siga con la tarifa de 2026. La Saunier Duval no sube (21.890 €). */
+const T27 = {precio_fv_10_12: 10390, precio_fv_14_16: 11490, precio_fv_18_20: 12490, precio_fv_22_24: 13590,
+  precio_aero_12: 16690, precio_aero_16: 17690, precio_aero_19: 18790, precio_aero_22: 19790,
+  precio_aero_saunier_15: 21890, precio_bateria_modulo: 2690, precio_cargador: 1950, precio_suplemento: 1050};
+export const tarifa2027 = () => new Date().toISOString().slice(0, 10) >= '2027-01-01';
+export const claveTarifa = k => (tarifa2027() && k in T27 ? 't27_' + k : k);
 function tarifas() {
   const c = api.estado.config || {};
-  const v = (k, d) => num(c[k]) || d;
+  const v = (k, d) => tarifa2027() && k in T27 ? (num(c['t27_' + k]) || T27[k]) : (num(c[k]) || d);
   return {
     fv: [[12, v('precio_fv_10_12', 9990)], [16, v('precio_fv_14_16', 10990)], [20, v('precio_fv_18_20', 11990)], [24, v('precio_fv_22_24', 12990)]],
     aero: {12: v('precio_aero_12', 15990), 16: v('precio_aero_16', 16990), 19: v('precio_aero_19', 17990), 22: v('precio_aero_22', 18990)},
-    saunier15: v('precio_aero_saunier_15', 21890), bateria: v('precio_bateria_modulo', 2570), cargador: v('precio_cargador', 1870), suplemento: 1000,
+    saunier15: v('precio_aero_saunier_15', 21890), bateria: v('precio_bateria_modulo', 2570), cargador: v('precio_cargador', 1870), suplemento: v('precio_suplemento', 1000),
     margenMin: v('margen_min_pct', 35) / 100, margenMax: v('margen_max_pct', 45) / 100
   };
 }
@@ -284,7 +291,7 @@ export async function vistaCotizador({id}) {
           s.addEventListener('change', () => { E.acs = +s.value; pinta(); }); return s; })()),
         campo('Depósito de inercia', (() => { const s = h('select#cotinercia', [0, 100, 150, 200].map(l => h('option', {value: l}, l ? l + ' L' : 'Sin inercia'))); s.value = E.inercia;
           s.addEventListener('change', () => { E.inercia = +s.value; pinta(); }); return s; })())),
-      h('p.nota', `Recomendado: ACS ${E.personas > 5 ? 300 : 200} L e inercia ${E.suelo || E.m2 > 400 ? 200 : 100} L. Por encima de 200/100 L se suma el suplemento de 1.000 € (2.000 € con ACS de 500 L) y el precio se recalcula.`),
+      h('p.nota', `Recomendado: ACS ${E.personas > 5 ? 300 : 200} L e inercia ${E.suelo || E.m2 > 400 ? 200 : 100} L. Por encima de 200/100 L se suma el suplemento de ${tarifa2027() ? '1.050 € (2.100 €' : '1.000 € (2.000 €'} con ACS de 500 L) y el precio se recalcula.`),
       chk(casilla(E.distancia, v => { E.distancia = v; }, 'cotdist'), 'Distancias largas (+1.000 €)'));
 
     const precioFinal = dir && E.margenObj !== null && c.mat && c.mat.base ? c.mat.base / (1 - E.margenObj) * IVA : c.pvp;
@@ -351,10 +358,10 @@ export async function vistaCotizador({id}) {
     // reparte el cambio entre los tramos de esta propuesta en proporción a su peso
     const cambios = {}, T = c.T, factorP = precioFinal / c.pvp;
     c.lineas.forEach(l => {
-      if (l.k === 'fv') cambios[claveFv(c.n)] = Math.round(precioFv(c.n, T) * factorP / 10) * 10;
-      if (l.k === 'aero') { if (E.marcaAero === 'Saunier') cambios.precio_aero_saunier_15 = Math.round(T.saunier15 * factorP / 10) * 10; else cambios['precio_aero_' + E.aero] = Math.round(T.aero[E.aero] * factorP / 10) * 10; }
-      if (l.k === 'bat') cambios.precio_bateria_modulo = Math.round(T.bateria * factorP / 10) * 10;
-      if (l.k === 'carg') cambios.precio_cargador = Math.round(T.cargador * factorP / 10) * 10;
+      if (l.k === 'fv') cambios[claveTarifa(claveFv(c.n))] = Math.round(precioFv(c.n, T) * factorP / 10) * 10;
+      if (l.k === 'aero') { if (E.marcaAero === 'Saunier') cambios[claveTarifa('precio_aero_saunier_15')] = Math.round(T.saunier15 * factorP / 10) * 10; else cambios[claveTarifa('precio_aero_' + E.aero)] = Math.round(T.aero[E.aero] * factorP / 10) * 10; }
+      if (l.k === 'bat') cambios[claveTarifa('precio_bateria_modulo')] = Math.round(T.bateria * factorP / 10) * 10;
+      if (l.k === 'carg') cambios[claveTarifa('precio_cargador')] = Math.round(T.cargador * factorP / 10) * 10;
     });
     const texto = Object.entries(cambios).map(([k, v]) => `${k.replace('precio_', '').replace(/_/g, ' ')}: ${eur(v)}`).join(' · ');
     const {confirmar} = await import('../ui.js');
