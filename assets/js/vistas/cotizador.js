@@ -61,7 +61,7 @@ function tarifas() {
   return {
     fv: [[12, v('precio_fv_10_12', 9990)], [16, v('precio_fv_14_16', 10990)], [20, v('precio_fv_18_20', 11990)], [24, v('precio_fv_22_24', 12990)]],
     aero: {12: v('precio_aero_12', 15990), 16: v('precio_aero_16', 16990), 19: v('precio_aero_19', 17990), 22: v('precio_aero_22', 18990)},
-    bateria: v('precio_bateria_modulo', 2570), cargador: v('precio_cargador', 1870), suplemento: 1000,
+    saunier15: v('precio_aero_saunier_15', 21890), bateria: v('precio_bateria_modulo', 2570), cargador: v('precio_cargador', 1870), suplemento: 1000,
     margenMin: v('margen_min_pct', 35) / 100, margenMax: v('margen_max_pct', 45) / 100
   };
 }
@@ -206,6 +206,11 @@ export async function vistaCotizador({id}) {
       lineas.push({k: 'aero', concepto: `${aeroSx.modelo} · ACS ${E.acs} L · ${E.inercia ? 'inercia ' + E.inercia + ' L' : 'sin inercia'}`, precio: T.aero[kwTarifaAero(aeroSx.kw * aeroSx.unidades)]});
       if (E.acs > 200 || E.inercia > 100) lineas.push({k: 'sup1', concepto: `Suplemento depósitos mayores (ACS ${E.acs} L / inercia ${E.inercia} L)`, precio: T.suplemento * (E.acs >= 500 ? 2 : 1)});
       if (E.distancia) lineas.push({k: 'sup2', concepto: 'Suplemento distancias (caldera / unidad exterior)', precio: T.suplemento});
+    } else if (E.quiereAero && E.marcaAero === 'Saunier') {
+      /* 26/11/2026, Nando: Saunier Duval Max ES 15 kW (230 V) a 21.890 € con IVA, con ACS 200 L e inercia 100 L. */
+      lineas.push({k: 'aero', concepto: `Saunier Duval Max ES 15 kW (monofásica) · ACS ${E.acs} L · ${E.inercia ? 'inercia ' + E.inercia + ' L' : 'sin inercia'}`, precio: T.saunier15});
+      if (E.acs > 200 || E.inercia > 100) lineas.push({k: 'sup1', concepto: `Suplemento depósitos mayores (ACS ${E.acs} L / inercia ${E.inercia} L)`, precio: T.suplemento * (E.acs >= 500 ? 2 : 1)});
+      if (E.distancia) lineas.push({k: 'sup2', concepto: 'Suplemento distancias (caldera / unidad exterior)', precio: T.suplemento});
     } else if (E.quiereAero) {
       const maq = MAQUINAS.find(m => m.id === E.maquina), aio = E.maquina === 'aio' ? AIO.find(a => a.id === E.aio) : null;
       lineas.push({k: 'aero', concepto: `${maq.n} ${E.aero} kW · ${aio ? aio.n : 'ACS ' + E.acs + ' L'} · ${E.inercia ? 'inercia ' + E.inercia + ' L' : 'sin inercia'}`, precio: T.aero[E.aero]});
@@ -216,9 +221,9 @@ export async function vistaCotizador({id}) {
     // operación "de mentira" para el catálogo de costes (mismas reglas que Materiales y costes)
     const op = {tipo: n && E.quiereAero ? 'fv_aero' : n ? 'fv' : E.quiereAero ? 'aero' : '', paneles_num: n, panel_wp: pan.w,
       inversor_modelo: inv ? (inv.cat ? inv.cat.n : inv.n) : '', inversor_kw: inv ? inv.kw : 0, bateria_kwh: kwhBat, bateria_modelo: E.baterias ? bat.n : '',
-      cargador_modelo: E.cargador ? (CARGADORES.find(x => x.id === E.modCargador) || CARGADORES[0]).n.replace('X3-HAC', 'X3 HAC') : '', aero_kw: E.quiereAero ? (aeroSx ? aeroSx.kw * aeroSx.unidades : E.aero) : 0,
-      aero_modelo: aeroSx ? aeroSx.modelo : E.quiereAero ? 'Domusa ' + (E.maquina === 'aio' ? 'Fusion all in one ' : E.maquina === 'htt' ? 'HTT ' : E.maquina === 'ecpro' ? 'EC PRO ' : 'HT ') + E.aero : '',
-      deposito_acs: E.quiereAero && E.maquina !== 'aio' ? E.acs : 0, deposito_inercia: E.quiereAero ? E.inercia : 0, tejado: ''};
+      cargador_modelo: E.cargador ? (CARGADORES.find(x => x.id === E.modCargador) || CARGADORES[0]).n.replace('X3-HAC', 'X3 HAC') : '', aero_kw: E.quiereAero ? (aeroSx ? aeroSx.kw * aeroSx.unidades : E.marcaAero === 'Saunier' ? 15 : E.aero) : 0,
+      aero_modelo: aeroSx ? aeroSx.modelo : E.quiereAero && E.marcaAero === 'Saunier' ? 'Saunier Duval Max ES 15' : E.quiereAero ? 'Domusa ' + (E.maquina === 'aio' ? 'Fusion all in one ' : E.maquina === 'htt' ? 'HTT ' : E.maquina === 'ecpro' ? 'EC PRO ' : 'HT ') + E.aero : '',
+      deposito_acs: E.quiereAero && (E.marcaAero !== 'Domusa' || E.maquina !== 'aio') ? E.acs : 0, deposito_inercia: E.quiereAero ? E.inercia : 0, tejado: ''};
     const mat = dir ? materialesDe(op, cat) : null;
     // ayudas y ahorro orientativos
     const kwh = kwp * 1650 * factor(30, E.techo ? E.techo.az : 0);
@@ -260,21 +265,22 @@ export async function vistaCotizador({id}) {
         s.addEventListener('change', () => { E.modCargador = s.value; if (s.value !== 'hac7') E.trifasico = true; pinta(); }); return s; })()) : null,
       h('h4', 'Aerotermia'),
       chk(casilla(E.quiereAero, v => { E.quiereAero = v; }, 'cotaero'), 'Incluir aerotermia'),
-      campo('Marca', (() => { const s = h('select#cotmarca', [['Domusa', 'Domusa'], ['SolaX', 'SolaX (Thermal R290 / Alture)']].map(([v, t]) => h('option', {value: v}, t))); s.value = E.marcaAero;
-        s.addEventListener('change', () => { E.marcaAero = s.value; pinta(); }); return s; })()),
+      campo('Marca', (() => { const s = h('select#cotmarca', [['Domusa', 'Domusa'], ['SolaX', 'SolaX (Thermal R290 / Alture)'], ['Saunier', 'Saunier Duval (Max ES 15 kW)']].map(([v, t]) => h('option', {value: v}, t))); s.value = E.marcaAero;
+        s.addEventListener('change', () => { E.marcaAero = s.value; if (s.value === 'Saunier') E.trifasico = false; pinta(); }); return s; })()),
+      E.marcaAero === 'Saunier' ? h('p.nota', {estilo: {margin: '2px 0 6px'}}, 'Opción premium: Saunier Duval Max ES 15 kW, solo monofásica (230 V). Dirección recomienda Domusa por defecto.') : null,
       E.marcaAero === 'SolaX' ? h('p.nota', {estilo: {margin: '2px 0 6px'}}, 'Dirección recomienda Domusa por defecto; SolaX solo con radiadores a 55–65 °C y mucha demanda, cliente con FV y baterías SolaX o frío con fancoils. Lleva depósito de inercia aparte.') : null,
       E.marcaAero === 'SolaX' ? campo('Modelo SolaX', (() => { const s = h('select#cotsolaxaero', [h('option', {value: 'auto'}, 'Automático según potencia' + (c.aeroSx ? ' → ' + c.aeroSx.modelo : ''))]
           .concat(AERO_SOLAX.filter(a => a.serie === 'SolaX Alture' || a.tri === !!E.trifasico).map(a => h('option', {value: a.id}, a.n + (a.scop35 ? ' · SCOP ' + String(a.scop35).replace('.', ',') : ''))))); s.value = E.solaxAero;
         s.addEventListener('change', () => { E.solaxAero = s.value; pinta(); }); return s; })()) : null,
-      E.marcaAero === 'SolaX' ? null : campo('Máquina', (() => { const s = h('select#cotmaq', MAQUINAS.map(m => h('option', {value: m.id}, m.n))); s.value = E.maquina;
+      E.marcaAero === 'SolaX' || E.marcaAero === 'Saunier' ? null : campo('Máquina', (() => { const s = h('select#cotmaq', MAQUINAS.map(m => h('option', {value: m.id}, m.n))); s.value = E.maquina;
         s.addEventListener('change', () => { E.maquina = s.value; if (s.value === 'htt') E.trifasico = true; pinta(); }); return s; })()),
-      E.marcaAero !== 'SolaX' && E.maquina === 'aio' ? campo('Modelo All in One', (() => { const s = h('select#cotaio', AIO.map(a => h('option', {value: a.id}, a.n))); s.value = E.aio;
+      E.marcaAero === 'Domusa' && E.maquina === 'aio' ? campo('Modelo All in One', (() => { const s = h('select#cotaio', AIO.map(a => h('option', {value: a.id}, a.n))); s.value = E.aio;
         s.addEventListener('change', () => { E.aio = s.value; pinta(); }); return s; })()) : null,
-      campo(E.marcaAero === 'SolaX' ? 'Potencia que pide la casa' : 'Potencia', (() => { const s = h('select#cotkw', [12, 16, 19, 22].map(k => h('option', {value: k}, k + ' kW' + (k === 22 ? ' (solo trifásica)' : ''))));
+      E.marcaAero === 'Saunier' ? null : campo(E.marcaAero === 'SolaX' ? 'Potencia que pide la casa' : 'Potencia', (() => { const s = h('select#cotkw', [12, 16, 19, 22].map(k => h('option', {value: k}, k + ' kW' + (k === 22 ? ' (solo trifásica)' : ''))));
         s.value = E.aero; s.addEventListener('change', () => { E.aero = +s.value; if (E.aero === 22) E.trifasico = true; pinta(); }); return s; })()),
       h('.cot-fila',
         campo('Depósito ACS', (() => { const s = h('select#cotacs', [150, 200, 300, 500].map(l => h('option', {value: l}, l + ' L'))); s.value = E.acs;
-          if (E.maquina === 'aio') { s.disabled = true; s.title = 'Integrado en el All in One'; }
+          if (E.marcaAero === 'Domusa' && E.maquina === 'aio') { s.disabled = true; s.title = 'Integrado en el All in One'; }
           s.addEventListener('change', () => { E.acs = +s.value; pinta(); }); return s; })()),
         campo('Depósito de inercia', (() => { const s = h('select#cotinercia', [0, 100, 150, 200].map(l => h('option', {value: l}, l ? l + ' L' : 'Sin inercia'))); s.value = E.inercia;
           s.addEventListener('change', () => { E.inercia = +s.value; pinta(); }); return s; })())),
@@ -346,7 +352,7 @@ export async function vistaCotizador({id}) {
     const cambios = {}, T = c.T, factorP = precioFinal / c.pvp;
     c.lineas.forEach(l => {
       if (l.k === 'fv') cambios[claveFv(c.n)] = Math.round(precioFv(c.n, T) * factorP / 10) * 10;
-      if (l.k === 'aero') cambios['precio_aero_' + E.aero] = Math.round(T.aero[E.aero] * factorP / 10) * 10;
+      if (l.k === 'aero') { if (E.marcaAero === 'Saunier') cambios.precio_aero_saunier_15 = Math.round(T.saunier15 * factorP / 10) * 10; else cambios['precio_aero_' + E.aero] = Math.round(T.aero[E.aero] * factorP / 10) * 10; }
       if (l.k === 'bat') cambios.precio_bateria_modulo = Math.round(T.bateria * factorP / 10) * 10;
       if (l.k === 'carg') cambios.precio_cargador = Math.round(T.cargador * factorP / 10) * 10;
     });
