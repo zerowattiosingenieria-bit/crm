@@ -75,7 +75,8 @@ function calleYNumero_($dir): array {
 /* Palabras que no distinguen una calle de otra («Valle del Moro» y «Valle de Nuria»). */
 const CALLE_GENERICAS = ['valle', 'playa', 'castillo', 'rio', 'cabo', 'monte', 'santa', 'santo', 'san', 'ronda', 'travesia',
   'parque', 'real', 'mayor', 'nueva', 'nuevo', 'calle', 'avenida', 'camino', 'paseo', 'plaza', 'madrid', 'boadilla', 'rozas',
-  'villaviciosa', 'odon', 'pozuelo', 'alarcon', 'torrelodones', 'majadahonda', 'preparar', 'informe', 'chalet', 'portal', 'bajo'];
+  'villaviciosa', 'odon', 'pozuelo', 'alarcon', 'torrelodones', 'majadahonda', 'preparar', 'informe', 'chalet', 'portal', 'bajo',
+  'numero', 'num', 'nro', 'piso', 'puerta', 'casa', 'esquina', 'cerca'];
 
 function palabrasCalle_($dir): array {
   [$pal] = calleYNumero_($dir);
