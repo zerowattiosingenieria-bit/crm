@@ -100,8 +100,11 @@ function accGuardarFacturaDoc_(array $u, array $p): array {
   foreach ($campos as $c) if (array_key_exists($c, $d)) $f[$c] = is_array($d[$c]) ? json_encode($d[$c], JSON_UNESCAPED_UNICODE) : $d[$c];
 
   /* comprobaciones */
-  $tipo = normal_($f['tipo'] ?? 'recibida') === 'emitida' ? 'emitida' : 'recibida';
-  $f['tipo'] = $tipo;
+  /* Al editar una factura sin mandar el tipo se conserva el que tiene (antes se volvía «recibida»). */
+  if (txt_($d['id'] ?? '') === '' || array_key_exists('tipo', $f)) {
+    $tipo = normal_($f['tipo'] ?? 'recibida') === 'emitida' ? 'emitida' : 'recibida';
+    $f['tipo'] = $tipo;
+  }
   if (isset($f['categoria']) && txt_($f['categoria']) !== '' && !in_array(txt_($f['categoria']), CATEGORIAS_DOC, true)) $f['categoria'] = 'otro';
   if (txt_($f['cliente_id'] ?? '') !== '' && !buscar1_('CLIENTES', fn($c) => mismo_($c['id'], $f['cliente_id']))) {
     return ['ok' => false, 'error' => 'Ese cliente no existe.'];
