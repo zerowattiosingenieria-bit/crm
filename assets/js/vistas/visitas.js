@@ -244,6 +244,8 @@ export async function vistaVisitas({ir}) {
             h('a.vis-nombre', {href: '#cliente/' + encodeURIComponent(c.id), onclick: e => { e.preventDefault(); irFicha(); }}, c.nombre || 'Sin nombre'),
             h('a.vis-dir', {href: '#cliente/' + encodeURIComponent(c.id), onclick: e => { e.preventDefault(); irFicha(); }},
               [c.direccion, c.municipio].filter(Boolean).join(' · ') || 'Sin dirección'),
+            /* 28/11/2026: el email del cliente, visible para todos (Nando). */
+            c.email ? h('a.vis-dir', {href: 'mailto:' + c.email, title: 'Escribirle un correo'}, '✉ ' + c.email) : null,
             h('div.vis-tecs', tecnologias(v.tecnologia),
               direccion ? h('span.vis-com', api.nombrePersona(v.comercial_id)) : null)),
           c.telefono ? h('div.vis-contacto',

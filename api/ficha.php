@@ -72,16 +72,37 @@ function calleYNumero_($dir): array {
   return [$pal, $num];
 }
 
-/** ¿Dos direcciones pueden ser la misma casa? (una calle contenida en la otra y el número igual o falta en una). */
-function callesParecidas_($dirA, $munA, $dirB, $munB): bool {
-  [$pa, $na] = calleYNumero_($dirA); [$pb, $nb] = calleYNumero_($dirB);
-  if (!$pa || !$pb) return false;
-  if ($na !== '' && $nb !== '' && $na !== $nb) return false;
+/* Palabras que no distinguen una calle de otra («Valle del Moro» y «Valle de Nuria»). */
+const CALLE_GENERICAS = ['valle', 'playa', 'castillo', 'rio', 'cabo', 'monte', 'santa', 'santo', 'san', 'ronda', 'travesia',
+  'parque', 'real', 'mayor', 'nueva', 'nuevo', 'calle', 'avenida', 'camino', 'paseo', 'plaza', 'madrid', 'boadilla', 'rozas',
+  'villaviciosa', 'odon', 'pozuelo', 'alarcon', 'torrelodones', 'majadahonda', 'preparar', 'informe', 'chalet', 'portal', 'bajo'];
+
+function palabrasCalle_($dir): array {
+  [$pal] = calleYNumero_($dir);
+  return array_values(array_unique(array_filter($pal, fn($w) => strlen($w) >= 4 && !in_array($w, CALLE_GENERICAS, true))));
+}
+
+/** Primera palabra del nombre que sirve para comparar («MARIO - Valle…» → «mario»). */
+function nombreClave_($n): string {
+  foreach (preg_split('/[^a-z]+/', normal_($n)) as $w) {
+    if (strlen($w) >= 3 && !in_array($w, ['sin', 'nombre', 'pendiente', 'calle', 'sr', 'sra', 'don', 'dona', 'cliente', 'comunidad'], true)) return $w;
+  }
+  return '';
+}
+
+/**
+ * ¿Dos fichas pueden ser la misma casa? Comparten una palabra propia de la
+ * calle y: el mismo número, o a una le falta el número y el nombre coincide.
+ */
+function callesParecidas_(array $a, array $b): bool {
+  if (!mismoMunicipio_($a['municipio'] ?? '', $b['municipio'] ?? '')) return false;
+  $comun = array_intersect(palabrasCalle_($a['direccion'] ?? ''), palabrasCalle_($b['direccion'] ?? ''));
+  if (!$comun || max(array_map('strlen', $comun)) < 5) return false;
+  [, $na] = calleYNumero_($a['direccion'] ?? ''); [, $nb] = calleYNumero_($b['direccion'] ?? '');
+  if ($na !== '' && $nb !== '') return $na === $nb;
   if ($na === '' && $nb === '') return false;
-  [$corta, $larga] = count($pa) <= count($pb) ? [$pa, $pb] : [$pb, $pa];
-  if (array_diff($corta, $larga)) return false;
-  if (max(array_map('strlen', $corta)) < 5) return false;
-  return mismoMunicipio_($munA, $munB);
+  $x = nombreClave_($a['nombre'] ?? ''); $y = nombreClave_($b['nombre'] ?? '');
+  return $x !== '' && $x === $y;
 }
 
 /** El cliente que ya existe con ese teléfono o esa dirección (o null). 'posible' => true si solo se parece. */
@@ -108,7 +129,7 @@ function buscarDuplicado_(array $d, $salvoId = null, ?array $todos = null): ?arr
   }
   if (txt_($d['direccion'] ?? '') !== '') foreach ($lista as $k) {
     if ($otro($k) || txt_($k['direccion'] ?? '') === '') continue;
-    if (callesParecidas_($d['direccion'], $d['municipio'] ?? '', $k['direccion'], $k['municipio'] ?? '')) return ['cliente' => $k, 'por' => 'calle parecida', 'posible' => true];
+    if (callesParecidas_($d, $k)) return ['cliente' => $k, 'por' => 'calle parecida', 'posible' => true];
   }
   return null;
 }
@@ -174,18 +195,16 @@ function accDuplicados_(array $u, array $p): array {
   $porPalabra = [];
   foreach ($C as $c) {
     if (txt_($c['direccion'] ?? '') === '') continue;
-    [$pal] = calleYNumero_($c['direccion']);
-    if (!$pal) continue;
-    usort($pal, fn($a, $b) => strlen($b) - strlen($a));
-    $porPalabra[$pal[0]][] = $c;
+    foreach (palabrasCalle_($c['direccion']) as $w) if (strlen($w) >= 5) $porPalabra[$w][] = $c;
   }
   foreach ($porPalabra as $w => $gr) {
     $n = count($gr);
     if ($n < 2 || $n > 60) continue;
     for ($i = 0; $i < $n; $i++) for ($j = $i + 1; $j < $n; $j++) {
       $a = $gr[$i]; $b = $gr[$j];
+      if (mismo_($a['id'], $b['id'])) continue;
       if (direccionClave_($a['direccion']) !== '' && direccionClave_($a['direccion']) === direccionClave_($b['direccion'])) continue;
-      if (callesParecidas_($a['direccion'], $a['municipio'] ?? '', $b['direccion'], $b['municipio'] ?? '')) {
+      if (callesParecidas_($a, $b)) {
         $ids = [txt_($a['id']), txt_($b['id'])]; sort($ids, SORT_STRING);
         $grupos['calle parecida (revisar)|' . implode('+', $ids)] = [$a, $b];
       }

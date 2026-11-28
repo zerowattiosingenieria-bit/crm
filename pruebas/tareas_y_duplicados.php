@@ -20,9 +20,9 @@ $ok('Pintor Goya 71 no', !tareaDeCliente_(['cliente_id' => '', 'titulo' => 'Pint
 $ok('Valle de/del Pinar', tareaDeCliente_(['cliente_id' => '', 'titulo' => 'Llamar al cliente · Valle de Pinar 3'], ['id' => 'C-3', 'direccion' => 'VALLE DEL PINAR, 3']));
 
 echo "== Fichas repetidas ==\n";
-$L = [['id' => 'C-900001', 'nombre' => 'CLIENTE A', 'telefono' => '', 'direccion' => 'VALLE DEL PINAR, 3', 'municipio' => 'Pueblo Uno', 'otros' => '', 'proxima_accion' => ''],
+$L = [['id' => 'C-900001', 'nombre' => 'JUAN - casa', 'telefono' => '', 'direccion' => 'VALLE DEL PINAR, 3', 'municipio' => 'Pueblo Uno', 'otros' => '', 'proxima_accion' => ''],
       ['id' => 'C-900002', 'nombre' => 'Cliente B', 'telefono' => '600000002', 'direccion' => 'C. Camino Ancho 42', 'municipio' => 'Pueblo Dos', 'otros' => '', 'proxima_accion' => '']];
-$d = buscarDuplicado_(['nombre' => 'Cliente Teléfono: 600000001', 'telefono' => '', 'direccion' => 'Calle Pinar (Pueblo Uno)', 'municipio' => 'Pueblo Uno'], null, $L);
+$d = buscarDuplicado_(['nombre' => 'Juan Teléfono: 600000001', 'telefono' => '', 'direccion' => 'Calle Pinar (Pueblo Uno)', 'municipio' => 'Pueblo Uno'], null, $L);
 $ok('calle sin número = posible duplicado', ($d['cliente']['id'] ?? '') === 'C-900001' && !empty($d['posible']));
 $d = buscarDuplicado_(['nombre' => 'x', 'telefono' => '', 'direccion' => 'Camino Ancho, 42', 'municipio' => 'Pueblo Dos de Madrid'], null, $L);
 $ok('municipio escrito distinto sigue siendo la misma casa', ($d['por'] ?? '') === 'dirección');

@@ -96,7 +96,7 @@ function filaVisita_(array $cap, array $cli, array $proys, array $segs, array $a
     'tecnologia' => txt_($cap['tecnologia']), 'estado_cita' => txt_($cap['estado_cita']),
     'resultado' => $res, 'comercial_id' => txt_($cap['comercial_id']), 'captador_id' => txt_($cap['captador_id']),
     'cliente' => ['id' => $cli['id'], 'nombre' => txt_($cli['nombre']), 'direccion' => txt_($cli['direccion']),
-                  'municipio' => txt_($cli['municipio']), 'telefono' => txt_($cli['telefono']), 'estado' => txt_($cli['estado'])],
+                  'municipio' => txt_($cli['municipio']), 'telefono' => txt_($cli['telefono']), 'email' => txt_($cli['email'] ?? ''), 'estado' => txt_($cli['estado'])],
     /* sentada: true / false (no llegó) / null (sin marcar) */
     'sentada' => in_array($res, ['sentada', 'venta', 'potencial'], true) ? true : (in_array($res, ['no_sentada', 'cancelada'], true) ? false : null),
     'proyecto_estado' => $estP,
