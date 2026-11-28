@@ -208,7 +208,7 @@ export async function vistaAjustes({refrescar}) {
       ['precio_aero_19', 'Aerotermia 19 kW (€)'], ['precio_aero_22', 'Aerotermia 22 kW (€)'],
       ['precio_aero_saunier_15', 'Saunier Duval Max ES 15 kW (€)'],
       ['precio_bateria_modulo', 'Módulo de batería 5,3 kWh (€)'], ['precio_cargador', 'Cargador (€)']]],
-    ['Tarifa 2027 (+4 %, se aplica sola desde el 1/1/2027; vacío = 10.390 / 11.490 / 12.490 / 13.590 · 16.690 / 17.690 / 18.790 / 19.790 · 21.890 · 2.690 · 1.950 · 1.050)', [
+    ['Tarifa 2027 (+4 %, en vigor desde el 28/11/2026; vacío = 10.390 / 11.490 / 12.490 / 13.590 · 16.690 / 17.690 / 18.790 / 19.790 · 21.890 · 2.690 · 1.950 · 1.050)', [
       ['t27_precio_fv_10_12', 'FV 10-12 paneles (€)'], ['t27_precio_fv_14_16', 'FV 14-16 paneles (€)'],
       ['t27_precio_fv_18_20', 'FV 18-20 paneles (€)'], ['t27_precio_fv_22_24', 'FV 22-24 paneles (€)'],
       ['t27_precio_aero_12', 'Aerotermia 12 kW (€)'], ['t27_precio_aero_16', 'Aerotermia 16 kW (€)'],

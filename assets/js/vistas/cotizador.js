@@ -60,7 +60,7 @@ const PANELES = [{w: 625, n: 'Hanersun 625 W', m2: 2.70}, {w: 590, n: 'Risen 590
 const T27 = {precio_fv_10_12: 10390, precio_fv_14_16: 11490, precio_fv_18_20: 12490, precio_fv_22_24: 13590,
   precio_aero_12: 16690, precio_aero_16: 17690, precio_aero_19: 18790, precio_aero_22: 19790,
   precio_aero_saunier_15: 21890, precio_bateria_modulo: 2690, precio_cargador: 1950, precio_suplemento: 1050};
-export const tarifa2027 = () => new Date().toISOString().slice(0, 10) >= '2027-01-01';
+export const tarifa2027 = () => new Date().toISOString().slice(0, 10) >= '2026-11-28'; // 28/11/2026, Nando: la tarifa 2027 (+4 %) se aplica desde hoy
 export const claveTarifa = k => (tarifa2027() && k in T27 ? 't27_' + k : k);
 function tarifas() {
   const c = api.estado.config || {};
