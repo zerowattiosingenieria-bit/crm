@@ -97,8 +97,12 @@ function nombreClave_($n): string {
  */
 function callesParecidas_(array $a, array $b): bool {
   if (!mismoMunicipio_($a['municipio'] ?? '', $b['municipio'] ?? '')) return false;
-  $comun = array_intersect(palabrasCalle_($a['direccion'] ?? ''), palabrasCalle_($b['direccion'] ?? ''));
+  $wa = palabrasCalle_($a['direccion'] ?? ''); $wb = palabrasCalle_($b['direccion'] ?? '');
+  $comun = array_intersect($wa, $wb);
   if (!$comun || max(array_map('strlen', $comun)) < 5) return false;
+  /* Si las dos calles tienen dos o más palabras propias, tienen que coincidir al menos dos
+     («Santa María de la Cabeza» no es «Santa María del Berrocal»). */
+  if (count($comun) < min(2, count($wa), count($wb))) return false;
   [, $na] = calleYNumero_($a['direccion'] ?? ''); [, $nb] = calleYNumero_($b['direccion'] ?? '');
   if ($na !== '' && $nb !== '') return $na === $nb;
   if ($na === '' && $nb === '') return false;
