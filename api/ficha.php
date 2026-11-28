@@ -36,23 +36,79 @@ function direccionClave_($dir): string {
   return (preg_match('/\d/', $n) && strlen($n) >= 6) ? $n : '';
 }
 
-/** El cliente que ya existe con ese teléfono o esa dirección (o null). */
+/* 28/11/2026 (mejora 7): también se buscan teléfonos escritos dentro del nombre
+   o de las notas («Juan, teléfono 600…») y calles parecidas aunque una ficha
+   no tenga número o el municipio esté escrito distinto («Calle Pinar
+   (pueblo)» frente a «Valle del Pinar, 3»). Estas últimas son «posibles»:
+   no bloquean el alta, solo avisan y salen en Fichas repetidas. */
+
+/** Todos los teléfonos de la ficha: el campo teléfono y los que vengan escritos en el nombre o las notas. */
+function telefonosDe_(array $c): array {
+  $out = [];
+  $t = telefono9_($c['telefono'] ?? '');
+  if ($t !== '') $out[$t] = 1;
+  $texto = txt_($c['nombre'] ?? '') . ' ' . txt_($c['otros'] ?? '') . ' ' . txt_($c['proxima_accion'] ?? '');
+  if (preg_match_all('/(?<!\d)(?:\+?34[\s.-]?)?([6789]\d{2}[\s.-]?\d{3}[\s.-]?\d{3}|[6789]\d{2}[\s.-]?\d{2}[\s.-]?\d{2}[\s.-]?\d{2}|[89]\d[\s.-]?\d{3}[\s.-]?\d{2}[\s.-]?\d{2})(?!\d)/', $texto, $m)) {
+    foreach ($m[1] as $x) { $d = preg_replace('/\D/', '', $x); if (strlen($d) === 9) $out[$d] = 1; }
+  }
+  return array_map('strval', array_keys($out));
+}
+
+/** Municipios compatibles: alguno vacío, iguales o uno dentro del otro («Las Rozas» / «Las Rozas de Madrid»). */
+function mismoMunicipio_($a, $b): bool {
+  $x = trim(preg_replace('/[^a-z0-9]+/', ' ', normal_($a))); $y = trim(preg_replace('/[^a-z0-9]+/', ' ', normal_($b)));
+  if ($x === '' || $y === '' || $x === $y) return true;
+  return strpos(' ' . $x . ' ', ' ' . $y . ' ') !== false || strpos(' ' . $y . ' ', ' ' . $x . ' ') !== false;
+}
+
+/** Calle en palabras (sin tipo de vía ni «de/del») y primer número: «Valle del Pinar, 3» → [['valle','pinar'], '3']. */
+function calleYNumero_($dir): array {
+  $n = normal_($dir);
+  $n = preg_replace('/\b(sta)\b\.?/', 'santa', $n);
+  $n = preg_replace('/\b(calle|c|cl|avenida|avda|av|plaza|pza|pl|paseo|po|camino|cm|urb|urbanizacion|carretera|ctra)\b\.?/', ' ', $n);
+  $corte = preg_split('/[\d(,\-·]/u', $n, 2);
+  $pal = array_values(array_filter(preg_split('/[^a-z]+/', $corte[0] ?? ''), fn($w) => strlen($w) > 1 && !in_array($w, ['de', 'del', 'la', 'las', 'el', 'los', 'sin', 'nombre', 'pendiente'], true)));
+  $num = preg_match('/\d+/', $n, $m) ? $m[0] : '';
+  return [$pal, $num];
+}
+
+/** ¿Dos direcciones pueden ser la misma casa? (una calle contenida en la otra y el número igual o falta en una). */
+function callesParecidas_($dirA, $munA, $dirB, $munB): bool {
+  [$pa, $na] = calleYNumero_($dirA); [$pb, $nb] = calleYNumero_($dirB);
+  if (!$pa || !$pb) return false;
+  if ($na !== '' && $nb !== '' && $na !== $nb) return false;
+  if ($na === '' && $nb === '') return false;
+  [$corta, $larga] = count($pa) <= count($pb) ? [$pa, $pb] : [$pb, $pa];
+  if (array_diff($corta, $larga)) return false;
+  if (max(array_map('strlen', $corta)) < 5) return false;
+  return mismoMunicipio_($munA, $munB);
+}
+
+/** El cliente que ya existe con ese teléfono o esa dirección (o null). 'posible' => true si solo se parece. */
 function buscarDuplicado_(array $d, $salvoId = null, ?array $todos = null): ?array {
   $tel = telefono9_($d['telefono'] ?? '');
   $dir = direccionClave_($d['direccion'] ?? '');
-  if ($tel === '' && $dir === '') return null;
   $mun = normal_($d['municipio'] ?? '');
   $lista = $todos ?? leer_('CLIENTES');
-  foreach ($lista as $c) {
-    if (txt_($salvoId) !== '' && mismo_($c['id'], $salvoId)) continue;
-    if ($tel !== '' && telefono9_($c['telefono']) === $tel) return ['cliente' => $c, 'por' => 'teléfono'];
+  $otro = fn($c) => txt_($salvoId) !== '' && mismo_($c['id'], $salvoId);
+  if ($tel !== '') foreach ($lista as $c) {
+    if ($otro($c)) continue;
+    if (telefono9_($c['telefono']) === $tel) return ['cliente' => $c, 'por' => 'teléfono'];
   }
-  if ($dir === '') return null;
-  foreach ($lista as $k) {
-    if (txt_($salvoId) !== '' && mismo_($k['id'], $salvoId)) continue;
+  if ($dir !== '') foreach ($lista as $k) {
+    if ($otro($k)) continue;
     if (direccionClave_($k['direccion']) !== $dir) continue;
-    $mk = normal_($k['municipio']);
-    if ($mun === '' || $mk === '' || $mun === $mk) return ['cliente' => $k, 'por' => 'dirección'];
+    if (mismoMunicipio_($mun, $k['municipio'])) return ['cliente' => $k, 'por' => 'dirección'];
+  }
+  /* Teléfonos escritos en el nombre o las notas, de esta ficha o de las otras. */
+  $mios = telefonosDe_($d);
+  if ($mios) foreach ($lista as $c) {
+    if ($otro($c)) continue;
+    if (array_intersect($mios, telefonosDe_($c))) return ['cliente' => $c, 'por' => 'teléfono (escrito en la ficha)', 'posible' => true];
+  }
+  if (txt_($d['direccion'] ?? '') !== '') foreach ($lista as $k) {
+    if ($otro($k) || txt_($k['direccion'] ?? '') === '') continue;
+    if (callesParecidas_($d['direccion'], $d['municipio'] ?? '', $k['direccion'], $k['municipio'] ?? '')) return ['cliente' => $k, 'por' => 'calle parecida', 'posible' => true];
   }
   return null;
 }
@@ -62,7 +118,7 @@ function etiquetaDuplicado_(array $u, array $dup): array {
   $visible = veCliente_($u, $c);
   $partes = array_values(array_filter([txt_($c['direccion']), txt_($c['nombre'])], fn($s) => $s !== ''));
   return [
-    'id' => $c['id'], 'por' => $dup['por'], 'visible' => $visible,
+    'id' => $c['id'], 'por' => $dup['por'], 'visible' => $visible, 'posible' => !empty($dup['posible']),
     'etiqueta' => $visible ? implode(' · ', $partes) : 'cliente de otro compañero',
     'comercial' => nombreUsuario_($c['comercial_id'])
   ];
@@ -112,6 +168,28 @@ function accDuplicados_(array $u, array $p): array {
     /* Por calle sin mirar el municipio: muchas fichas viejas no lo tienen.
        Si son de pueblos distintos, se ve en la lista y no se fusionan. */
     $add(direccionClave_($c['direccion']), $c, 'dirección');
+  }
+  /* 28/11/2026: teléfonos escritos dentro de la ficha y calles parecidas (revisar). */
+  foreach ($C as $c) foreach (telefonosDe_($c) as $t) if ($t !== telefono9_($c['telefono'])) $add($t, $c, 'teléfono');
+  $porPalabra = [];
+  foreach ($C as $c) {
+    if (txt_($c['direccion'] ?? '') === '') continue;
+    [$pal] = calleYNumero_($c['direccion']);
+    if (!$pal) continue;
+    usort($pal, fn($a, $b) => strlen($b) - strlen($a));
+    $porPalabra[$pal[0]][] = $c;
+  }
+  foreach ($porPalabra as $w => $gr) {
+    $n = count($gr);
+    if ($n < 2 || $n > 60) continue;
+    for ($i = 0; $i < $n; $i++) for ($j = $i + 1; $j < $n; $j++) {
+      $a = $gr[$i]; $b = $gr[$j];
+      if (direccionClave_($a['direccion']) !== '' && direccionClave_($a['direccion']) === direccionClave_($b['direccion'])) continue;
+      if (callesParecidas_($a['direccion'], $a['municipio'] ?? '', $b['direccion'], $b['municipio'] ?? '')) {
+        $ids = [txt_($a['id']), txt_($b['id'])]; sort($ids, SORT_STRING);
+        $grupos['calle parecida (revisar)|' . implode('+', $ids)] = [$a, $b];
+      }
+    }
   }
   $vistos = [];
   $lista = [];

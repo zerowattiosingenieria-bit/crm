@@ -1150,6 +1150,7 @@ export function panelFicha(cliente) {
         try {
           const rc = await api.guardarCliente(Object.assign({id: cliente.id}, alCliente));
           Object.assign(cliente, (rc && rc.cliente) || alCliente);
+          if (rc && rc.falta_operacion) aviso('Falta registrar la operación con su importe (IVA incl.): te queda como tarea.', 'error');
         } catch (e) {
           throw new FalloGuardado('La ficha se ha guardado (v' + paquete.version + '), pero no se ha podido ' +
             'actualizar el cliente (' + campos.map(k => k.replace(/_/g, ' ')).join(', ') + ')', e);

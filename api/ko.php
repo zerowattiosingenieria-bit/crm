@@ -73,6 +73,7 @@ function accMarcarKO_(array $u, array $p): array {
     }
   }
   registrar_($u, 'cliente_ko', 'CLIENTES', $cli['id'], $texto);
+  if (function_exists('cerrarTareasPorEstado_')) cerrarTareasPorEstado_($u, $cli, 'ko');
   return ['ok' => true, 'citas_canceladas' => $canceladas];
 }
 

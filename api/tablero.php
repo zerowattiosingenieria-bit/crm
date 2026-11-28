@@ -353,6 +353,24 @@ function accGuardarTarea_(array $u, array $p): array {
   }
 
   if (txt_($cambios['titulo'] ?? '') === '') return ['ok' => false, 'error' => 'La tarea necesita un título.'];
+  /* 28/11/2026 (mejora 11): si ya hay una tarea abierta que pide lo mismo, se
+     actualiza esa en vez de crear otra igual. */
+  if (function_exists('tareaRepetida_') && empty($d['forzar'])) {
+    $rep = tareaRepetida_($cambios, $todas);
+    if ($rep) {
+      $upd = ['modificado' => ahora_(), 'modificado_por' => $u['id'] ?? ''];
+      if (txt_($cambios['vence'] ?? '') !== '') $upd['vence'] = $cambios['vence'];
+      $peso = ['urgente' => 0, 'alta' => 1, 'normal' => 2, 'media' => 2, 'baja' => 3];
+      $pn = normal_($cambios['prioridad'] ?? ''); $pv = normal_($rep['prioridad'] ?? '');
+      if ($pn !== '' && ($peso[$pn] ?? 2) < ($peso[$pv] ?? 2)) $upd['prioridad'] = $pn;
+      if (txt_($rep['cliente_id'] ?? '') === '' && txt_($cambios['cliente_id'] ?? '') !== '') $upd['cliente_id'] = $cambios['cliente_id'];
+      $det = txt_($cambios['detalle'] ?? '');
+      if ($det !== '' && strpos(txt_($rep['detalle'] ?? ''), $det) === false) $upd['detalle'] = trozo_(trim(txt_($rep['detalle'] ?? '') . ' · ' . $det, ' ·'), 0, 2000);
+      $r = actualizar_('TAREAS', $rep['id'], $upd);
+      registrar_($u, 'tarea_repetida', 'TAREAS', $rep['id'], $cambios['titulo']);
+      return ['ok' => true, 'repetida' => true, 'tarea' => tareaPublica_($r ?? $rep, indexar_(leer_('CLIENTES')), indexar_(leer_('USUARIOS')))];
+    }
+  }
   $cambios['area'] = normal_($cambios['area'] ?? '') ?: (txt_($cambios['usuario_id'] ?? '') !== '' ? '' : 'direccion');
   if ($cambios['area'] === '' && txt_($cambios['usuario_id'] ?? '') !== '') {
     $dueno = buscar1_('USUARIOS', fn($x) => txt_($x['id']) === txt_($cambios['usuario_id']));

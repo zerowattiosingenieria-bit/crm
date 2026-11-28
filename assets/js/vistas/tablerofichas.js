@@ -382,6 +382,7 @@ export async function vistaTableroFichas({refrescar}) {
           const r = await api.guardarCliente(Object.assign({id: c.id, _origen: 'tablero'}, cambiosCli));
           if (r && r.cliente) Object.assign(c, r.cliente); else Object.assign(c, cambiosCli);
           if (r && r.aviso_duplicado) aviso(r.aviso_duplicado, 'error');
+          if (r && r.falta_operacion) aviso('Falta registrar la operación con su importe (IVA incl.): queda como tarea.', 'error');
         }
         const nueva = Object.assign({}, k);
         delete nueva._fila;

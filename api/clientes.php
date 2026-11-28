@@ -88,6 +88,17 @@ function accGuardarCliente_(array $u, array $p): array {
     $r = actualizar_('CLIENTES', $d['id'], $cambios);
     apuntarHistorial_($u, 'CLIENTES', $d['id'], $d['id'], $actual, $cambios);
     registrar_($u, 'editar_cliente', 'CLIENTES', $d['id'], txt_($cambios['estado'] ?? '') !== '' ? $cambios['estado'] : '');
+    /* 28/11/2026 (mejoras 6 y 11): al cambiar de estado se cierran las tareas
+       que ya no tocan y, si pasa a propuesta/negociando/ganado sin operación
+       con importe, se pide registrarla. */
+    $faltaOp = false;
+    if (txt_($cambios['estado'] ?? '') !== '' && !mismo_($cambios['estado'], $actual['estado']) && function_exists('cerrarTareasPorEstado_')) {
+      cerrarTareasPorEstado_($u, $r, $cambios['estado']);
+      if (in_array(normal_($cambios['estado']), ['propuesta', 'negociando', 'ganado'], true) && !clienteConOperacionValorada_($d['id'])) {
+        $faltaOp = true;
+        avisarFaltaOperacion_($u, $r, normal_($cambios['estado']));
+      }
+    }
     /* Si al corregir el teléfono o la calle resulta que es otro cliente que ya
        estaba, se avisa (no se bloquea: dirección decide si se fusionan). */
     $avisoDup = null;
@@ -95,7 +106,7 @@ function accGuardarCliente_(array $u, array $p): array {
       $dup = buscarDuplicado_($r, $r['id']);
       if ($dup) $avisoDup = etiquetaDuplicado_($u, $dup);
     }
-    return ['ok' => true, 'cliente' => clienteParaVer_($u, $r), 'duplicado' => $avisoDup];
+    return ['ok' => true, 'cliente' => clienteParaVer_($u, $r), 'duplicado' => $avisoDup, 'falta_operacion' => $faltaOp];
   }
 
   $nuevo = ['creado' => hoyISO_(), 'creado_por' => $u['id'], 'modificado' => ahora_(), 'modificado_por' => $u['id']];
@@ -104,6 +115,9 @@ function accGuardarCliente_(array $u, array $p): array {
   /* Un cliente, una ficha: si ya está por teléfono o dirección, no se crea
      otro. Solo dirección puede forzarlo (dos viviendas del mismo dueño). */
   $dup = buscarDuplicado_($nuevo);
+  /* Si solo se parece (calle sin número, teléfono escrito en el nombre…), se crea y se avisa. */
+  $avisoPosible = ($dup && !empty($dup['posible'])) ? etiquetaDuplicado_($u, $dup) : null;
+  if ($avisoPosible) $dup = null;
   if ($dup && !(!empty($d['forzar']) && !empty($per['editarTodo']))) {
     $info = etiquetaDuplicado_($u, $dup);
     return ['ok' => false, 'duplicado' => $info,
@@ -119,7 +133,7 @@ function accGuardarCliente_(array $u, array $p): array {
   $r = insertar_('CLIENTES', $nuevo);
   apuntarHistorial_($u, 'CLIENTES', $r['id'], $r['id'], null, null, 'Ficha creada');
   registrar_($u, 'alta_cliente', 'CLIENTES', $r['id'], $r['nombre'] ?? '');
-  return ['ok' => true, 'cliente' => clienteParaVer_($u, $r)];
+  return ['ok' => true, 'cliente' => clienteParaVer_($u, $r), 'duplicado' => $avisoPosible];
 }
 
 function accBorrarCliente_(array $u, array $p): array {
@@ -156,6 +170,17 @@ function accGuardarOperacion_(array $u, array $p): array {
   if (!veCliente_($u, $cli)) return ['ok' => false, 'error' => 'Ese cliente no es tuyo.'];
 
   $calc = totalesOperacion_($d);
+  /* 28/11/2026 (mejora 6): una operación viva tiene que llevar su importe.
+     Solo los procesos automáticos (estado puesto desde la visita) pueden
+     crearla sin precio, y entonces se deja una tarea para ponerlo. */
+  $estOp = normal_($d['estado'] ?? '') ?: (txt_($d['id'] ?? '') === '' ? 'propuesta' : '');
+  if ($estOp === '' && txt_($d['id'] ?? '') !== '') {
+    $prev = buscar1_('OPERACIONES', fn($o) => mismo_($o['id'], $d['id']));
+    $estOp = normal_($prev['estado'] ?? '');
+  }
+  if (empty($p['permitirSinImporte']) && in_array($estOp, OP_CON_IMPORTE, true) && $calc['total'] <= 0) {
+    return ['ok' => false, 'error' => 'Pon el importe de la operación (IVA incluido: fotovoltaica, aerotermia, batería…). Sin importe no cuenta en la previsión ni en el Centro de Mando.'];
+  }
 
   if (txt_($d['id'] ?? '') !== '') {
     $actual = buscar1_('OPERACIONES', fn($o) => mismo_($o['id'], $d['id']));
@@ -171,6 +196,7 @@ function accGuardarOperacion_(array $u, array $p): array {
        de cobros se rehace para que no quede descuadrado. */
     if (abs(num_($actual['total']) - $calc['total']) > 0.01) recalcularCobros_($u, $r);
     registrar_($u, 'editar_operacion', 'OPERACIONES', $d['id'], txt_($cambios['estado'] ?? '') !== '' ? $cambios['estado'] : '');
+    if ($r && function_exists('cerrarAvisosImporte_')) cerrarAvisosImporte_($u, $r);
     return ['ok' => true, 'operacion' => $r, 'cobros' => cobrosDe_($u, $d['id'])];
   }
 
@@ -189,6 +215,7 @@ function accGuardarOperacion_(array $u, array $p): array {
   if (normal_($r['forma_pago'] ?? '') === 'contado' && num_($r['total']) > 0) crearCobrosEstandar_($u, $r);
   sincronizarEstadoCliente_($u, $r);
   registrar_($u, 'alta_operacion', 'OPERACIONES', $r['id'], $cli['nombre']);
+  if (function_exists('cerrarAvisosImporte_')) cerrarAvisosImporte_($u, $r);
   return ['ok' => true, 'operacion' => $r, 'cobros' => cobrosDe_($u, $r['id'])];
 }
 
@@ -214,6 +241,7 @@ function sincronizarEstadoCliente_(array $u, ?array $op): void {
   if ($cli && normal_($cli['estado']) !== $nuevo) {
     actualizar_('CLIENTES', $cli['id'], ['estado' => $nuevo, 'fecha_estado' => hoyISO_(),
       'modificado' => ahora_(), 'modificado_por' => $u['id']]);
+    if (function_exists('cerrarTareasPorEstado_')) cerrarTareasPorEstado_($u, $cli, $nuevo);
   }
   /* Si venía de una captación, se marca cómo acabó. */
   $cap = captacionActual_($op['cliente_id'] ?? '', $op['id'] ?? '');
@@ -427,6 +455,10 @@ function guardarCaptacionSinReglas_(array $u, array $p): array {
       avisarCaptador_($r, $cli);
     }
     sincronizarCaptacionCliente_($u, $r, buscar1_('CLIENTES', fn($c) => mismo_($c['id'], $cli['id'])));
+    if ($anterior && txt_($cambios['resultado'] ?? '') !== '' && normal_($cambios['resultado']) !== 'pendiente' &&
+        normal_($cambios['resultado']) !== normal_($anterior['resultado']) && function_exists('cerrarTareasResueltas_')) {
+      cerrarTareasResueltas_($u, $cli, TAREAS_DE_VISITA, 'resultado de la visita apuntado (' . normal_($cambios['resultado']) . ')');
+    }
 
     /* Adjudicar la captación a un comercial es lo que hace que ese comercial
        la vea: el cliente pasa a ser suyo. Si se quita, deja de verla. */

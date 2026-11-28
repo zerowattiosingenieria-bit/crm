@@ -174,6 +174,7 @@ function accVisitaMarcar_(array $u, array $p): array {
       actualizar_('CLIENTES', $cli['id'], ['estado' => 'sentada', 'modificado' => ahora_(), 'modificado_por' => $u['id']]);
     }
     registrar_($u, 'visita_sentada', 'CAPTACIONES', $cap['id'], $res);
+    if ($valor !== null && function_exists('cerrarTareasResueltas_')) cerrarTareasResueltas_($u, $cli, TAREAS_DE_VISITA, 'resultado de la visita apuntado (' . $res . ')');
   } elseif ($campo === 'proyecto') {
     actualizar_('CAPTACIONES', $cap['id'], ['proyecto_creado' => $valor ? ahora_() : '']);
     registrar_($u, 'visita_proyecto', 'CAPTACIONES', $cap['id'], $valor ? 'hecho' : 'no');
@@ -290,8 +291,9 @@ function ponerEstadoVisita_(array $u, array $cap, array $cli, string $estado, st
   $tipo = strpos($tec, 'aero') !== false && strpos($tec, 'foto') !== false ? 'fv_aero' : (strpos($tec, 'aero') !== false ? 'aero' : (strpos($tec, 'foto') !== false ? 'fv' : ''));
   $datos = ['cliente_id' => $cli['id'], 'estado' => $estado, 'tipo' => $tipo];
   if ($estado === 'cancelada' && $motivo !== '') $datos['motivo_perdida'] = trozo_($motivo, 0, 300);
-  $r = accGuardarOperacion_($u, ['operacion' => $datos]);
+  $r = accGuardarOperacion_($u, ['operacion' => $datos, 'permitirSinImporte' => true]);
   if (empty($r['ok'])) return ['error' => $r['error'] ?? 'No se ha podido crear la operación.'];
+  if (function_exists('avisarFaltaImporte_') && $estado !== 'cancelada' && num_($r['operacion']['total'] ?? '') <= 0) avisarFaltaImporte_($u, $r['operacion'], $cli);
   if (txt_($cap['operacion_id'] ?? '') === '') actualizar_('CAPTACIONES', $cap['id'], ['operacion_id' => $r['operacion']['id']]);
   return ['op' => $r['operacion']];
 }
@@ -383,6 +385,12 @@ function aplicarComentario_(array $u, array $cap, array $cli, string $texto, boo
     } catch (Throwable $e) {}
   }
   if ($hechos) registrar_($u, 'estado_por_comentario', 'CAPTACIONES', $cap['id'], implode(' · ', $hechos));
+  /* 28/11/2026 (mejora 11): si el comentario ya dice qué pasó en la visita, las tareas de «apuntar resultado» de ese cliente se cierran solas. */
+  if (count($hechos) && function_exists('cerrarTareasResueltas_')) {
+    $c2 = buscar1_('CLIENTES', fn($x) => mismo_($x['id'], $cli['id'])) ?? $cli;
+    if (in_array(normal_($c2['estado'] ?? ''), ['ganado', 'perdido', 'ko'], true)) cerrarTareasPorEstado_($u, $c2, $c2['estado']);
+    else cerrarTareasResueltas_($u, $c2, TAREAS_DE_VISITA, 'comentario de la visita: ' . implode(', ', $hechos));
+  }
   return $hechos;
 }
 

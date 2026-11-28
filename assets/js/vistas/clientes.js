@@ -82,9 +82,15 @@ export function editorCliente(cliente, alTerminar, {solo, titulo, ir} = {}) {
     if (forzar) datos.forzar = true;
     const r = await api.guardarCliente(datos);
     aviso('Cliente guardado.');
-    if (r.duplicado) aviso('Ojo: con ese ' + r.duplicado.por + ' ya hay otra ficha (' + r.duplicado.etiqueta + ', ' +
+    if (r.duplicado) aviso((r.duplicado.posible ? 'Ojo: puede que ya exista (' : 'Ojo: con ese ' + r.duplicado.por + ' ya hay otra ficha (') +
+      (r.duplicado.posible ? r.duplicado.por + ': ' : '') + r.duplicado.etiqueta + ', ' +
       r.duplicado.id + '). Dirección puede fusionarlas desde Clientes › Fichas repetidas.', 'error');
     await alTerminar(r.cliente);
+    /* 28/11/2026 (mejora 6): en propuesta, negociando o ganado tiene que haber una operación con importe. */
+    if (r.falta_operacion && r.cliente) {
+      aviso('Falta registrar la operación con su importe (IVA incl.). Rellénala ahora; si no, queda una tarea pendiente.', 'error');
+      editorOperacion(null, r.cliente, async () => { if (typeof alTerminar === 'function') await alTerminar(r.cliente); });
+    }
   };
   vf = ventanaFormulario({
     titulo: titulo || (cliente && cliente.id ? 'Editar ' + etiquetaCliente(cliente) : 'Nuevo cliente'),

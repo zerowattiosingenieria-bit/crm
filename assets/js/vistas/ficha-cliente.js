@@ -32,6 +32,10 @@ export function duplicadoLocal(d, salvoId) {
   const otros = api.estado.clientes.filter(c => String(c.id) !== String(salvoId || ''));
   const porTel = tel && otros.find(c => telefono9(c.telefono) === tel);
   if (porTel) return {cliente: porTel, por: 'teléfono'};
+  /* 28/11/2026: también el teléfono escrito dentro del nombre o las notas de otra ficha. */
+  const enTexto = tel && otros.find(c => String((c.nombre || '') + ' ' + (c.otros || '') + ' ' + (c.proxima_accion || ''))
+    .replace(/[\s.-]/g, '').includes(tel));
+  if (enTexto) return {cliente: enTexto, por: 'teléfono (escrito en la ficha)'};
   const porDir = dir && otros.find(c => direccionClave(c.direccion) === dir &&
     (!mun || !normal(c.municipio) || normal(c.municipio) === mun));
   return porDir ? {cliente: porDir, por: 'dirección'} : null;
